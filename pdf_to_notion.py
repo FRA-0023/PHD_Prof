@@ -25,6 +25,7 @@ import pathlib
 import textwrap
 import datetime
 import requests
+import re
 import google.genai as genai
 import google.genai.types as genai_types
 from dotenv import load_dotenv
@@ -50,7 +51,10 @@ SLEEP_NOTION_BATCH     = 0.4   # secondi tra batch di blocchi Notion
 SLEEP_BETWEEN_FILES    = 5     # secondi di pausa tra un PDF e il successivo
 
 # Client Gemini — inizializzato in main() dopo validate_env().
-gemini_client: genai.Client | None = None
+gemini_client = genai.Client(
+        api_key=GEMINI_API_KEY, 
+        http_options={"timeout": 20.0} 
+    )
 
 # ---------------------------------------------------------------------------
 # PROMPT DINAMICO
@@ -70,24 +74,19 @@ Your output must match the high-quality baseline structure established in our pr
 
 # TASK
 Extract the core concepts from the slides and transform them into exceptional, highly readable study notes.
-Do not merely summarize; expand the original text by adding necessary background information, deep-dive explanations, and practical examples to maximize understanding (aim to expand the content to roughly 1.3x its original length where useful).
-Organize the topics logically, separating distinct semantic groups.
+Provide necessary background information and deep-dive explanations, but keep the output concise and highly dense with information. Avoid dispersive verbosity, fluff, or overly long text.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
-- Markdown Hierarchy: Organize the notes using strict Markdown headings:
-  # Main title for the section
-  [Body text]
-  ## Subsection title
-  [Body text]
-  ### Sub-subsection title
-  [Body text]
-- Readability (No Walls of Text): Go to the next line immediately each time a sentence finishes.
-- Lists: Use standard Markdown bullet points (`*` or `-`) and numbered lists (`1.`). Keep all text for a single list item on the exact same line as its bullet or number marker. Do not add hard line breaks within a list item.
-- Emphasis: Use **bold** text strategically to highlight important notations, keywords, and core concepts.
-- Emojis: Prefix every `##` and `###` heading with a single relevant emoji that reflects the topic (e.g. 📐 for geometry, 🔍 for search, 📊 for statistics). Do NOT add emojis to `#` top-level headings.
-- Formulas and Math: Extract and explain EVERY formula present in the slides. Format them for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks for math.
-- Strict Citation Rule: Place ALL citations exclusively at the very end of the final document in a dedicated "References" section. Do NOT insert any citation numbers, names, or references in the middle of the notes.
-- Output Constraints: Output ONLY the requested study notes. Do not print tags like "[inference]", "[unverified]", or provide any conversational filler or meta-commentary about the prompt instructions.
+- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). If you need deeper nesting, use bold text within the paragraph instead of `####`.
+- Readability & Flow: Break lines immediately after each sentence.
+- Zero Blank Lines: DO NOT output any empty lines between paragraphs, headings, or list items. Every single line of your output must contain text.
+- At the end of each section h1 and h2, add a line (---) to visually separate it from the next one.
+- No Bullet-Point Spam: Use lists ONLY for sequential steps or raw itemized data. Use narrative paragraphs for explanations.
+- Emphasis: Use **bold** text strategically.
+- Emojis: Prefix every `##` and `###` heading with a single relevant emoji. Do NOT add emojis to `#` top-level headings.
+- Formulas and Math: Extract and explain EVERY formula. Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks for math.
+- Citations: Place ALL citations exclusively at the very end in a "References" section.
+- Output Constraints: Output ONLY the study notes. Do not print tags like "[inference]".
 
 # DATA INPUT
 Please process the following {subject} lecture content:
@@ -408,11 +407,12 @@ def navigate_to_database(subject: str = "") -> tuple[str, str, str]:
                 "Controlla che l'integrazione abbia accesso alla pagina."
             )
 
-        # Auto-selezione se il subject digitato coincide con un corso Notion.
+        # Auto-selezione: match parziale (substring) e case-insensitive
         auto_match = None
         if subject:
+            subject_clean = subject.strip().lower()
             for c in courses:
-                if c["title"].strip().lower() == subject.strip().lower():
+                if subject_clean in c["title"].strip().lower():
                     auto_match = c
                     break
 
@@ -461,11 +461,24 @@ def upload_pdf_to_gemini(pdf_path: str) -> genai_types.File:
 
 def generate_notes(uploaded: genai_types.File, prompt: str) -> str:
     check_and_increment_usage()
-    response = gemini_client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=[prompt, uploaded],
-    )
-    return response.text
+    max_retries = 3
+    base_delay = 15
+
+    for attempt in range(max_retries):
+        try:
+            response = gemini_client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=[prompt, uploaded],
+            )
+            return response.text
+        except Exception as exc:
+            if attempt == max_retries - 1:
+                # Se fallisce anche l'ultimo tentativo, alza l'errore per fermare/gestire
+                raise exc
+            
+            delay = base_delay * (2 ** attempt)  # Backoff: aspetta 5s, poi 10s...
+            print(f"    [ATTENZIONE] Rete/Server instabile ({exc}). Ritento tra {delay}s... ({attempt + 1}/{max_retries})")
+            time.sleep(delay)
 
 
 def delete_gemini_file(uploaded: genai_types.File) -> None:
