@@ -77,7 +77,7 @@ Extract the core concepts from the slides and transform them into exceptional, h
 Provide necessary background information and deep-dive explanations, but keep the output concise and highly dense with information. Avoid dispersive verbosity, fluff, or overly long text.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
-- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). If you need deeper nesting, use bold text within the paragraph instead of `####`.
+- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). If you need deeper nesting, use bold text within the paragraph instead of `####` (NO HEADINGS 4).
 - Readability & Flow: Break lines immediately after each sentence.
 - Zero Blank Lines: DO NOT output any empty lines between paragraphs, headings, or list items. Every single line of your output must contain text.
 - At the end of each h2 section and before a new h1 (except the first), add a line (---) to visually separate it from the next one. 
@@ -85,8 +85,8 @@ Provide necessary background information and deep-dive explanations, but keep th
 - Emphasis: Use **bold** text strategically.
 - Emojis: Prefix every `##` and `###` heading with a single relevant emoji. Do NOT add emojis to `#` top-level headings.
 - Formulas and Math: Extract and explain EVERY formula. Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks for math.
-- Citations: Place ALL citations exclusively at the very end in a "References" section.
-- Output Constraints: Output ONLY the study notes. Do not print tags like "[inference]".
+- Citations: Place ALL citations exclusively at the very end in a "References" section, NOT in the middle of the notes. Do NOT include any in-line citations or bibliography entries within the main content.
+- Output Constraints: Output ONLY the study notes in British English. Do not print tags like "[inference]".
 
 # DATA INPUT
 Please process the following {subject} lecture content:
