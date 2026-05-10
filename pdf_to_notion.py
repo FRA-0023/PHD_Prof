@@ -80,7 +80,7 @@ Provide necessary background information and deep-dive explanations, but keep th
 - Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). If you need deeper nesting, use bold text within the paragraph instead of `####`.
 - Readability & Flow: Break lines immediately after each sentence.
 - Zero Blank Lines: DO NOT output any empty lines between paragraphs, headings, or list items. Every single line of your output must contain text.
-- At the end of each section h1 and h2, add a line (---) to visually separate it from the next one.
+- At the end of each h2 section and before a new h1 (except the first), add a line (---) to visually separate it from the next one. 
 - No Bullet-Point Spam: Use lists ONLY for sequential steps or raw itemized data. Use narrative paragraphs for explanations.
 - Emphasis: Use **bold** text strategically.
 - Emojis: Prefix every `##` and `###` heading with a single relevant emoji. Do NOT add emojis to `#` top-level headings.
@@ -461,8 +461,8 @@ def upload_pdf_to_gemini(pdf_path: str) -> genai_types.File:
 
 def generate_notes(uploaded: genai_types.File, prompt: str) -> str:
     check_and_increment_usage()
-    max_retries = 3
-    base_delay = 15
+    max_retries = 5   
+    base_delay = 15   
 
     for attempt in range(max_retries):
         try:
@@ -472,11 +472,16 @@ def generate_notes(uploaded: genai_types.File, prompt: str) -> str:
             )
             return response.text
         except Exception as exc:
+            # Se l'errore è un 429 (Quota esaurita), blocca tutto istantaneamente
+            if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
+                raise RuntimeError(f"Quota API esaurita (Errore 429). Elaborazione bloccata. Dettagli: {exc}")
+
             if attempt == max_retries - 1:
                 # Se fallisce anche l'ultimo tentativo, alza l'errore per fermare/gestire
                 raise exc
             
-            delay = base_delay * (2 ** attempt)  # Backoff: aspetta 5s, poi 10s...
+            # Backoff: 15s, 30s, 60s, 120s...
+            delay = base_delay * (2 ** attempt)  
             print(f"    [ATTENZIONE] Rete/Server instabile ({exc}). Ritento tra {delay}s... ({attempt + 1}/{max_retries})")
             time.sleep(delay)
 
@@ -614,6 +619,14 @@ def _build_blocks(text: str) -> list[dict]:
             })
             continue
 
+        # Linea di divisione (Divider)
+        if s == "---":
+            blocks.append({
+                "object": "block", "type": "divider",
+                "divider": {}
+            })
+            continue
+
         # Heading 1
         if s.startswith("# ") and not s.startswith("## "):
             content = s[2:].strip()
@@ -710,6 +723,11 @@ def run_batch(
         print(f"  [{index:>2}/{total}] {file_name}.pdf")
 
         try:
+            print("    [Notion] Controllo duplicati...")
+            if page_exists(database_id, file_name):
+                print("    [Notion] Pagina già esistente — skip.\n")
+                continue  # Passa subito al prossimo file senza pause inutili
+
             print("    [Gemini] Upload PDF...")
             uploaded = upload_pdf_to_gemini(str(pdf_path))
 
@@ -718,14 +736,8 @@ def run_batch(
             print(f"    [Gemini] Ricevuti {len(text)} caratteri.")
             delete_gemini_file(uploaded)
 
-            print("    [Notion] Controllo duplicati...")
-            if page_exists(database_id, file_name):
-                print("    [Notion] Pagina già esistente — skip.\n")
-                if index < total:
-                    time.sleep(SLEEP_BETWEEN_FILES)
-                continue
-
             print("    [Notion] Creazione pagina...")
+
             page_id = create_notion_page(database_id, file_name)
             blocks  = _build_blocks(text)
             append_blocks(page_id, blocks)
