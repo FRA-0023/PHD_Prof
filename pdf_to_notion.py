@@ -9,7 +9,7 @@ Flusso:
   5. Al termine chiede se processare un altro corso.
 
 Requisiti:
-    pip install google-generativeai python-dotenv requests
+    pip install google-genai python-dotenv requests
 
 File .env (stessa cartella dello script):
     GEMINI_API_KEY=...
@@ -25,7 +25,8 @@ import pathlib
 import textwrap
 import datetime
 import requests
-import google.generativeai as genai
+import google.genai as genai
+import google.genai.types as genai_types
 from dotenv import load_dotenv
 
 # ---------------------------------------------------------------------------
@@ -38,8 +39,8 @@ GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY")
 NOTION_TOKEN        = os.getenv("NOTION_TOKEN")
 NOTION_ROOT_PAGE_ID = os.getenv("NOTION_ROOT_PAGE_ID")
 
-GEMINI_MODEL       = "gemini-2.5-pro-preview-05-06"
-GEMINI_DAILY_LIMIT = 50
+GEMINI_MODEL       = "gemini-2.5-flash"
+GEMINI_DAILY_LIMIT = 200
 USAGE_FILE         = pathlib.Path(__file__).parent / "gemini_usage.json"
 
 NOTION_API_BASE        = "https://api.notion.com/v1"
@@ -47,6 +48,9 @@ NOTION_VERSION         = "2022-06-28"
 NOTION_MAX_BLOCK_CHARS = 1900
 SLEEP_NOTION_BATCH     = 0.4   # secondi tra batch di blocchi Notion
 SLEEP_BETWEEN_FILES    = 5     # secondi di pausa tra un PDF e il successivo
+
+# Client Gemini — inizializzato in main() dopo validate_env().
+gemini_client: genai.Client | None = None
 
 # ---------------------------------------------------------------------------
 # PROMPT DINAMICO
@@ -80,7 +84,8 @@ Organize the topics logically, separating distinct semantic groups.
 - Readability (No Walls of Text): Go to the next line immediately each time a sentence finishes.
 - Lists: Use standard Markdown bullet points (`*` or `-`) and numbered lists (`1.`). Keep all text for a single list item on the exact same line as its bullet or number marker. Do not add hard line breaks within a list item.
 - Emphasis: Use **bold** text strategically to highlight important notations, keywords, and core concepts.
-- Formulas and Math: You must explain and extract EVERY formula present in the slides. Format them explicitly for Notion using standard LaTeX: enclose inline math within `$` (e.g., $E=mc^2$) and display math within `$$` on a separate line.
+- Emojis: Prefix every `##` and `###` heading with a single relevant emoji that reflects the topic (e.g. 📐 for geometry, 🔍 for search, 📊 for statistics). Do NOT add emojis to `#` top-level headings.
+- Formulas and Math: Extract and explain EVERY formula present in the slides. Format them for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks for math.
 - Strict Citation Rule: Place ALL citations exclusively at the very end of the final document in a dedicated "References" section. Do NOT insert any citation numbers, names, or references in the middle of the notes.
 - Output Constraints: Output ONLY the requested study notes. Do not print tags like "[inference]", "[unverified]", or provide any conversational filler or meta-commentary about the prompt instructions.
 
@@ -215,8 +220,8 @@ def setup_session() -> tuple[pathlib.Path, str, str, str, str]:
         print(f"  Trovati {len(pdfs)} PDF.")
         break
 
-    # 3. Navigazione Notion
-    database_id, course_name, db_title = navigate_to_database()
+    # 3. Navigazione Notion (il subject viene usato per auto-selezionare il corso)
+    database_id, course_name, db_title = navigate_to_database(subject)
 
     # 4. Riepilogo
     print("\n" + "-"*58)
@@ -264,11 +269,106 @@ def fetch_child_pages(parent_id: str) -> list[dict]:
     ]
 
 
-def fetch_child_databases(parent_id: str) -> list[dict]:
-    return [
-        {"id": b["id"], "title": b.get("child_database", {}).get("title", "Senza titolo")}
-        for b in _fetch_children(parent_id) if b.get("type") == "child_database"
+def _fetch_database_title(database_id: str) -> str:
+    """Recupera il titolo reale di un database tramite GET /databases/{id}."""
+    try:
+        r = requests.get(
+            f"{NOTION_API_BASE}/databases/{database_id}",
+            headers=_notion_headers(),
+            timeout=30,
+        )
+        r.raise_for_status()
+        data = r.json()
+        parts = data.get("title", [])
+        return parts[0].get("plain_text", "") if parts else ""
+    except Exception:
+        return ""
+
+
+# Tipi di blocco che possono contenere altri blocchi (ricerca ricorsiva).
+_CONTAINER_TYPES = {
+    "column_list", "column", "toggle", "callout",
+    "bulleted_list_item", "numbered_list_item", "quote",
+    "synced_block", "template", "table",
+}
+
+def fetch_children_as_targets(parent_id: str, _depth: int = 0) -> list[dict]:
+    """
+    Cerca ricorsivamente child_database e child_page dentro la pagina corso,
+    attraversando blocchi contenitore (column_list, column, toggle, ecc.).
+    I tab Notion sono spesso annidati in strutture a colonne.
+    Ogni elemento ha: id, title, kind ("database" | "page").
+    """
+    if _depth > 4:          # limite di sicurezza alla ricorsione
+        return []
+    items = []
+    for b in _fetch_children(parent_id):
+        btype = b.get("type")
+        if btype == "child_database":
+            db_id = b["id"]
+            title = b.get("child_database", {}).get("title", "").strip()
+            if not title:
+                title = _fetch_database_title(db_id)
+            items.append({"id": db_id, "title": title or "Senza titolo", "kind": "database"})
+        elif btype == "child_page":
+            items.append({
+                "id": b["id"],
+                "title": b.get("child_page", {}).get("title", "Senza titolo"),
+                "kind": "page",
+            })
+        elif btype in _CONTAINER_TYPES and b.get(btype, {}).get("has_children") is not False:
+            # Scende nei blocchi contenitore per trovare pagine/database annidati.
+            nested = fetch_children_as_targets(b["id"], _depth + 1)
+            items.extend(nested)
+    return items
+
+
+def resolve_database_id(target: dict) -> str:
+    """
+    Dato un target (database o pagina), restituisce l'ID del database da usare.
+    - Se è già un database → usa l'ID direttamente.
+    - Se è una pagina (es. tab "Notes") → cerca il primo child_database al suo interno.
+    """
+    if target["kind"] == "database":
+        return target["id"]
+    # È una pagina: cerca il database al suo interno.
+    inner = [
+        b for b in _fetch_children(target["id"])
+        if b.get("type") == "child_database"
     ]
+    if not inner:
+        raise RuntimeError(
+            f"Nessun database trovato dentro la pagina '{target['title']}'. "
+            "Assicurati che contenga un database inline."
+        )
+    return inner[0]["id"]
+
+
+def fetch_database_entries(database_id: str) -> list[dict]:
+    """
+    Legge le pagine contenute in un database Notion (es. il database 'Courses').
+    Usa POST /databases/{id}/query invece di /blocks/{id}/children.
+    """
+    results, payload = [], {"page_size": 100}
+    url = f"{NOTION_API_BASE}/databases/{database_id}/query"
+    while url:
+        r = requests.post(url, headers=_notion_headers(), json=payload, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        for page in data.get("results", []):
+            title = "Senza titolo"
+            for prop in page.get("properties", {}).values():
+                if prop.get("type") == "title":
+                    parts = prop.get("title", [])
+                    if parts:
+                        title = parts[0].get("plain_text", "Senza titolo")
+                    break
+            results.append({"id": page["id"], "title": title})
+        if data.get("has_more"):
+            payload = {"page_size": 100, "start_cursor": data["next_cursor"]}
+        else:
+            url = None
+    return results
 
 
 def _pick(items: list[dict], label: str) -> dict:
@@ -285,9 +385,11 @@ def _pick(items: list[dict], label: str) -> dict:
         print("  [!] Valore non valido.")
 
 
-def navigate_to_database() -> tuple[str, str, str]:
+def navigate_to_database(subject: str = "") -> tuple[str, str, str]:
     """
     Navigazione interattiva: Courses > Corso > Database.
+    Se `subject` corrisponde esattamente (case-insensitive) a un corso Notion,
+    lo seleziona automaticamente senza mostrare la lista.
 
     Returns:
         (database_id, course_name, database_title)
@@ -298,57 +400,95 @@ def navigate_to_database() -> tuple[str, str, str]:
 
     while True:
         print("\n  Recupero corsi...")
-        courses = fetch_child_pages(NOTION_ROOT_PAGE_ID)
+        # Courses è un database: si interroga con /databases/{id}/query.
+        courses = fetch_database_entries(NOTION_ROOT_PAGE_ID)
         if not courses:
             raise RuntimeError(
-                "Nessuna pagina-corso trovata nella root Notion. "
-                "Controlla i permessi dell'integrazione."
+                "Nessun corso trovato nel database Courses. "
+                "Controlla che l'integrazione abbia accesso alla pagina."
             )
 
-        course = _pick(courses, "CORSI DISPONIBILI")
+        # Auto-selezione se il subject digitato coincide con un corso Notion.
+        auto_match = None
+        if subject:
+            for c in courses:
+                if c["title"].strip().lower() == subject.strip().lower():
+                    auto_match = c
+                    break
 
-        print(f"\n  Recupero database in '{course['title']}'...")
-        dbs = fetch_child_databases(course["id"])
+        if auto_match:
+            course = auto_match
+            print(f"  Corso selezionato automaticamente: \"{course['title']}\"")
+        else:
+            course = _pick(courses, "CORSI DISPONIBILI")
 
-        if not dbs:
-            print(f"\n  [!] Nessun database in '{course['title']}'.")
+        print(f"\n  Recupero sezioni in '{course['title']}'...")
+        targets = fetch_children_as_targets(course["id"])
+
+        if not targets:
+            print(f"\n  [!] Nessuna sezione trovata in '{course['title']}'.")
             if input("  Scegli un altro corso? [s/n]: ").strip().lower() == "s":
                 continue
-            raise RuntimeError("Nessun database trovato. Operazione annullata.")
+            raise RuntimeError("Nessuna sezione trovata. Operazione annullata.")
 
-        db = _pick(dbs, f"DATABASE IN '{course['title'].upper()}'")
-        return db["id"], course["title"], db["title"]
+        # Auto-selezione se esiste una sezione chiamata "Notes".
+        auto_db = next((t for t in targets if t["title"].strip().lower() == "notes"), None)
+        if auto_db:
+            target = auto_db
+            print(f"  Sezione selezionata automaticamente: \"{target['title']}\"")
+        else:
+            target = _pick(targets, f"SEZIONI IN '{course['title'].upper()}'")
+
+        db_id = resolve_database_id(target)
+        return db_id, course["title"], target["title"]
 
 # ---------------------------------------------------------------------------
 # GEMINI
 # ---------------------------------------------------------------------------
 
-def upload_pdf_to_gemini(pdf_path: str) -> genai.types.File:
-    uploaded = genai.upload_file(path=pdf_path, mime_type="application/pdf")
+def upload_pdf_to_gemini(pdf_path: str) -> genai_types.File:
+    uploaded = gemini_client.files.upload(
+        file=pdf_path,
+        config=genai_types.UploadFileConfig(mime_type="application/pdf"),
+    )
     while uploaded.state.name == "PROCESSING":
         time.sleep(3)
-        uploaded = genai.get_file(uploaded.name)
+        uploaded = gemini_client.files.get(name=uploaded.name)
     if uploaded.state.name == "FAILED":
         raise RuntimeError(f"Gemini: elaborazione fallita per '{pdf_path}'.")
     return uploaded
 
 
-def generate_notes(uploaded: genai.types.File, prompt: str) -> str:
+def generate_notes(uploaded: genai_types.File, prompt: str) -> str:
     check_and_increment_usage()
-    model    = genai.GenerativeModel(model_name=GEMINI_MODEL)
-    response = model.generate_content([prompt, uploaded])
+    response = gemini_client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, uploaded],
+    )
     return response.text
 
 
-def delete_gemini_file(uploaded: genai.types.File) -> None:
+def delete_gemini_file(uploaded: genai_types.File) -> None:
     try:
-        genai.delete_file(uploaded.name)
+        gemini_client.files.delete(name=uploaded.name)
     except Exception:
         pass  # I file Gemini scadono automaticamente dopo 48h.
 
 # ---------------------------------------------------------------------------
 # NOTION — CREAZIONE PAGINA E BLOCCHI
 # ---------------------------------------------------------------------------
+
+def page_exists(database_id: str, title: str) -> bool:
+    """Controlla se una pagina con quel titolo esiste già nel database Notion."""
+    r = requests.post(
+        f"{NOTION_API_BASE}/databases/{database_id}/query",
+        headers=_notion_headers(),
+        json={"filter": {"property": "Name", "title": {"equals": title}}},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return len(r.json().get("results", [])) > 0
+
 
 def create_notion_page(database_id: str, title: str) -> str:
     r = requests.post(
@@ -366,17 +506,93 @@ def create_notion_page(database_id: str, title: str) -> str:
     return r.json()["id"]
 
 
+def _parse_rich_text(line: str) -> list[dict]:
+    """
+    Converte una riga Markdown in una lista di rich_text Notion gestendo:
+      - **bold** → testo con annotazione bold
+      - $formula$ → oggetto equation inline
+      - testo normale → oggetto text
+    Tronca ogni segmento a NOTION_MAX_BLOCK_CHARS.
+    """
+    parts = []
+    # Tokenizza per **bold** e $math$ (in quest'ordine, bold ha precedenza).
+    pattern = re.compile(r'(\*\*(.+?)\*\*|\$(?!\$)(.+?)(?<!\$)\$)')
+    cursor = 0
+    for m in pattern.finditer(line):
+        # Testo normale prima del match
+        if m.start() > cursor:
+            seg = line[cursor:m.start()][:NOTION_MAX_BLOCK_CHARS]
+            if seg:
+                parts.append({"type": "text", "text": {"content": seg}})
+        if m.group(0).startswith("**"):
+            # Bold
+            seg = m.group(2)[:NOTION_MAX_BLOCK_CHARS]
+            parts.append({
+                "type": "text",
+                "text": {"content": seg},
+                "annotations": {"bold": True},
+            })
+        else:
+            # Inline math
+            expr = m.group(3)[:NOTION_MAX_BLOCK_CHARS]
+            parts.append({"type": "equation", "equation": {"expression": expr}})
+        cursor = m.end()
+    # Testo rimanente
+    if cursor < len(line):
+        seg = line[cursor:][:NOTION_MAX_BLOCK_CHARS]
+        if seg:
+            parts.append({"type": "text", "text": {"content": seg}})
+    # Fallback: riga vuota
+    return parts or [{"type": "text", "text": {"content": ""}}]
+
+
 def _build_blocks(text: str) -> list[dict]:
     """
     Converte il testo Markdown di Gemini in blocchi Notion.
-    Gestisce: # h1, ## h2, ### h3, - /* bullet, testo normale.
-    I blocchi LaTeX ($$...$$) vengono passati come codice inline
-    in attesa del supporto nativo equazioni su Notion.
+    Gestisce:
+      # h1, ## h2 (con emoji), ### h3 (con emoji)
+      - /* bullet, 1. numbered list
+      $$...$$ → equation block nativo Notion
+      $...$ inline → equation rich_text inline
+      **bold** → annotazione bold
+      testo normale
     """
     blocks = []
 
+    # Gestione $$...$$ multiriga: raccoglie le righe tra $$ apertura e chiusura.
+    display_math_buf: list[str] = []
+    in_display_math = False
+
     for line in text.splitlines():
         s = line.strip()
+
+        # ── Apertura/chiusura blocco $$ ──────────────────────────────────────
+        if s == "$$":
+            if in_display_math:
+                # Chiude il blocco e crea un equation block
+                expr = "\n".join(display_math_buf).strip()
+                blocks.append({
+                    "object": "block", "type": "equation",
+                    "equation": {"expression": expr},
+                })
+                display_math_buf = []
+                in_display_math = False
+            else:
+                in_display_math = True
+            continue
+
+        if in_display_math:
+            display_math_buf.append(s)
+            continue
+
+        # $$ su una sola riga: $$formula$$
+        if s.startswith("$$") and s.endswith("$$") and len(s) > 4:
+            expr = s[2:-2].strip()
+            blocks.append({
+                "object": "block", "type": "equation",
+                "equation": {"expression": expr},
+            })
+            continue
 
         if not s:
             blocks.append({
@@ -390,9 +606,7 @@ def _build_blocks(text: str) -> list[dict]:
             content = s[2:].strip()
             blocks.append({
                 "object": "block", "type": "heading_1",
-                "heading_1": {"rich_text": [
-                    {"type": "text", "text": {"content": content[:NOTION_MAX_BLOCK_CHARS]}}
-                ]},
+                "heading_1": {"rich_text": _parse_rich_text(content[:NOTION_MAX_BLOCK_CHARS])},
             })
             continue
 
@@ -401,9 +615,7 @@ def _build_blocks(text: str) -> list[dict]:
             content = s[3:].strip()
             blocks.append({
                 "object": "block", "type": "heading_2",
-                "heading_2": {"rich_text": [
-                    {"type": "text", "text": {"content": content[:NOTION_MAX_BLOCK_CHARS]}}
-                ]},
+                "heading_2": {"rich_text": _parse_rich_text(content[:NOTION_MAX_BLOCK_CHARS])},
             })
             continue
 
@@ -412,56 +624,33 @@ def _build_blocks(text: str) -> list[dict]:
             content = s[4:].strip()
             blocks.append({
                 "object": "block", "type": "heading_3",
-                "heading_3": {"rich_text": [
-                    {"type": "text", "text": {"content": content[:NOTION_MAX_BLOCK_CHARS]}}
-                ]},
+                "heading_3": {"rich_text": _parse_rich_text(content[:NOTION_MAX_BLOCK_CHARS])},
             })
             continue
 
         # Bullet point
         if s.startswith(("- ", "* ")):
             content = s[2:].strip()
-            for chunk in textwrap.wrap(content, NOTION_MAX_BLOCK_CHARS, break_long_words=True):
-                blocks.append({
-                    "object": "block", "type": "bulleted_list_item",
-                    "bulleted_list_item": {"rich_text": [
-                        {"type": "text", "text": {"content": chunk}}
-                    ]},
-                })
+            blocks.append({
+                "object": "block", "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": _parse_rich_text(content)},
+            })
             continue
 
         # Numbered list (1. 2. ecc.)
         if len(s) > 2 and s[0].isdigit() and s[1] in ".)" and s[2] == " ":
             content = s[3:].strip()
-            for chunk in textwrap.wrap(content, NOTION_MAX_BLOCK_CHARS, break_long_words=True):
-                blocks.append({
-                    "object": "block", "type": "numbered_list_item",
-                    "numbered_list_item": {"rich_text": [
-                        {"type": "text", "text": {"content": chunk}}
-                    ]},
-                })
-            continue
-
-        # Blocco formula display ($$...$$) → blocco codice
-        if s.startswith("$$") and s.endswith("$$") and len(s) > 4:
-            formula = s[2:-2].strip()
             blocks.append({
-                "object": "block", "type": "code",
-                "code": {
-                    "language": "plain text",
-                    "rich_text": [{"type": "text", "text": {"content": formula}}],
-                },
+                "object": "block", "type": "numbered_list_item",
+                "numbered_list_item": {"rich_text": _parse_rich_text(content)},
             })
             continue
 
-        # Paragrafo normale (con chunking se troppo lungo)
-        for chunk in textwrap.wrap(s, NOTION_MAX_BLOCK_CHARS, break_long_words=True):
-            blocks.append({
-                "object": "block", "type": "paragraph",
-                "paragraph": {"rich_text": [
-                    {"type": "text", "text": {"content": chunk}}
-                ]},
-            })
+        # Paragrafo normale
+        blocks.append({
+            "object": "block", "type": "paragraph",
+            "paragraph": {"rich_text": _parse_rich_text(s)},
+        })
 
     return blocks
 
@@ -516,6 +705,13 @@ def run_batch(
             print(f"    [Gemini] Ricevuti {len(text)} caratteri.")
             delete_gemini_file(uploaded)
 
+            print("    [Notion] Controllo duplicati...")
+            if page_exists(database_id, file_name):
+                print("    [Notion] Pagina già esistente — skip.\n")
+                if index < total:
+                    time.sleep(SLEEP_BETWEEN_FILES)
+                continue
+
             print("    [Notion] Creazione pagina...")
             page_id = create_notion_page(database_id, file_name)
             blocks  = _build_blocks(text)
@@ -523,6 +719,15 @@ def run_batch(
             print(f"    [Notion] OK — {len(blocks)} blocchi archiviati.\n")
 
             success += 1
+
+            # Dopo il primo file chiede conferma prima di continuare.
+            if index == 1 and total > 1:
+                print(f"\n  Primo file completato. Controlla la pagina su Notion.")
+                print(f"  Rimangono {total - 1} file da elaborare.")
+                go = input("  Continuare con gli altri? [s/n]: ").strip().lower()
+                if go != "s":
+                    print("  Elaborazione interrotta dall'utente.")
+                    break
 
         except RuntimeError as exc:
             # Limite giornaliero Gemini: blocca il batch immediatamente.
@@ -552,7 +757,8 @@ def main() -> None:
     print("="*58)
 
     validate_env()
-    genai.configure(api_key=GEMINI_API_KEY)
+    global gemini_client
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
     # Stato iniziale utilizzo Gemini.
     remaining = get_remaining_calls()
