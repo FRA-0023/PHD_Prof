@@ -78,16 +78,15 @@ Extract the core concepts from the slides and transform them into exceptional, h
 Provide necessary background information and deep-dive explanations, but keep the output concise and highly dense with information. Avoid dispersive verbosity, fluff, or overly long text.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
-- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). If you need deeper nesting, use bold text within the paragraph instead of `####` (NO HEADINGS 4).
-- Readability & Flow: Break lines immediately after each sentence.
-- Zero Blank Lines: DO NOT output any empty lines between paragraphs, headings, or list items. Every single line of your output must contain text.
-- At the end of each h2 section and before a new h1 (except the first), add a line (---) to visually separate it from the next one. 
-- No Bullet-Point Spam: Use lists ONLY for sequential steps or raw itemized data. Use narrative paragraphs for explanations.
+- Format Requirement: You MUST write in continuous narrative paragraphs (Essay format). You are STRICTLY FORBIDDEN from using bullet points (`-`, `*`) or numbered lists for standard explanations. Only use lists if you are stating raw data properties.
+- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use `####`.
+- Readability & Flow: Break lines immediately after each sentence finishes to avoid walls of text.
+- Zero Blank Lines: DO NOT output any empty lines between paragraphs or headings. Every line must contain text.
 - Emphasis: Use **bold** text strategically.
-- Emojis: Prefix every `##` and `###` heading with a single relevant emoji. Do NOT add emojis to `#` top-level headings.
-- Formulas and Math: Extract and explain EVERY formula. Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks for math.
-- Citations: Place ALL citations exclusively at the very end in a "References" section, NOT in the middle of the notes. Do NOT include any in-line citations or bibliography entries within the main content.
-- Output Constraints: Output ONLY the study notes in British English. Do not print tags like "[inference]".
+- Emojis: Prefix every `##` (H2) and `###` (H3) heading with a single relevant emoji. Do NOT add emojis to `#` (H1) top-level headings.
+- Formulas and Math: Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks.
+- Citations: Place ALL citations exclusively at the very end in a "References" section.
+- Language: British English exclusively. Output ONLY the study notes without "[inference]" tags.
 
 # DATA INPUT
 Please process the following {subject} lecture content:
@@ -467,11 +466,18 @@ def generate_notes(uploaded: genai_types.File, prompt: str) -> str:
 
     for attempt in range(max_retries):
         try:
-            response = gemini_client.models.generate_content(
+            response_stream = gemini_client.models.generate_content_stream(
                 model=GEMINI_MODEL,
                 contents=[prompt, uploaded],
             )
-            return response.text
+            
+            full_text = ""
+            for chunk in response_stream:
+                if chunk.text:
+                    full_text += chunk.text
+                    
+            return full_text
+
         except Exception as exc:
             # Se l'errore è un 429 (Quota esaurita), blocca tutto istantaneamente
             if "429" in str(exc) or "RESOURCE_EXHAUSTED" in str(exc):
@@ -613,11 +619,7 @@ def _build_blocks(text: str) -> list[dict]:
             })
             continue
 
-        if not s:
-            blocks.append({
-                "object": "block", "type": "paragraph",
-                "paragraph": {"rich_text": []},
-            })
+        if not s or s.isspace():
             continue
 
         # Linea di divisione (Divider)
@@ -630,6 +632,10 @@ def _build_blocks(text: str) -> list[dict]:
 
         # Heading 1
         if s.startswith("# ") and not s.startswith("## "):
+            # Se ci sono già blocchi nella lista (non è il primo titolo), metti il divisore
+            if blocks:
+                blocks.append({"object": "block", "type": "divider", "divider": {}})
+                
             content = s[2:].strip()
             blocks.append({
                 "object": "block", "type": "heading_1",
@@ -639,6 +645,10 @@ def _build_blocks(text: str) -> list[dict]:
 
         # Heading 2
         if s.startswith("## ") and not s.startswith("### "):
+            # Inserisci divisore prima degli H2
+            if blocks:
+                blocks.append({"object": "block", "type": "divider", "divider": {}})
+                
             content = s[3:].strip()
             blocks.append({
                 "object": "block", "type": "heading_2",
@@ -648,6 +658,10 @@ def _build_blocks(text: str) -> list[dict]:
 
         # Heading 3
         if s.startswith("### "):
+            # Inserisci divisore prima degli H3
+            if blocks:
+                blocks.append({"object": "block", "type": "divider", "divider": {}})
+                
             content = s[4:].strip()
             blocks.append({
                 "object": "block", "type": "heading_3",
