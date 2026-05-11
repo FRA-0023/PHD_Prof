@@ -34,14 +34,15 @@ from dotenv import load_dotenv
 # CONFIGURAZIONE FISSA
 # ---------------------------------------------------------------------------
 
-load_dotenv()
+load_dotenv(override=True)
 
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY")
+print(f"  [DEBUG] Chiave API in uso: {GEMINI_API_KEY[:4]}...{GEMINI_API_KEY[-4:]}")
 NOTION_TOKEN        = os.getenv("NOTION_TOKEN")
 NOTION_ROOT_PAGE_ID = os.getenv("NOTION_ROOT_PAGE_ID")
 
 GEMINI_MODEL       = "gemini-2.5-flash"
-GEMINI_DAILY_LIMIT = 200
+GEMINI_DAILY_LIMIT = 20
 USAGE_FILE         = pathlib.Path(__file__).parent / "gemini_usage.json"
 
 NOTION_API_BASE        = "https://api.notion.com/v1"
