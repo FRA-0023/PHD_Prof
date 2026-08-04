@@ -79,14 +79,14 @@ Provide necessary background information and deep-dive explanations, but keep th
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
 - Format Requirement: You MUST write in continuous narrative paragraphs (Essay format). You are STRICTLY FORBIDDEN from using bullet points (`-`, `*`) or numbered lists for standard explanations. Only use lists if you are stating raw data properties.
-- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use `####`.
+- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use H4 `####`.
 - Readability & Flow: Break lines immediately after each sentence finishes to avoid walls of text.
 - Zero Blank Lines: DO NOT output any empty lines between paragraphs or headings. Every line must contain text.
 - Emphasis: Use **bold** text strategically.
-- Emojis: Prefix every `##` (H2) and `###` (H3) heading with a single relevant emoji. Do NOT add emojis to `#` (H1) top-level headings.
 - Formulas and Math: Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\hat{{y}} = \sigma(Wx+b)$$). Never use code blocks.
 - Citations: Place ALL citations exclusively at the very end in a "References" section.
 - Language: British English exclusively. Output ONLY the study notes without "[inference]" tags.
+- Code chunks: If the slides contain code, format it as a code block with the appropriate language tag (e.g., ```python). Do not use inline code formatting for code snippets.
 
 # DATA INPUT
 Please process the following {subject} lecture content:
