@@ -10,4 +10,4 @@ venv/
 env/
 
 # Skills e Agent Workspace
-.gemini/
+.agents/
