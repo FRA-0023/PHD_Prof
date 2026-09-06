@@ -1,0 +1,10 @@
+{
+  "managed": [
+    "dev-backend/docker-compose-patterns",
+    "dev-backend/testing-strategy",
+    "dev-backend/cloud-and-distributed-architecture",
+    "dev-backend/gnn-recommender-systems",
+    "dev-backend/master-hexagonal-architecture",
+    "dev-backend/solid-principles"
+  ]
+}

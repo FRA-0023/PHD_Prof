@@ -1,3 +1,13 @@
 # Ignora password e configurazioni locali
 .env
 gemini_usage.json
+
+# Ambiente Python e Cache
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Skills e Agent Workspace
+.gemini/

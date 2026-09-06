@@ -29,6 +29,7 @@ import re
 import google.genai as genai
 import google.genai.types as genai_types
 from dotenv import load_dotenv
+import hashlib
 
 # ---------------------------------------------------------------------------
 # CONFIGURAZIONE FISSA
@@ -44,6 +45,9 @@ NOTION_ROOT_PAGE_ID = os.getenv("NOTION_ROOT_PAGE_ID")
 GEMINI_MODEL       = "gemini-2.5-flash"
 GEMINI_DAILY_LIMIT = 20
 USAGE_FILE         = pathlib.Path(__file__).parent / "gemini_usage.json"
+STATE_FILE         = pathlib.Path(__file__).parent / "sync_state.json"
+STAGING_DIR        = pathlib.Path(__file__).parent / "staging"
+STAGING_DIR.mkdir(exist_ok=True)
 
 NOTION_API_BASE        = "https://api.notion.com/v1"
 NOTION_VERSION         = "2022-06-28"
@@ -78,7 +82,8 @@ Extract the core concepts from the slides and transform them into exceptional, h
 Provide necessary background information and deep-dive explanations, but keep the output concise and highly dense with information. Avoid dispersive verbosity, fluff, or overly long text.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
-- Format Requirement: You MUST write in continuous narrative paragraphs (Essay format). You are STRICTLY FORBIDDEN from using bullet points (`-`, `*`) or numbered lists for standard explanations. Only use lists if you are stating raw data properties.
+- Format Requirement: You MUST write in continuous narrative paragraphs (Essay format). You are STRICTLY FORBIDDEN from using bullet points (`-`, `*`) or numbered lists for standard explanations. 
+    Only use lists if you are stating raw data properties.
 - Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use H4 `####`.
 - Readability & Flow: Break lines immediately after each sentence finishes to avoid walls of text.
 - Zero Blank Lines: DO NOT output any empty lines between paragraphs or headings. Every line must contain text.
@@ -531,6 +536,19 @@ def create_notion_page(database_id: str, title: str) -> str:
     return r.json()["id"]
 
 
+def archive_notion_page(page_id: str) -> None:
+    try:
+        r = requests.patch(
+            f"{NOTION_API_BASE}/pages/{page_id}",
+            headers=_notion_headers(),
+            json={"archived": True},
+            timeout=30,
+        )
+        r.raise_for_status()
+    except Exception as exc:
+        print(f"    [ATTENZIONE] Impossibile archiviare la pagina orfana {page_id}: {exc}")
+
+
 def _parse_rich_text(line: str) -> list[dict]:
     """
     Converte una riga Markdown in una lista di rich_text Notion gestendo:
@@ -708,6 +726,31 @@ def append_blocks(page_id: str, blocks: list[dict]) -> None:
         r.raise_for_status()
         time.sleep(SLEEP_NOTION_BATCH)
 
+
+# ---------------------------------------------------------------------------
+# GESTIONE STATO E IDEMPOTENZA (Crash-Only)
+# ---------------------------------------------------------------------------
+
+def _load_state() -> dict:
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_state(state: dict) -> None:
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+
+def compute_hash(file_path: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        while chunk := f.read(8192):
+            h.update(chunk)
+    return h.hexdigest()
+
 # ---------------------------------------------------------------------------
 # ELABORAZIONE BATCH (completamente automatica)
 # ---------------------------------------------------------------------------
@@ -733,34 +776,60 @@ def run_batch(
     print(f"  ELABORAZIONE: {total} file  |  {course_name} > {db_title}")
     print(f"{'='*58}\n")
 
+    state = _load_state()
+
     for index, pdf_path in enumerate(pdf_files, start=1):
         file_name = pdf_path.stem
         print(f"  [{index:>2}/{total}] {file_name}.pdf")
 
         try:
-            print("    [Notion] Controllo duplicati...")
-            if page_exists(database_id, file_name):
-                print("    [Notion] Pagina già esistente — skip.\n")
-                continue  # Passa subito al prossimo file senza pause inutili
+            file_hash = compute_hash(pdf_path)
+            entry = state.get(file_hash)
 
-            print("    [Gemini] Upload PDF...")
-            uploaded = upload_pdf_to_gemini(str(pdf_path))
+            if entry and entry.get("status") == "SYNCED":
+                print("    [Local] File già sincronizzato (Hash invariato) — skip.\n")
+                continue
 
-            print("    [Gemini] Generazione note...")
-            text = generate_notes(uploaded, prompt)
-            print(f"    [Gemini] Ricevuti {len(text)} caratteri.")
-            delete_gemini_file(uploaded)
+            if entry and entry.get("status") == "SYNCING":
+                page_id = entry.get("page_id")
+                if page_id:
+                    print(f"    [Rollback] Rilevato caricamento incompleto. Archiviazione pagina orfana ({page_id})...")
+                    archive_notion_page(page_id)
+                del state[file_hash]
+                _save_state(state)
+
+            staging_file = STAGING_DIR / f"{file_hash}.md"
+            if staging_file.exists():
+                print("    [Local] Markdown già presente in staging. Salto Gemini.")
+                text = staging_file.read_text(encoding="utf-8")
+            else:
+                print("    [Gemini] Upload PDF...")
+                uploaded = upload_pdf_to_gemini(str(pdf_path))
+
+                print("    [Gemini] Generazione note...")
+                text = generate_notes(uploaded, prompt)
+                print(f"    [Gemini] Ricevuti {len(text)} caratteri. Salvataggio in staging...")
+                staging_file.write_text(text, encoding="utf-8")
+                delete_gemini_file(uploaded)
 
             print("    [Notion] Creazione pagina...")
-
             page_id = create_notion_page(database_id, file_name)
-            blocks  = _build_blocks(text)
+            
+            # Crash-only: mark as syncing
+            state[file_hash] = {"status": "SYNCING", "page_id": page_id}
+            _save_state(state)
+
+            blocks = _build_blocks(text)
             append_blocks(page_id, blocks)
+            
+            # Sync complete
+            state[file_hash] = {"status": "SYNCED", "page_id": page_id}
+            _save_state(state)
+            
             print(f"    [Notion] OK — {len(blocks)} blocchi archiviati.\n")
 
             success += 1
 
-            # Dopo il primo file chiede conferma prima di continuare.
             if index == 1 and total > 1:
                 print(f"\n  Primo file completato. Controlla la pagina su Notion.")
                 print(f"  Rimangono {total - 1} file da elaborare.")
@@ -770,13 +839,10 @@ def run_batch(
                     break
 
         except RuntimeError as exc:
-            # Limite giornaliero Gemini: blocca il batch immediatamente.
             print(f"\n  [STOP] {exc}")
             break
         except requests.HTTPError as exc:
-            # Errore HTTP non critico: logga e continua col prossimo file.
-            print(f"    [ERRORE HTTP {exc.response.status_code}] "
-                  f"{exc.response.text[:200]}\n")
+            print(f"    [ERRORE HTTP {exc.response.status_code}] {exc.response.text[:200]}\n")
         except Exception as exc:
             print(f"    [ERRORE] {exc}\n")
 
