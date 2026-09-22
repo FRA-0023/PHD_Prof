@@ -14,6 +14,12 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 
 ## Log delle Sessioni
 
+### 2026-09-22 (Hotfix) — Supporto PPTX & Correzione Parametro Upload Gemini
+- **Fix Upload Gemini File API**: Corretto il parametro da ile=... a path=... in GeminiFileReader per piena conformità con google-genai SDK v0.6.0.
+- **Supporto Nativo PPTX**: Estesa la scansione in CLIAdapter e il parsing in TextPdfReader (tramite MarkItDown) per supportare presentazioni PowerPoint (.pptx), estraendo sia il contenuto delle slide sia le note del relatore.
+- **Test Suite**: Aggiunto 	est_process_document_pptx_routing, 16/16 test superati con successo.
+
+
 ### 2026-09-22 — Refactoring Esagonale, Dual PDF Reader & Anti-Overengineering Gate
 - **Architettura Esagonale & SOLID**: Rifattorizzato il monolite pdf_to_notion.py in src/ disaccoppiando Core Domain, Use Cases (ProcessDocumentUseCase), Ports e Adapters (IDocumentReader, ILlmClient, INotionClient, IStateRepository, IStagingStorage).
 - **Dual PDF Reading**: Supporto per SLIDES (upload multimodale Gemini File API per espansione pedagogica di grafici e layout) e PAPER_OR_BOOK (estrazione testuale/markdown locale con MarkItDown/PyMuPDF per paper densi e teoremi).

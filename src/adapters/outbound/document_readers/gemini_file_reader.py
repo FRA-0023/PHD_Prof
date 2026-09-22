@@ -17,7 +17,7 @@ class GeminiFileReader(IDocumentReader):
         pdf_path = str(document.path)
         print(f"    [Gemini File API] Uploading '{document.path.name}'...")
         uploaded = self.client.files.upload(
-            file=pdf_path,
+            path=pdf_path,
             config=genai_types.UploadFileConfig(mime_type="application/pdf"),
         )
 

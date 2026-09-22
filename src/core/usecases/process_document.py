@@ -69,7 +69,11 @@ class ProcessDocumentUseCase:
             print("    [Local] Markdown già presente in staging. Salto inference LLM.")
             markdown_text = self.staging_storage.read(file_hash) or ""
         else:
-            reader = self.readers.get(document.doc_type) or self.readers[DocumentType.SLIDES]
+            # PPTX files are always extracted locally via text/markdown parser (MarkItDown)
+            if document.path.suffix.lower() == ".pptx":
+                reader = self.readers.get(DocumentType.PAPER_OR_BOOK) or list(self.readers.values())[0]
+            else:
+                reader = self.readers.get(document.doc_type) or self.readers[DocumentType.SLIDES]
             payload = reader.read(document)
             try:
                 print("    [LLM] Generazione note...")

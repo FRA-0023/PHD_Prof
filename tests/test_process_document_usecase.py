@@ -104,3 +104,43 @@ def test_process_document_full_flow():
     notion_client.append_blocks.assert_called_once()
     assert res.success is True
     assert res.page_id == "created_page_id"
+
+def test_process_document_pptx_routing():
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = False
+
+    slides_reader = MagicMock(spec=IDocumentReader)
+    text_reader = MagicMock(spec=IDocumentReader)
+    text_reader.read.return_value = "extracted pptx text"
+
+    llm_client = MagicMock(spec=ILlmClient)
+    llm_client.generate_notes.return_value = "# PPTX Notes"
+
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "p_pptx"
+
+    usecase = ProcessDocumentUseCase(
+        readers={
+            DocumentType.SLIDES: slides_reader,
+            DocumentType.PAPER_OR_BOOK: text_reader,
+        },
+        llm_client=llm_client,
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+    )
+
+    doc = Document(path=Path("slides.pptx"), file_hash="pptx_hash", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="EA", database_title="Notes")
+
+    res = usecase.execute(doc, target, "prompt")
+
+    # Even though doc_type was SLIDES, .pptx must be routed to text_reader (MarkItDown)
+    text_reader.read.assert_called_once_with(doc)
+    slides_reader.read.assert_not_called()
+    assert res.success is True
+    assert res.page_id == "p_pptx"
+

@@ -11,10 +11,19 @@ from src.ports.outbound.llm_client_port import ILlmClient
 
 SLEEP_BETWEEN_FILES = 5
 
+SUPPORTED_EXTENSIONS = {".pdf", ".pptx"}
+
+def scan_documents(folder: pathlib.Path) -> List[pathlib.Path]:
+    return sorted([
+        p for p in folder.iterdir()
+        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+    ])
+
 class CLIAdapter:
     """
     Inbound CLI Adapter.
     Guides the user through interactive setup, Notion course navigation, and batch execution.
+    Supports both PDF and PPTX slide decks / documents.
     """
     def __init__(
         self,
@@ -112,7 +121,7 @@ class CLIAdapter:
             professor_type = f"PhD Professor in {subject}"
 
         print("\n  Tipologia di documento:")
-        print("    [1] Slide di lezione (Visual/Multimodale — grafici, diagrammi, espansione pedagogica)")
+        print("    [1] Slide di lezione (Visual/Multimodale per PDF, estrattore testo e note per PPTX)")
         print("    [2] Paper / Libro / Dispensa (Estrazione analitica locale — sintesi rigorosa, dimostrazioni)")
         doc_type_choice = input("  Scelta [1/2, default: 1]: ").strip()
         if doc_type_choice == "2":
@@ -123,7 +132,7 @@ class CLIAdapter:
         prompt = get_prompt_template(doc_type.value, subject, professor_type)
 
         print("\n" + "=" * 58)
-        print("  CARTELLA PDF")
+        print("  CARTELLA DOCUMENTI (PDF / PPTX)")
         print("=" * 58)
         while True:
             raw = input("  Percorso (supporta ~): ").strip()
@@ -131,11 +140,11 @@ class CLIAdapter:
             if not folder.is_dir():
                 print(f"  [!] '{folder}' non trovata. Riprova.")
                 continue
-            pdfs = sorted(folder.glob("*.pdf"))
-            if not pdfs:
-                print(f"  [!] Nessun PDF in '{folder}'. Riprova.")
+            docs = scan_documents(folder)
+            if not docs:
+                print(f"  [!] Nessun file supportato (.pdf, .pptx) in '{folder}'. Riprova.")
                 continue
-            print(f"  Trovati {len(pdfs)} PDF.")
+            print(f"  Trovati {len(docs)} file supportati (.pdf / .pptx).")
             break
 
         target = self.navigate_to_target(subject)
@@ -147,7 +156,7 @@ class CLIAdapter:
         print(f"  Cartella    : {folder}")
         print(f"  Corso Notion: {target.course_name}")
         print(f"  Database    : {target.database_title}")
-        print(f"  PDF         : {len(pdfs)} file")
+        print(f"  File trovati: {len(docs)} file (.pdf / .pptx)")
         print("-" * 58)
 
         return folder, doc_type, target, prompt
@@ -159,19 +168,19 @@ class CLIAdapter:
         target: NotionTarget,
         prompt: str,
     ) -> Tuple[int, int]:
-        pdf_files = sorted(folder.glob("*.pdf"))
-        total = len(pdf_files)
+        doc_files = scan_documents(folder)
+        total = len(doc_files)
         success = 0
 
         print(f"\n{'=' * 58}")
         print(f"  ELABORAZIONE: {total} file  |  {target.course_name} > {target.database_title}")
         print(f"{'=' * 58}\n")
 
-        for index, pdf_path in enumerate(pdf_files, start=1):
-            print(f"  [{index:>2}/{total}] {pdf_path.stem}.pdf")
+        for index, doc_path in enumerate(doc_files, start=1):
+            print(f"  [{index:>2}/{total}] {doc_path.name}")
             try:
-                file_hash = compute_file_hash(pdf_path)
-                doc = Document(path=pdf_path, file_hash=file_hash, doc_type=doc_type)
+                file_hash = compute_file_hash(doc_path)
+                doc = Document(path=doc_path, file_hash=file_hash, doc_type=doc_type)
 
                 result = self.usecase.execute(doc, target, prompt)
                 if result.success:
@@ -215,11 +224,11 @@ class CLIAdapter:
                 print(f"\n  Setup annullato: {exc}")
                 break
 
-            pdf_count = len(sorted(folder.glob("*.pdf")))
+            doc_count = len(scan_documents(folder))
             remaining = self.llm_client.get_remaining_calls()
-            if pdf_count > remaining:
+            if doc_count > remaining:
                 print(
-                    f"\n  Attenzione: {pdf_count} PDF ma solo {remaining} chiamate "
+                    f"\n  Attenzione: {doc_count} file ma solo {remaining} chiamate "
                     f"disponibili oggi.\n  Lo script si fermerà al raggiungimento del limite."
                 )
 
