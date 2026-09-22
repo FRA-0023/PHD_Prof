@@ -3,6 +3,7 @@ from src.adapters.outbound.notion_block_builder import (
     parse_rich_text,
     build_notion_blocks,
     NOTION_MAX_BLOCK_CHARS,
+    normalize_sentence_spacing,
 )
 
 def test_parse_rich_text_plain():
@@ -72,3 +73,28 @@ def test_build_notion_blocks_h4_fallback():
     blocks = build_notion_blocks(md)
     # Notion does not support H4; downgraded to heading_3
     assert blocks[0]["type"] == "heading_3"
+
+def test_normalize_sentence_spacing():
+    assert normalize_sentence_spacing("concept.Next") == "concept. Next"
+    assert normalize_sentence_spacing("value:Key") == "value: Key"
+    assert normalize_sentence_spacing("first,second") == "first, second"
+    assert normalize_sentence_spacing("clause;another") == "clause; another"
+    assert normalize_sentence_spacing("pi is 3.14 approx") == "pi is 3.14 approx"
+    assert normalize_sentence_spacing("already separated. Words.") == "already separated. Words."
+
+def test_no_duplicate_dividers():
+    md = "### Previous H3\nSome text\n---\n## Next Section\nMore text"
+    blocks = build_notion_blocks(md)
+    # Filter only divider blocks
+    dividers = [b for b in blocks if b["type"] == "divider"]
+    assert len(dividers) == 1
+
+def test_no_divider_before_h3():
+    md = "# Main Title\nIntroductory text\n## Section\nSome text\n### Subsection\nMore text"
+    blocks = build_notion_blocks(md)
+    # Divider before H2, but NO divider before H3
+    dividers = [b for b in blocks if b["type"] == "divider"]
+    assert len(dividers) == 1
+    # Check types sequence: heading_1, paragraph, divider, heading_2, paragraph, heading_3, paragraph
+    types = [b["type"] for b in blocks]
+    assert types == ["heading_1", "paragraph", "divider", "heading_2", "paragraph", "heading_3", "paragraph"]

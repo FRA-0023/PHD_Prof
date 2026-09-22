@@ -6,13 +6,26 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 ## Stato Attuale
 - **Architettura**: Esagonale (Ports & Adapters) in src/.
 - **Modello LLM**: Gemini 2.5 Flash con rate limiting e retry esponenziale.
-- **Test**: 15 unit test offline con mock completi.
+- **Test**: 19 unit test offline con mock completi.
 
 ## Prossimi Passi
 - Monitorare l'esecuzione batch in produzione su corsi reali Notion.
 - Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
 
 ## Log delle Sessioni
+
+### 2026-09-22 (Fix Formatting Inconsistencies & Divider Deduplication)
+- **Deduplicazione Divider & H3**:
+  - Aggiornato notion_block_builder.py per prevenire doppi divisori consecutivi (---).
+  - Rimosso l'inserimento automatico del divisore prima dei sottotitoli H3 (###), garantendo continuita visiva con la sezione genitore H2.
+- **Terminazione e Delimitazione Liste**:
+  - Esplicitata nei prompt (prompt_templates.py) la regola di chiusura immediata delle liste (max 3-6 elementi) e ritorno ai paragrafi discorsivi senza bullet points persistenti.
+- **Separazione Semantica Elenchi**:
+  - Vietato il mix disordinato tra liste numerate e bullet points: numeri (1., 2.) riservati a sequenze cronologiche/step operativi, bullet (-) per insiemi non ordinati.
+- **Spaziatura Punteggiatura & Paragrafi**:
+  - Introdotta la funzione normalize_sentence_spacing in notion_block_builder.py per garantire lo spazio dopo la punteggiatura (., ,, :, ;).
+  - Vincolato il prompt a raggruppare i periodi in paragrafi coesi di 2-4 frasi con spaziatura corretta.
+- **Test Suite**: Aggiunti 3 nuovi test in tests/test_notion_block_builder.py per convalidare spaziatura, assenza di divisori duplicati e assenza di divisori prima di H3 (19/19 test superati).
 
 ### 2026-09-22 (Tutor-Universale Pedagogical Framework Integration)
 - **Framework Didattico Evoluto**: Integrati nel prompt (prompt_templates.py) i 4 stadi cardine di 	utor-universale:

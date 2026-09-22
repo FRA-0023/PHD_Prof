@@ -16,6 +16,18 @@ NOTION_SUPPORTED_LANGUAGES = {
     "webassembly", "xml", "yaml", "java/c/c++/c#"
 }
 
+def normalize_sentence_spacing(text: str) -> str:
+    """
+    Ensures a single space exists after sentence-ending punctuation
+    when followed immediately by a letter (e.g. 'concept.Next' -> 'concept. Next').
+    Avoids altering numbers ('3.14') or valid LaTeX.
+    """
+    text = re.sub(r'([a-zA-Z0-9\)])\.([A-Z])', r'\1. \2', text)
+    text = re.sub(r'([a-zA-Z0-9\)]):([A-Za-z])', r'\1: \2', text)
+    text = re.sub(r'([a-zA-Z0-9\)]),([A-Za-z])', r'\1, \2', text)
+    text = re.sub(r'([a-zA-Z0-9\)]);([A-Za-z])', r'\1; \2', text)
+    return text
+
 def parse_rich_text(line: str) -> List[Dict[str, Any]]:
     """
     Converts a Markdown line into Notion rich_text objects.
@@ -23,8 +35,9 @@ def parse_rich_text(line: str) -> List[Dict[str, Any]]:
       - **bold** -> rich_text with bold annotation
       - $formula$ -> inline equation object
       - plain text -> text object
-    Truncates individual segments to NOTION_MAX_BLOCK_CHARS.
+    Normalizes punctuation spacing and truncates individual segments to NOTION_MAX_BLOCK_CHARS.
     """
+    line = normalize_sentence_spacing(line)
     parts: List[Dict[str, Any]] = []
     pattern = re.compile(r'(\*\*(.+?)\*\*|\$(?!\$)(.+?)(?<!\$)\$)')
     cursor = 0
@@ -149,7 +162,8 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # ── Horizontal Divider ──────────────────────────────────────────────
         if s == "---":
-            blocks.append({"object": "block", "type": "divider", "divider": {}})
+            if blocks and blocks[-1]["type"] != "divider":
+                blocks.append({"object": "block", "type": "divider", "divider": {}})
             continue
 
         # ── Blockquote ──────────────────────────────────────────────────────
@@ -164,7 +178,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # ── Headings with Dividers ──────────────────────────────────────────
         if s.startswith("# ") and not s.startswith("## "):
-            if blocks:
+            if blocks and blocks[-1]["type"] != "divider":
                 blocks.append({"object": "block", "type": "divider", "divider": {}})
             content = s[2:].strip()
             blocks.append({
@@ -175,7 +189,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             continue
 
         if s.startswith("## ") and not s.startswith("### "):
-            if blocks:
+            if blocks and blocks[-1]["type"] != "divider":
                 blocks.append({"object": "block", "type": "divider", "divider": {}})
             content = s[3:].strip()
             blocks.append({
@@ -186,8 +200,6 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             continue
 
         if s.startswith("### "):
-            if blocks:
-                blocks.append({"object": "block", "type": "divider", "divider": {}})
             content = s[4:].strip()
             blocks.append({
                 "object": "block",

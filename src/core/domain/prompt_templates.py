@@ -26,10 +26,15 @@ Organize content into logical semantic sections.
   ## [Emoji] Section Title
   ### [Emoji] Subsection Title
   Maximum heading depth is 3 (###). Never use ####; use bold text within paragraphs if deeper nesting is needed.
-- Visual Separators: Add a horizontal rule (---) before each ## section (except the first).
-- Readability & Flow: Break lines immediately after each sentence finishes.
-- Zero Blank Lines: DO NOT output empty lines between headings, paragraphs, or list items. Every single line must contain text.
-- Lists: Use standard Markdown bullet points (`-` or `*`) and numbered lists (`1.`) for key properties, components, takeaways, or sequential steps. Keep each list item entirely on a single line.
+- Visual Separators: Add a single horizontal rule (---) before each ## section (except the first). NEVER add a horizontal rule before ### subsections. NEVER place consecutive or duplicate horizontal rules.
+- Paragraph Structure & Spacing:
+  * Group sentences into cohesive paragraphs of 2 to 4 sentences.
+  * Always ensure standard punctuation spacing: exactly one space after a period (`.`), comma (`,`), colon (`:`), or semicolon (`;`). Never attach the next word directly to punctuation (e.g. write `concept. Next`, never `concept.Next`).
+- Lists & Boundaries:
+  * Use bullet points (`-`) exclusively for concise enumerations of 3 to 6 items maximum.
+  * Once the list items are stated, IMMEDIATELY terminate the list and return to standard narrative paragraphs without bullet points. Do not continue bullet points for explanatory paragraphs or subsequent commentary.
+  * Keep lists strictly distinct: use numbered lists (`1.`, `2.`) ONLY for sequential steps, chronological procedures, or algorithms; use bullet points (`-`) ONLY for unordered collections or attributes. NEVER mix numbered items and bullets within the same section.
+  * Keep each list item entirely on a single line.
 - Emphasis: Use **bold** text strategically for key terms and core concepts.
 - Mathematics & Formulas: Extract and explain all formulas. Format inline math with `$` (e.g., $E=mc^2$) and display math on its own line with `$$` (e.g., $$\\hat{{y}} = \\sigma(Wx+b)$$). Never use code blocks for math.
 - Code Snippets: Format code inside fenced blocks with the language tag (e.g., ```python).
@@ -63,10 +68,15 @@ Calibrate depth to conceptual complexity: unpack intricate proofs with mathemati
   ## [Emoji] Section Title
   ### [Emoji] Subsection Title
   Maximum heading depth is 3 (###). Never use ####; use bold text within paragraphs if deeper nesting is needed.
-- Visual Separators: Add a horizontal rule (---) before each ## section (except the first).
-- Readability & Flow: Break lines immediately after each sentence finishes to facilitate rapid scanning.
-- Zero Blank Lines: DO NOT output empty lines between headings, paragraphs, or list items. Every single line must contain text.
-- Lists: Use standard Markdown bullet points (`-` or `*`) and numbered lists (`1.`) for formal assumptions, axioms, parameter definitions, or sequential methodology steps. Keep each item on a single line.
+- Visual Separators: Add a single horizontal rule (---) before each ## section (except the first). NEVER add a horizontal rule before ### subsections. NEVER place consecutive or duplicate horizontal rules.
+- Paragraph Structure & Spacing:
+  * Group sentences into cohesive paragraphs of 2 to 4 sentences.
+  * Always ensure standard punctuation spacing: exactly one space after a period (`.`), comma (`,`), colon (`:`), or semicolon (`;`). Never attach the next word directly to punctuation (e.g. write `concept. Next`, never `concept.Next`).
+- Lists & Boundaries:
+  * Use bullet points (`-`) exclusively for concise enumerations of 3 to 6 items maximum.
+  * Once the list items are stated, IMMEDIATELY terminate the list and return to standard narrative paragraphs without bullet points. Do not continue bullet points for explanatory paragraphs or subsequent commentary.
+  * Keep lists strictly distinct: use numbered lists (`1.`, `2.`) ONLY for sequential methodology steps, algorithms, or chronological procedures; use bullet points (`-`) ONLY for unordered collections, axioms, or parameters. NEVER mix numbered items and bullets within the same section.
+  * Keep each item entirely on a single line.
 - Emphasis: Highlight critical terms, theorems, definitions, and variables in **bold**.
 - Mathematics & Formulas: Extract and explain all mathematical formulations. Format inline math with `$` (e.g., $L(\\theta)$) and display equations on standalone lines with `$$` (e.g., $$\\nabla_\\theta J(\\theta) = \\mathbb{{E}}[ \\dots ]$$). Never use code blocks for math.
 - Code & Algorithms: Format pseudo-code or algorithms inside fenced code blocks with language identifiers (e.g., ```python).

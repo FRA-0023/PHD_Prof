@@ -1,6 +1,8 @@
 # Ignora password e configurazioni locali
 .env
 gemini_usage.json
+sync_state.json
+staging/
 
 # Ambiente Python e Cache
 __pycache__/
@@ -8,6 +10,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.pytest_cache
 
 # Skills e Agent Workspace
 .agents/
