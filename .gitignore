@@ -11,6 +11,7 @@ __pycache__/
 venv/
 env/
 .pytest_cache
+staging/
 
 # Skills e Agent Workspace
 .agents/
