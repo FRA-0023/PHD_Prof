@@ -14,6 +14,13 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 
 ## Log delle Sessioni
 
+### 2026-09-22 (Prompt Enhancement: Fluid Narrative Flow & Grounded Examples)
+- **Superamento del Formato Piatto**:
+  - Aggiornato <task> in prompt_templates.py per imporre un arco narrativo logico e progressivo (percorso logico sensato), vietando esposizioni frammentate in soli bullet points o grassetti surrogati di titoli.
+  - Introdotto lo stadio Grounded Examples: obbligo di ancorare modelli, framework e trade-off complessi a esempi concreti e realistici (es. migrazione legacy, disaccoppiamento API, cascate di errori) quando il concetto rischia di apparire astratto.
+- **Narrative Flow & Delimitazione Bullet**:
+  - In <formatting_rules>, la prosa in paragrafi coesi (2-4 frasi) diventa il veicolo principale di spiegazione; i bullet points sono rigorosamente confinati a inventari mirati di 3-6 elementi (proprieta, assiomi, componenti distinti).
+
 ### 2026-09-22 (Fix Formatting Inconsistencies & Divider Deduplication)
 - **Deduplicazione Divider & H3**:
   - Aggiornato notion_block_builder.py per prevenire doppi divisori consecutivi (---).
