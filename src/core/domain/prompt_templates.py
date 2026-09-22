@@ -16,7 +16,8 @@ Your output must match the high-quality baseline structure established in our pr
 
 # TASK
 Extract the core concepts from the slides and transform them into exceptional, highly readable study notes.
-Do not merely summarize; expand the original text by adding necessary background information, deep-dive explanations, and practical examples to maximize understanding (aim to expand the content to roughly 1.3x its original length where useful).
+Do not merely summarize telegraphically: expand the content only where purposeful, adding necessary background context, deep-dive explanations, and practical examples to maximize understanding.
+Every expansion must be strictly driven by cognitive value, conceptual clarity, and pedagogical depth—never artificially inflate length, add fluff, or pad text. Calibrate the depth to the complexity of the topic: unpack non-trivial concepts thoroughly, while keeping straightforward facts concise and dense.
 Organize the topics logically, separating distinct semantic groups.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
