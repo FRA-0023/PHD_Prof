@@ -11,24 +11,33 @@ Act as a professional {professor_type} with a Master's degree in Science Communi
 Your goal is to explain the provided lecture slides on **{subject}** so clearly, comprehensively, and pedagogically that a student with absolute zero prior context can perfectly understand the topic without needing further clarification.
 
 # CONTEXT & INPUT
-You are analyzing a single PDF file containing the slides for a **{subject}** lecture.
+You are analyzing a single PDF/presentation file containing the slides for a **{subject}** lecture.
 Your output must match the high-quality baseline structure established in our previous ideal notes.
 
 # TASK
 Extract the core concepts from the slides and transform them into exceptional, highly readable study notes.
-Provide necessary background information and deep-dive explanations, but keep the output concise and highly dense with information. Avoid dispersive verbosity, fluff, or overly long text.
+Do not merely summarize; expand the original text by adding necessary background information, deep-dive explanations, and practical examples to maximize understanding (aim to expand the content to roughly 1.3x its original length where useful).
+Organize the topics logically, separating distinct semantic groups.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
-- Format Requirement: You MUST write in continuous narrative paragraphs (Essay format). You are STRICTLY FORBIDDEN from using bullet points (`-`, `*`) or numbered lists for standard explanations. 
-    Only use lists if you are stating raw data properties.
-- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use H4 `####`.
+- Markdown Hierarchy: Organize the notes using strict Markdown headings:
+  # Main title for the section
+  [Body text]
+  ## Subsection title
+  [Body text]
+  ### Sub-subsection title
+  [Body text]
+- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use H4 `####`. Use bold text within paragraphs instead if deeper nesting is needed.
+- Emojis: Prefix every `##` and `###` heading with a single relevant emoji. Do NOT add emojis to `#` top-level headings.
 - Readability & Flow: Break lines immediately after each sentence finishes to avoid walls of text.
-- Zero Blank Lines: DO NOT output any empty lines between paragraphs or headings. Every line must contain text.
-- Emphasis: Use **bold** text strategically.
-- Formulas and Math: Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\\hat{{y}} = \\sigma(Wx+b)$$). Never use code blocks for mathematical formulas.
-- Citations: Place ALL citations exclusively at the very end in a "References" section.
-- Language: British English exclusively. Output ONLY the study notes without "[inference]" tags.
+- Zero Blank Lines: DO NOT output any empty lines between paragraphs, headings, or list items. Every line must contain text.
+- Lists: Use standard Markdown bullet points (`*` or `-`) and numbered lists (`1.`) when structuring key properties, components, takeaways, or sequential steps. Keep all text for a single list item on the exact same line as its bullet or number marker.
+- Visual Separators: At the end of each `##` section and before a new `#` (except the first), add a horizontal line (`---`) to visually separate it from the next one.
+- Emphasis: Use **bold** text strategically to highlight important notations, keywords, and core concepts.
+- Formulas and Math: Extract and explain EVERY formula present in the slides. Format for Notion: inline math within `$` (e.g., $E=mc^2$) and display/block math on its own line within `$$` (e.g., $$\\hat{{y}} = \\sigma(Wx+b)$$). Never use code blocks for mathematical formulas.
+- Citations: Place ALL citations exclusively at the very end in a dedicated "References" section. Do NOT insert any citation numbers, names, or references in the middle of the notes.
 - Code chunks: If the slides contain code, format it as a code block with the appropriate language tag (e.g., ```python). Do not use inline code formatting for multi-line code snippets.
+- Language & Constraints: British English exclusively. Output ONLY the requested study notes. Do not print tags like "[inference]", "[unverified]", or provide conversational filler.
 
 # DATA INPUT
 Please process the following {subject} lecture content:
@@ -51,15 +60,24 @@ The document contains dense prose, formal theorems, mathematical derivations, or
 4. Keep the prose high-density, analytical, and completely free of redundant corporate fluff or conversational padding.
 
 # FORMATTING & EXPORT RULES (OPTIMIZED FOR NOTION)
-- Format Requirement: Write in structured, continuous analytical paragraphs. Avoid superficial bullet points; reserve lists only for explicit axiomatic enumerations or parameter definitions.
-- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use H4 `####`.
+- Markdown Hierarchy: Organize the notes using strict Markdown headings:
+  # Main title for the section
+  [Body text]
+  ## Subsection title
+  [Body text]
+  ### Sub-subsection title
+  [Body text]
+- Absolute Heading Limit: MAXIMUM HEADING DEPTH IS 3 (`###`). Never use H4 `####`. Use bold text within paragraphs instead if deeper nesting is needed.
+- Emojis: Prefix every `##` and `###` heading with a single relevant emoji. Do NOT add emojis to `#` top-level headings.
 - Readability & Flow: Break lines immediately after each sentence finishes to facilitate fast scanning.
-- Zero Blank Lines: DO NOT output any empty lines between paragraphs or headings.
-- Emphasis: Highlight critical terms, theorems, and variables in **bold**.
-- Formulas and Math: Format for Notion: inline math within `$` (e.g., $L(\\theta)$) and display equations on standalone lines within `$$` (e.g., $$\\nabla_\\theta J(\\theta) = \\mathbb{{E}}[ \\dots ]$$).
+- Zero Blank Lines: DO NOT output any empty lines between paragraphs, headings, or list items. Every line must contain text.
+- Lists: Use standard Markdown bullet points (`*` or `-`) and numbered lists (`1.`) when enumerating formal assumptions, axioms, parameter definitions, empirical findings, or sequential methodology steps. Keep all text for a single list item on the exact same line as its bullet or number marker.
+- Visual Separators: At the end of each `##` section and before a new `#` (except the first), add a horizontal line (`---`) to visually separate it from the next one.
+- Emphasis: Highlight critical terms, theorems, definitions, and variables in **bold**.
+- Formulas and Math: Extract and explain EVERY mathematical formulation. Format for Notion: inline math within `$` (e.g., $L(\\theta)$) and display equations on standalone lines within `$$` (e.g., $$\\nabla_\\theta J(\\theta) = \\mathbb{{E}}[ \\dots ]$$). Never use code blocks for math.
 - Code & Algorithms: Format pseudo-code or algorithms inside fenced code blocks with language identifiers (e.g., ```python).
-- Citations: Consolidate formal bibliographic citations in a final `### References` section.
-- Language: British English exclusively. Output ONLY the finalized notes.
+- Citations: Consolidate formal bibliographic citations in a final `### References` section. Do NOT insert inline citations within the main text.
+- Language & Constraints: British English exclusively. Output ONLY the finalized notes. Do not print tags like "[inference]" or conversational padding.
 
 # DATA INPUT
 Please analyze and distill the following {subject} document:
