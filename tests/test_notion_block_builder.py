@@ -98,3 +98,41 @@ def test_no_divider_before_h3():
     # Check types sequence: heading_1, paragraph, divider, heading_2, paragraph, heading_3, paragraph
     types = [b["type"] for b in blocks]
     assert types == ["heading_1", "paragraph", "divider", "heading_2", "paragraph", "heading_3", "paragraph"]
+
+def test_parse_rich_text_italic():
+    parts = parse_rich_text("This is *italicized* thought.")
+    assert len(parts) == 3
+    assert parts[1]["text"]["content"] == "italicized"
+    assert parts[1]["annotations"]["italic"] is True
+
+def test_parse_rich_text_bold_italic():
+    parts = parse_rich_text("This is ***crucial premise*** here.")
+    assert len(parts) == 3
+    assert parts[1]["text"]["content"] == "crucial premise"
+    assert parts[1]["annotations"]["bold"] is True
+    assert parts[1]["annotations"]["italic"] is True
+
+def test_parse_rich_text_code():
+    parts = parse_rich_text("Call the `evaluate()` function.")
+    assert len(parts) == 3
+    assert parts[1]["text"]["content"] == "evaluate()"
+    assert parts[1]["annotations"]["code"] is True
+
+def test_parse_rich_text_example_pattern():
+    parts = parse_rich_text("**Example:** *In banking monoliths, decoupling starts with strangler fig.*")
+    assert parts[0]["text"]["content"] == "Example:"
+    assert parts[0]["annotations"]["bold"] is True
+    assert parts[1]["text"]["content"] == " "
+    assert "banking monoliths" in parts[2]["text"]["content"]
+    assert parts[2]["annotations"]["italic"] is True
+
+def test_build_notion_blocks_blockquote_with_formatting():
+    md = "> **Core Insight:** Loose coupling minimizes systemic fragility."
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "quote"
+    rich_text = blocks[0]["quote"]["rich_text"]
+    assert rich_text[0]["text"]["content"] == "Core Insight:"
+    assert rich_text[0]["annotations"]["bold"] is True
+    assert "Loose coupling" in rich_text[1]["text"]["content"]
+

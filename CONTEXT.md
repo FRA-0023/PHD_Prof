@@ -6,13 +6,24 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 ## Stato Attuale
 - **Architettura**: Esagonale (Ports & Adapters) in src/.
 - **Modello LLM**: Gemini 2.5 Flash con rate limiting e retry esponenziale.
-- **Test**: 19 unit test offline con mock completi.
+- **Test**: 24 unit test offline con mock completi.
 
 ## Prossimi Passi
 - Monitorare l'esecuzione batch in produzione su corsi reali Notion.
 - Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
 
 ## Log delle Sessioni
+
+### 2026-09-23 (Prompt & Block Builder: Airy Layout, Frequent H3, Italic Examples, Quotes)
+- **Struttura Paragrafi Rilassati & Granularita H3**:
+  - Aggiornati SLIDES_PROMPT_TEMPLATE e PAPER_OR_BOOK_PROMPT_TEMPLATE per imporre paragrafi ariosi (2-3 frasi max) che danno respiro ai concetti.
+  - Vietati blocchi H2 massivi da 400-500 parole: imposto l'uso sistematico di sottosezioni ### [Emoji] (ogni ~120-180 parole o a cambi di layer/modello) per scandire visivamente la gerarchia.
+- **Esempi Visivamente Distinti**:
+  - Standardizzato il formato degli esempi in un paragrafo dedicato: **Example:** *[Scenario applicato in corsivo...]*.
+  - Aggiornato parse_rich_text in notion_block_builder.py con supporto completo a *italic*, ***bold italic***, e code per convertire correttamente il corsivo nelle annotazioni Notion rich text.
+- **Parti Salienti come Quote**:
+  - Istruito il modello a racchiudere le massime teoriche, gli assiomi fondamentali e i trade-off critici in blocchi quote Markdown (> **Core Insight:** ...), resi su Notion come callout con barra verticale.
+- **Test Suite**: Aggiunti 5 nuovi test di parsing rich text e formattazione blockquote in tests/test_notion_block_builder.py (24/24 test passati).
 
 ### 2026-09-22 (Prompt Enhancement: Fluid Narrative Flow & Grounded Examples)
 - **Superamento del Formato Piatto**:

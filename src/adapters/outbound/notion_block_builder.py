@@ -32,14 +32,23 @@ def parse_rich_text(line: str) -> List[Dict[str, Any]]:
     """
     Converts a Markdown line into Notion rich_text objects.
     Handles:
+      - ***bold italic*** -> rich_text with bold and italic annotations
       - **bold** -> rich_text with bold annotation
+      - *italic* -> rich_text with italic annotation
+      - `code` -> rich_text with code annotation
       - $formula$ -> inline equation object
       - plain text -> text object
     Normalizes punctuation spacing and truncates individual segments to NOTION_MAX_BLOCK_CHARS.
     """
     line = normalize_sentence_spacing(line)
     parts: List[Dict[str, Any]] = []
-    pattern = re.compile(r'(\*\*(.+?)\*\*|\$(?!\$)(.+?)(?<!\$)\$)')
+    pattern = re.compile(
+        r'(\*\*\*(.+?)\*\*\*'
+        r'|\*\*(.+?)\*\*'
+        r'|\*(?!\s)(.+?)(?<!\s)\*'
+        r'|`([^`]+)`'
+        r'|\$(?!\$)(.+?)(?<!\$)\$)'
+    )
     cursor = 0
 
     for m in pattern.finditer(line):
@@ -47,16 +56,40 @@ def parse_rich_text(line: str) -> List[Dict[str, Any]]:
             seg = line[cursor:m.start()][:NOTION_MAX_BLOCK_CHARS]
             if seg:
                 parts.append({"type": "text", "text": {"content": seg}})
-        if m.group(0).startswith("**"):
+
+        full = m.group(0)
+        if full.startswith("***"):
             seg = m.group(2)[:NOTION_MAX_BLOCK_CHARS]
+            parts.append({
+                "type": "text",
+                "text": {"content": seg},
+                "annotations": {"bold": True, "italic": True},
+            })
+        elif full.startswith("**"):
+            seg = m.group(3)[:NOTION_MAX_BLOCK_CHARS]
             parts.append({
                 "type": "text",
                 "text": {"content": seg},
                 "annotations": {"bold": True},
             })
+        elif full.startswith("*"):
+            seg = m.group(4)[:NOTION_MAX_BLOCK_CHARS]
+            parts.append({
+                "type": "text",
+                "text": {"content": seg},
+                "annotations": {"italic": True},
+            })
+        elif full.startswith("`"):
+            seg = m.group(5)[:NOTION_MAX_BLOCK_CHARS]
+            parts.append({
+                "type": "text",
+                "text": {"content": seg},
+                "annotations": {"code": True},
+            })
         else:
-            expr = m.group(3)[:NOTION_MAX_BLOCK_CHARS]
+            expr = m.group(6)[:NOTION_MAX_BLOCK_CHARS]
             parts.append({"type": "equation", "equation": {"expression": expr}})
+
         cursor = m.end()
 
     if cursor < len(line):
@@ -167,13 +200,14 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             continue
 
         # ── Blockquote ──────────────────────────────────────────────────────
-        if s.startswith("> "):
-            content = s[2:].strip()
-            blocks.append({
-                "object": "block",
-                "type": "quote",
-                "quote": {"rich_text": parse_rich_text(content)},
-            })
+        if s.startswith(">"):
+            content = s[1:].strip()
+            if content:
+                blocks.append({
+                    "object": "block",
+                    "type": "quote",
+                    "quote": {"rich_text": parse_rich_text(content)},
+                })
             continue
 
         # ── Headings with Dividers ──────────────────────────────────────────
