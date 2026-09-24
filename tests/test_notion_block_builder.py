@@ -150,4 +150,29 @@ def test_parse_rich_text_italic_with_nested_bold():
     assert nested_bold["annotations"]["bold"] is True
     assert nested_bold["annotations"]["italic"] is True
 
+def test_parse_rich_text_formula_inside_bold():
+    line = "**Sample size ($T=100$):** critical baseline."
+    parts = parse_rich_text(line)
+    eq_parts = [p for p in parts if p.get("type") == "equation"]
+    assert len(eq_parts) == 1
+    assert eq_parts[0]["equation"]["expression"] == "T=100"
+    assert eq_parts[0]["annotations"]["bold"] is True
+
+def test_parse_rich_text_formula_inside_italic():
+    line = "**Example:** *Simulated white noise with $T=100$ observations.*"
+    parts = parse_rich_text(line)
+    eq_parts = [p for p in parts if p.get("type") == "equation"]
+    assert len(eq_parts) == 1
+    assert eq_parts[0]["equation"]["expression"] == "T=100"
+    assert eq_parts[0]["annotations"]["italic"] is True
+
+def test_build_notion_blocks_bullet_with_equation():
+    md = "- $$n_i = |F_i|$$"
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "bulleted_list_item"
+    rich_text = blocks[0]["bulleted_list_item"]["rich_text"]
+    assert any(r.get("type") == "equation" and r["equation"]["expression"] == "n_i = |F_i|" for r in rich_text)
+
+
 

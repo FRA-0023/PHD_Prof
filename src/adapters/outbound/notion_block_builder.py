@@ -28,62 +28,30 @@ def normalize_sentence_spacing(text: str) -> str:
     text = re.sub(r'([a-zA-Z0-9\)]);([A-Za-z])', r'\1; \2', text)
     return text
 
-def _parse_italic_subsegments(italic_content: str) -> List[Dict[str, Any]]:
-    """Handles potential bold segments inside an italic block."""
-    sub_parts: List[Dict[str, Any]] = []
-    bold_pattern = re.compile(r'\*\*(.+?)\*\*')
-    cursor = 0
-    for bm in bold_pattern.finditer(italic_content):
-        if bm.start() > cursor:
-            plain = italic_content[cursor:bm.start()][:NOTION_MAX_BLOCK_CHARS]
-            if plain:
-                sub_parts.append({
-                    "type": "text",
-                    "text": {"content": plain},
-                    "annotations": {"italic": True},
-                })
-        bold_text = bm.group(1)[:NOTION_MAX_BLOCK_CHARS]
-        sub_parts.append({
-            "type": "text",
-            "text": {"content": bold_text},
-            "annotations": {"bold": True, "italic": True},
-        })
-        cursor = bm.end()
-    if cursor < len(italic_content):
-        plain = italic_content[cursor:][:NOTION_MAX_BLOCK_CHARS]
-        if plain:
-            sub_parts.append({
-                "type": "text",
-                "text": {"content": plain},
-                "annotations": {"italic": True},
-            })
-    return sub_parts or [{
-        "type": "text",
-        "text": {"content": italic_content[:NOTION_MAX_BLOCK_CHARS]},
-        "annotations": {"italic": True},
-    }]
-
-
-def parse_rich_text(line: str) -> List[Dict[str, Any]]:
+def parse_rich_text(line: str, annotations: Dict[str, bool] = None) -> List[Dict[str, Any]]:
     """
     Converts a Markdown line into Notion rich_text objects.
-    Handles:
-      - ***bold italic*** -> rich_text with bold and italic annotations
-      - **bold** -> rich_text with bold annotation
-      - *italic* -> rich_text with italic annotation (supports nested **bold**)
+    Recursively handles nested formatting:
       - `code` -> rich_text with code annotation
-      - $formula$ -> inline equation object
+      - $$formula$$ / $formula$ -> inline equation object (even inside bold or italic)
+      - ***bold italic*** -> rich_text with bold and italic annotations (recursive)
+      - **bold** -> rich_text with bold annotation (recursive)
+      - *italic* -> rich_text with italic annotation (recursive)
       - plain text -> text object
     Normalizes punctuation spacing and truncates individual segments to NOTION_MAX_BLOCK_CHARS.
     """
-    line = normalize_sentence_spacing(line)
+    if annotations is None:
+        line = normalize_sentence_spacing(line)
+        annotations = {}
+
     parts: List[Dict[str, Any]] = []
     pattern = re.compile(
-        r'(\*\*\*(.+?)\*\*\*'
-        r'|\*\*(.+?)\*\*'
-        r'|(?<!\*)\*(?!\s|\*)(.+?)(?<!\s|\*)\*(?!\*)'
-        r'|`([^`]+)`'
-        r'|\$(?!\$)(.+?)(?<!\$)\$)'
+        r'(`([^`]+)`)'
+        r'|(\$\$([^\$]+)\$\$)'
+        r'|(\$(?!\$)([^\$]+?)(?<!\$)\$)'
+        r'|(\*\*\*(.+?)\*\*\*)'
+        r'|(\*\*(.+?)\*\*)'
+        r'|((?<!\*)\*(?!\s|\*)(.+?)(?<!\s|\*)\*(?!\*))'
     )
     cursor = 0
 
@@ -91,41 +59,61 @@ def parse_rich_text(line: str) -> List[Dict[str, Any]]:
         if m.start() > cursor:
             seg = line[cursor:m.start()][:NOTION_MAX_BLOCK_CHARS]
             if seg:
-                parts.append({"type": "text", "text": {"content": seg}})
+                item: Dict[str, Any] = {"type": "text", "text": {"content": seg}}
+                if annotations:
+                    item["annotations"] = dict(annotations)
+                parts.append(item)
 
+        # 1: Code `...` -> Group 2
         if m.group(2) is not None:
             seg = m.group(2)[:NOTION_MAX_BLOCK_CHARS]
+            code_ann = dict(annotations)
+            code_ann["code"] = True
             parts.append({
                 "type": "text",
                 "text": {"content": seg},
-                "annotations": {"bold": True, "italic": True},
+                "annotations": code_ann,
             })
-        elif m.group(3) is not None:
-            seg = m.group(3)[:NOTION_MAX_BLOCK_CHARS]
-            parts.append({
-                "type": "text",
-                "text": {"content": seg},
-                "annotations": {"bold": True},
-            })
+        # 2: $$...$$ -> Group 4
         elif m.group(4) is not None:
-            parts.extend(_parse_italic_subsegments(m.group(4)))
-        elif m.group(5) is not None:
-            seg = m.group(5)[:NOTION_MAX_BLOCK_CHARS]
-            parts.append({
-                "type": "text",
-                "text": {"content": seg},
-                "annotations": {"code": True},
-            })
+            expr = m.group(4).strip()[:NOTION_MAX_BLOCK_CHARS]
+            eq_item: Dict[str, Any] = {"type": "equation", "equation": {"expression": expr}}
+            if annotations:
+                eq_item["annotations"] = dict(annotations)
+            parts.append(eq_item)
+        # 3: $...$ -> Group 6
         elif m.group(6) is not None:
-            expr = m.group(6)[:NOTION_MAX_BLOCK_CHARS]
-            parts.append({"type": "equation", "equation": {"expression": expr}})
+            expr = m.group(6).strip()[:NOTION_MAX_BLOCK_CHARS]
+            eq_item = {"type": "equation", "equation": {"expression": expr}}
+            if annotations:
+                eq_item["annotations"] = dict(annotations)
+            parts.append(eq_item)
+        # 4: ***...*** -> Group 8
+        elif m.group(8) is not None:
+            sub_ann = dict(annotations)
+            sub_ann["bold"] = True
+            sub_ann["italic"] = True
+            parts.extend(parse_rich_text(m.group(8), sub_ann))
+        # 5: **...** -> Group 10
+        elif m.group(10) is not None:
+            sub_ann = dict(annotations)
+            sub_ann["bold"] = True
+            parts.extend(parse_rich_text(m.group(10), sub_ann))
+        # 6: *...* -> Group 12
+        elif m.group(12) is not None:
+            sub_ann = dict(annotations)
+            sub_ann["italic"] = True
+            parts.extend(parse_rich_text(m.group(12), sub_ann))
 
         cursor = m.end()
 
     if cursor < len(line):
         seg = line[cursor:][:NOTION_MAX_BLOCK_CHARS]
         if seg:
-            parts.append({"type": "text", "text": {"content": seg}})
+            item = {"type": "text", "text": {"content": seg}}
+            if annotations:
+                item["annotations"] = dict(annotations)
+            parts.append(item)
 
     return parts or [{"type": "text", "text": {"content": ""}}]
 
