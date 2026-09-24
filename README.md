@@ -4,6 +4,7 @@
 [![Model](https://img.shields.io/badge/Model-Google%20Gemini%20API-4285F4?logo=google)](https://ai.google.dev/)
 [![Destination](https://img.shields.io/badge/Destination-Notion%20API-000000?logo=notion)](https://www.notion.so/)
 [![Architecture](https://img.shields.io/badge/Architecture-Crash--Only%20ETL-green)](#)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > A crash-only, zero-data-loss document processing pipeline: ingesting academic PDFs, synthesizing core findings via LLM, and persisting structured intelligence to Notion with cryptographic state tracking.
 
