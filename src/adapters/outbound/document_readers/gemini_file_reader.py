@@ -10,7 +10,7 @@ class GeminiFileReader(IDocumentReader):
     Multimodal document reader that uploads PDFs to the Gemini File API.
     Essential for lecture slides where charts, figures, and spatial layouts convey meaning.
     """
-    def __init__(self, api_key: str, timeout: float = 20.0):
+    def __init__(self, api_key: str, timeout: float = 60.0):
         self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
 
     def read(self, document: Document) -> genai_types.File:

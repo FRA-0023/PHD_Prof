@@ -136,3 +136,18 @@ def test_build_notion_blocks_blockquote_with_formatting():
     assert rich_text[0]["annotations"]["bold"] is True
     assert "Loose coupling" in rich_text[1]["text"]["content"]
 
+def test_parse_rich_text_italic_with_nested_bold():
+    line = "**Example:** *Consider a **stationary series** before shock.*"
+    parts = parse_rich_text(line)
+    # Check Example: is bold
+    assert parts[0]["text"]["content"] == "Example:"
+    assert parts[0]["annotations"]["bold"] is True
+    # Check italic prefix
+    italic_prefix = next(p for p in parts if "Consider a " in p["text"]["content"])
+    assert italic_prefix["annotations"]["italic"] is True
+    # Check bold+italic nested text
+    nested_bold = next(p for p in parts if p["text"]["content"] == "stationary series")
+    assert nested_bold["annotations"]["bold"] is True
+    assert nested_bold["annotations"]["italic"] is True
+
+

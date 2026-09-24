@@ -15,7 +15,7 @@ class GeminiLlmAdapter(ILlmClient):
         state_repo: IStateRepository,
         model: str = "gemini-2.5-flash",
         daily_limit: int = 20,
-        timeout: float = 20.0
+        timeout: float = 60.0
     ):
         self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
         self.state_repo = state_repo
