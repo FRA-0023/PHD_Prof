@@ -6,13 +6,28 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 ## Stato Attuale
 - **Architettura**: Esagonale (Ports & Adapters) in src/.
 - **Modello LLM**: Gemini 2.5 Flash con rate limiting e retry esponenziale.
-- **Test**: 24 unit test offline con mock completi.
+- **Test**: 28 unit test offline con mock completi.
 
 ## Prossimi Passi
 - Monitorare l'esecuzione batch in produzione su corsi reali Notion.
 - Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
 
 ## Log delle Sessioni
+
+### 2026-09-25 (Prompt Engineering: Anti-Tautology, Pruning & High Density)
+- **Eliminazione Inflazione & Ridondanze**:
+  - Rimosso l'obbligo forzato di sottosezioni `###` ogni 120-180 parole che frammentava il testo e costringeva il modello a generare formule di raccordo e preamboli ad ogni micro-blocco.
+  - Introdotta la regola tassativa di **Anti-Tautologia & Anti-Ripetizione**: ogni concetto, proprietà o parametro viene spiegato una sola volta alla prima introduzione sostanziale; nelle sezioni successive si fa riferimento diretto al termine senza ridefinizioni circolari.
+  - Circoscritti gli esempi `**Example:**` esclusivamente a modelli o scenari di stima econometrici complessi e non banali, eliminando esempi superflui su panoramiche di syllabus e definizioni terminologiche di base.
+  - Limitati i callout quote (`> **Core Insight:**`) a massimo 1 per sezione principale `##`, riservandoli a teoremi o leggi di identificazione cardine.
+  - Sostituito il comando "airy relaxed paragraphs" con "dense, focused paragraphs" eliminando meta-introduzioni decorative e padding accademico ("delves into the intricate world", "it is vital to understand that").
+
+### 2026-09-24 (Recursive Notion Block Parsing: KaTeX Equations & Nested Styles)
+- **Parser Rich-Text Ricorsivo**:
+  - Risolto il bug delle formule inline `$T=100$` e `$\delta$` visibili come testo grezzo: implementato un tokenizer ricorsivo in `parse_rich_text` che estrae equazioni KaTeX anche se annidate all'interno di grassetti (`**...**`) o corsivi (`*...*`).
+  - Aggiunto supporto a equazioni display su elenchi puntati (`- $$...$$`).
+  - Risolto il `TypeError: 'NoneType' object is not subscriptable` su delimitatori annidati.
+  - Suite unit test estesa a 28/28 test superati con successo.
 
 ### 2026-09-23 (Prompt & Block Builder: Airy Layout, Frequent H3, Italic Examples, Quotes)
 - **Struttura Paragrafi Rilassati & Granularita H3**:
