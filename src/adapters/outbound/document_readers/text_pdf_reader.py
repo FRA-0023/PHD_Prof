@@ -51,32 +51,10 @@ class TextPdfReader(IDocumentReader):
             except Exception as exc:
                 raise RuntimeError(f"Impossibile estrarre testo dal PDF '{doc_path}': {exc}")
 
-        # Fallback to python-pptx for presentation files if MarkItDown fails
+        # Delegate PPTX extraction to shared markitdown / python-pptx extractor
         if ext == ".pptx":
-            try:
-                from pptx import Presentation
-                prs = Presentation(doc_path)
-                slides_text = []
-                for idx, slide in enumerate(prs.slides, 1):
-                    slide_parts = [f"--- SLIDE {idx} ---"]
-                    for shape in slide.shapes:
-                        if shape.has_text_frame:
-                            for paragraph in shape.text_frame.paragraphs:
-                                line = paragraph.text.strip()
-                                if line:
-                                    slide_parts.append(line)
-                    if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
-                        notes = slide.notes_slide.notes_text_frame.text.strip()
-                        if notes:
-                            slide_parts.append(f"[Note: {notes}]")
-                    if len(slide_parts) > 1:
-                        slides_text.append("\n".join(slide_parts))
-                full_text = "\n\n".join(slides_text).strip()
-                if full_text:
-                    print(f"    [python-pptx] Extracted {len(full_text)} characters across {len(slides_text)} slides.")
-                    return full_text
-            except Exception as exc:
-                print(f"    [python-pptx Warning] Fallback failed ({exc}).")
+            from src.adapters.outbound.document_readers.pptx_extractor import extract_pptx_to_markdown
+            return extract_pptx_to_markdown(document.path)
 
         raise RuntimeError(f"Impossibile convertire il documento '{doc_path}' (formato {ext}).")
 

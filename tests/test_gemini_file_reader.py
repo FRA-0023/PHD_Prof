@@ -29,34 +29,33 @@ def test_gemini_file_reader_upload_pdf_mime_type(mock_genai_client):
     assert kwargs["config"].mime_type == "application/pdf"
 
 
-def test_gemini_file_reader_upload_pptx_mime_type(mock_genai_client):
-    mock_file = genai_types.File(name="files/test-pptx-id", state="ACTIVE")
-    mock_genai_client.files.upload.return_value = mock_file
+def test_gemini_file_reader_pptx_extracts_markdown_locally(mock_genai_client, monkeypatch):
+    monkeypatch.setattr(
+        "src.adapters.outbound.document_readers.gemini_file_reader.extract_pptx_to_markdown",
+        lambda p: "## Slide 1\nExtracted PPTX Markdown content",
+    )
 
     reader = GeminiFileReader(client=mock_genai_client)
     doc = Document(path=Path("/tmp/deck.pptx"), file_hash="hash_pptx", doc_type=DocumentType.SLIDES)
 
     result = reader.read(doc)
 
-    assert result == mock_file
-    mock_genai_client.files.upload.assert_called_once()
-    _, kwargs = mock_genai_client.files.upload.call_args
-    assert (kwargs.get("file") or kwargs.get("path")) == str(Path("/tmp/deck.pptx"))
-    assert kwargs["config"].mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    assert result == "## Slide 1\nExtracted PPTX Markdown content"
+    mock_genai_client.files.upload.assert_not_called()
 
 
-def test_gemini_file_reader_upload_case_insensitive_extension(mock_genai_client):
+def test_gemini_file_reader_upload_case_insensitive_pdf_extension(mock_genai_client):
     mock_file = genai_types.File(name="files/test-upper-id", state="ACTIVE")
     mock_genai_client.files.upload.return_value = mock_file
 
     reader = GeminiFileReader(client=mock_genai_client)
-    doc = Document(path=Path("/tmp/PRESENTATION.PPTX"), file_hash="hash_upper", doc_type=DocumentType.SLIDES)
+    doc = Document(path=Path("/tmp/PRESENTATION.PDF"), file_hash="hash_upper", doc_type=DocumentType.SLIDES)
 
     result = reader.read(doc)
 
     assert result == mock_file
     _, kwargs = mock_genai_client.files.upload.call_args
-    assert kwargs["config"].mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    assert kwargs["config"].mime_type == "application/pdf"
 
 
 def test_gemini_file_reader_unsupported_extension_raises_value_error(mock_genai_client):
@@ -94,7 +93,7 @@ def test_gemini_file_reader_failed_state_raises_runtime_error(mock_genai_client)
     mock_genai_client.files.upload.return_value = failed_file
 
     reader = GeminiFileReader(client=mock_genai_client)
-    doc = Document(path=Path("/tmp/corrupted.pptx"), file_hash="hash_fail", doc_type=DocumentType.SLIDES)
+    doc = Document(path=Path("/tmp/corrupted.pdf"), file_hash="hash_fail", doc_type=DocumentType.SLIDES)
 
     with pytest.raises(RuntimeError, match="Gemini: elaborazione fallita"):
         reader.read(doc)
@@ -181,7 +180,7 @@ def test_gemini_file_reader_upload_fallback_on_type_error():
     client.files.upload = MagicMock(side_effect=upload_func)
 
     reader = GeminiFileReader(client=client)
-    doc = Document(path=Path("/tmp/fallback.pptx"), file_hash="h3", doc_type=DocumentType.SLIDES)
+    doc = Document(path=Path("/tmp/fallback.pdf"), file_hash="h3", doc_type=DocumentType.SLIDES)
     res = reader.read(doc)
 
     assert res == mock_file
@@ -211,7 +210,7 @@ def test_gemini_file_reader_upload_retry_on_timeout(monkeypatch):
     client.files.upload = MagicMock(side_effect=flaky_upload)
 
     reader = GeminiFileReader(client=client)
-    doc = Document(path=Path("/tmp/deck.pptx"), file_hash="h4", doc_type=DocumentType.SLIDES)
+    doc = Document(path=Path("/tmp/deck.pdf"), file_hash="h4", doc_type=DocumentType.SLIDES)
     res = reader.read(doc)
 
     assert res == mock_file

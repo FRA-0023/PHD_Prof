@@ -39,4 +39,5 @@ def test_text_pdf_reader_pptx_fallback_with_python_pptx():
         result = reader.read(doc)
 
     assert "Introduction to Econometrics" in result
-    assert "[Note: Emphasize Gauss-Markov assumptions]" in result
+    assert "Note del relatore" in result
+    assert "Emphasize Gauss-Markov assumptions" in result

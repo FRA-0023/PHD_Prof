@@ -1,17 +1,17 @@
 import time
-from typing import Any, Optional
+from typing import Any, Optional, Union
 import google.genai as genai
 import google.genai.types as genai_types
 from src.core.domain.models import Document
 from src.ports.outbound.document_reader_port import IDocumentReader
+from src.adapters.outbound.document_readers.pptx_extractor import extract_pptx_to_markdown
 
 class GeminiFileReader(IDocumentReader):
     """
-    Multimodal document reader that uploads presentation slide decks and documents (PDF, PPTX)
-    to the Gemini File API.
-
-    Preserves multimodal visual context (charts, diagrams, equations, and spatial layouts)
-    by delegating parsing and rendering directly to Gemini's native document vision pipeline.
+    Multimodal document reader for presentation slides and documents.
+    - PDF: Uploads to Google Gemini File API to preserve charts, formulas, and visual spatial layout.
+    - PPTX: Extracts structured Markdown (headers, bullet points, tables, speaker notes) locally
+      via MarkItDown and python-pptx, preventing socket upload timeouts and remote API failures.
     """
 
     SUPPORTED_MIME_TYPES = {
@@ -44,16 +44,23 @@ class GeminiFileReader(IDocumentReader):
                 return self.client.files.upload(path=file_path, config=config)
             raise
 
-    def read(self, document: Document) -> genai_types.File:
+    def read(self, document: Document) -> Union[genai_types.File, str]:
         ext = document.path.suffix.lower()
-        mime_type = self.SUPPORTED_MIME_TYPES.get(ext)
-        if not mime_type:
+        if ext not in self.SUPPORTED_MIME_TYPES:
             raise ValueError(
                 f"Formato non supportato per GeminiFileReader: '{ext}'. "
                 f"Formati supportati: {', '.join(sorted(self.SUPPORTED_MIME_TYPES.keys()))}"
             )
 
+        # PPTX files: convert locally via MarkItDown / python-pptx to prevent upload timeouts
+        if ext == ".pptx":
+            print(f"    [MarkItDown / python-pptx] Estrazione locale slide e note da '{document.path.name}'...")
+            text = extract_pptx_to_markdown(document.path)
+            print(f"    [MarkItDown / python-pptx] Estratti {len(text)} caratteri in Markdown strutturato.")
+            return text
+
         file_path = str(document.path)
+        mime_type = self.SUPPORTED_MIME_TYPES[ext]
         try:
             size_mb = document.path.stat().st_size / (1024 * 1024)
             size_str = f", {size_mb:.1f} MB"
