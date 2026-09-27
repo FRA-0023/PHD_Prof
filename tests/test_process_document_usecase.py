@@ -105,7 +105,7 @@ def test_process_document_full_flow():
     assert res.success is True
     assert res.page_id == "created_page_id"
 
-def test_process_document_pptx_routing():
+def test_process_document_pptx_slides_routing():
     state_repo = MagicMock(spec=IStateRepository)
     state_repo.get_entry.return_value = None
 
@@ -113,8 +113,8 @@ def test_process_document_pptx_routing():
     staging_storage.exists.return_value = False
 
     slides_reader = MagicMock(spec=IDocumentReader)
+    slides_reader.read.return_value = MagicMock()
     text_reader = MagicMock(spec=IDocumentReader)
-    text_reader.read.return_value = "extracted pptx text"
 
     llm_client = MagicMock(spec=ILlmClient)
     llm_client.generate_notes.return_value = "# PPTX Notes"
@@ -138,9 +138,50 @@ def test_process_document_pptx_routing():
 
     res = usecase.execute(doc, target, "prompt")
 
-    # Even though doc_type was SLIDES, .pptx must be routed to text_reader (MarkItDown)
+    # SLIDES doc_type with .pptx must route to slides_reader (GeminiFileReader)
+    slides_reader.read.assert_called_once_with(doc)
+    text_reader.read.assert_not_called()
+    assert res.success is True
+    assert res.page_id == "p_pptx"
+
+
+def test_process_document_pptx_paper_routing():
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = False
+
+    slides_reader = MagicMock(spec=IDocumentReader)
+    text_reader = MagicMock(spec=IDocumentReader)
+    text_reader.read.return_value = "extracted pptx text"
+
+    llm_client = MagicMock(spec=ILlmClient)
+    llm_client.generate_notes.return_value = "# PPTX Paper Notes"
+
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "p_pptx_paper"
+
+    usecase = ProcessDocumentUseCase(
+        readers={
+            DocumentType.SLIDES: slides_reader,
+            DocumentType.PAPER_OR_BOOK: text_reader,
+        },
+        llm_client=llm_client,
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+    )
+
+    doc = Document(path=Path("deck.pptx"), file_hash="pptx_hash_paper", doc_type=DocumentType.PAPER_OR_BOOK)
+    target = NotionTarget(database_id="db1", course_name="EA", database_title="Notes")
+
+    res = usecase.execute(doc, target, "prompt")
+
+    # PAPER_OR_BOOK doc_type with .pptx must route to text_reader (MarkItDown/python-pptx)
     text_reader.read.assert_called_once_with(doc)
     slides_reader.read.assert_not_called()
     assert res.success is True
-    assert res.page_id == "p_pptx"
+    assert res.page_id == "p_pptx_paper"
+
 

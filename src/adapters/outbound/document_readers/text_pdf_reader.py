@@ -4,8 +4,8 @@ from src.ports.outbound.document_reader_port import IDocumentReader
 
 class TextPdfReader(IDocumentReader):
     """
-    Extracts structured text/markdown from dense academic documents (papers, book chapters, lecture notes).
-    Uses MarkItDown if available; falls back to PyMuPDF (fitz) for fast, zero-dependency extraction.
+    Extracts structured text/markdown from dense academic documents (papers, book chapters, lecture notes, presentations).
+    Uses MarkItDown if available; falls back to PyMuPDF (fitz) for PDF files and python-pptx for PPTX files.
     Trade-off: Bypasses Gemini File API upload latency and remote file limits entirely,
     injecting extracted text directly into the LLM context.
     """
@@ -50,6 +50,33 @@ class TextPdfReader(IDocumentReader):
                 return full_text
             except Exception as exc:
                 raise RuntimeError(f"Impossibile estrarre testo dal PDF '{doc_path}': {exc}")
+
+        # Fallback to python-pptx for presentation files if MarkItDown fails
+        if ext == ".pptx":
+            try:
+                from pptx import Presentation
+                prs = Presentation(doc_path)
+                slides_text = []
+                for idx, slide in enumerate(prs.slides, 1):
+                    slide_parts = [f"--- SLIDE {idx} ---"]
+                    for shape in slide.shapes:
+                        if shape.has_text_frame:
+                            for paragraph in shape.text_frame.paragraphs:
+                                line = paragraph.text.strip()
+                                if line:
+                                    slide_parts.append(line)
+                    if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+                        notes = slide.notes_slide.notes_text_frame.text.strip()
+                        if notes:
+                            slide_parts.append(f"[Note: {notes}]")
+                    if len(slide_parts) > 1:
+                        slides_text.append("\n".join(slide_parts))
+                full_text = "\n\n".join(slides_text).strip()
+                if full_text:
+                    print(f"    [python-pptx] Extracted {len(full_text)} characters across {len(slides_text)} slides.")
+                    return full_text
+            except Exception as exc:
+                print(f"    [python-pptx Warning] Fallback failed ({exc}).")
 
         raise RuntimeError(f"Impossibile convertire il documento '{doc_path}' (formato {ext}).")
 

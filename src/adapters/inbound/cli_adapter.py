@@ -121,7 +121,7 @@ class CLIAdapter:
             professor_type = f"PhD Professor in {subject}"
 
         print("\n  Tipologia di documento:")
-        print("    [1] Slide di lezione (Visual/Multimodale per PDF, estrattore testo e note per PPTX)")
+        print("    [1] Slide di lezione (Visual/Multimodale per PDF e PPTX — Gemini File API)")
         print("    [2] Paper / Libro / Dispensa (Estrazione analitica locale — sintesi rigorosa, dimostrazioni)")
         doc_type_choice = input("  Scelta [1/2, default: 1]: ").strip()
         if doc_type_choice == "2":
