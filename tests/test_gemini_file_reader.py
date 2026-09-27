@@ -191,3 +191,58 @@ def test_gemini_file_reader_upload_fallback_on_type_error():
     second_call_kwargs = client.files.upload.call_args_list[1][1]
     assert "file" in first_call_kwargs
     assert "path" in second_call_kwargs
+
+
+def test_gemini_file_reader_upload_retry_on_timeout(monkeypatch):
+    mock_file = genai_types.File(name="files/retry-timeout", state="ACTIVE")
+    sleep_mock = MagicMock()
+    monkeypatch.setattr("time.sleep", sleep_mock)
+
+    attempts = 0
+
+    def flaky_upload(**kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise TimeoutError("The read operation timed out")
+        return mock_file
+
+    client = MagicMock()
+    client.files.upload = MagicMock(side_effect=flaky_upload)
+
+    reader = GeminiFileReader(client=client)
+    doc = Document(path=Path("/tmp/deck.pptx"), file_hash="h4", doc_type=DocumentType.SLIDES)
+    res = reader.read(doc)
+
+    assert res == mock_file
+    assert client.files.upload.call_count == 2
+    sleep_mock.assert_called_with(5.0)
+
+
+def test_gemini_file_reader_polling_retry_on_timeout(monkeypatch):
+    proc_file = genai_types.File(name="files/poll-to", state="PROCESSING")
+    ready_file = genai_types.File(name="files/poll-to", state="ACTIVE")
+    sleep_mock = MagicMock()
+    monkeypatch.setattr("time.sleep", sleep_mock)
+
+    client = MagicMock()
+    client.files.upload.return_value = proc_file
+
+    get_attempts = 0
+
+    def flaky_get(name):
+        nonlocal get_attempts
+        get_attempts += 1
+        if get_attempts == 1:
+            raise TimeoutError("The read operation timed out during get")
+        return ready_file
+
+    client.files.get = MagicMock(side_effect=flaky_get)
+
+    reader = GeminiFileReader(client=client)
+    doc = Document(path=Path("/tmp/deck.pdf"), file_hash="h5", doc_type=DocumentType.SLIDES)
+    res = reader.read(doc)
+
+    assert res == ready_file
+    assert client.files.get.call_count == 2
+

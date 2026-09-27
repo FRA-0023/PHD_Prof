@@ -19,7 +19,7 @@ class GeminiFileReader(IDocumentReader):
         ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     }
 
-    def __init__(self, api_key: str = "", timeout: float = 60.0, client: Optional[Any] = None):
+    def __init__(self, api_key: str = "", timeout: float = 300.0, client: Optional[Any] = None):
         if client is not None:
             self.client = client
         else:
@@ -54,13 +54,47 @@ class GeminiFileReader(IDocumentReader):
             )
 
         file_path = str(document.path)
-        print(f"    [Gemini File API] Uploading '{document.path.name}' ({mime_type})...")
-        config = genai_types.UploadFileConfig(mime_type=mime_type)
-        uploaded = self._upload_file(file_path=file_path, config=config)
+        try:
+            size_mb = document.path.stat().st_size / (1024 * 1024)
+            size_str = f", {size_mb:.1f} MB"
+        except Exception:
+            size_str = ""
 
-        while uploaded.state.name == "PROCESSING":
+        print(f"    [Gemini File API] Uploading '{document.path.name}' ({mime_type}{size_str})...")
+        config = genai_types.UploadFileConfig(mime_type=mime_type)
+
+        max_upload_retries = 3
+        base_delay = 5.0
+        uploaded = None
+        for attempt in range(max_upload_retries):
+            try:
+                uploaded = self._upload_file(file_path=file_path, config=config)
+                break
+            except Exception as exc:
+                is_timeout = "timed out" in str(exc).lower() or "timeout" in str(exc).lower()
+                is_conn = "connection" in str(exc).lower() or "reset" in str(exc).lower()
+                if (is_timeout or is_conn) and attempt < max_upload_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(
+                        f"    [Gemini File API Warning] Upload interrotto ({exc}). "
+                        f"Nuovo tentativo tra {delay:.0f}s... ({attempt + 1}/{max_upload_retries})"
+                    )
+                    time.sleep(delay)
+                else:
+                    raise
+
+        poll_attempts = 0
+        max_poll_attempts = 100
+        while uploaded.state.name == "PROCESSING" and poll_attempts < max_poll_attempts:
             time.sleep(3)
-            uploaded = self.client.files.get(name=uploaded.name)
+            poll_attempts += 1
+            try:
+                uploaded = self.client.files.get(name=uploaded.name)
+            except Exception as exc:
+                if ("timed out" in str(exc).lower() or "timeout" in str(exc).lower()) and poll_attempts < max_poll_attempts:
+                    print(f"    [Gemini File API Warning] Polling timeout temporaneo ({exc}), ritento...")
+                    continue
+                raise
 
         if uploaded.state.name == "FAILED":
             raise RuntimeError(f"Gemini: elaborazione fallita per '{file_path}'.")

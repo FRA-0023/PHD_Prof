@@ -47,14 +47,21 @@ def main() -> None:
     usage_file = root_dir / "gemini_usage.json"
     staging_dir = root_dir / "staging"
 
+    # Timeout configuration (default: 300s to avoid socket read timeouts on large uploads)
+    raw_timeout = os.getenv("GEMINI_TIMEOUT_SECONDS")
+    try:
+        gemini_timeout = float(raw_timeout) if raw_timeout else 300.0
+    except ValueError:
+        gemini_timeout = 300.0
+
     # Dependency Injection: Wiring Adapters to Ports
     state_repo = JsonStateRepository(state_file=state_file, usage_file=usage_file)
     staging_storage = FileSystemStaging(staging_dir=staging_dir)
-    llm_client = GeminiLlmAdapter(api_key=gemini_api_key, state_repo=state_repo)
+    llm_client = GeminiLlmAdapter(api_key=gemini_api_key, state_repo=state_repo, timeout=gemini_timeout)
     notion_client = NotionApiAdapter(token=notion_token)
 
     readers = {
-        DocumentType.SLIDES: GeminiFileReader(api_key=gemini_api_key),
+        DocumentType.SLIDES: GeminiFileReader(api_key=gemini_api_key, timeout=gemini_timeout),
         DocumentType.PAPER_OR_BOOK: TextPdfReader(),
     }
 
