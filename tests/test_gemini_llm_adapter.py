@@ -129,3 +129,21 @@ def test_gemini_llm_adapter_sanitizes_null_bytes(mock_state_repo, mock_genai_cli
 
     call_args = mock_genai_client.models.generate_content_stream.call_args[1]
     assert call_args["contents"] == ["prompt", "textwithnull"]
+
+
+def test_gemini_llm_adapter_timeout_converted_to_milliseconds(monkeypatch, mock_state_repo):
+    captured_client_kwargs = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured_client_kwargs.update(kwargs)
+
+    monkeypatch.setattr("google.genai.Client", FakeClient)
+
+    adapter = GeminiLlmAdapter(api_key="test_key", state_repo=mock_state_repo, timeout=300.0)
+    assert captured_client_kwargs["http_options"]["timeout"] == 300000
+
+    # Minimum deadline clamp test
+    adapter_low = GeminiLlmAdapter(api_key="test_key", state_repo=mock_state_repo, timeout=2.0)
+    assert captured_client_kwargs["http_options"]["timeout"] == 10000
+

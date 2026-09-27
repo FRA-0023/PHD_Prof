@@ -23,7 +23,11 @@ class GeminiFileReader(IDocumentReader):
         if client is not None:
             self.client = client
         else:
-            self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
+            if timeout and timeout > 0:
+                timeout_ms = max(10_000, int(timeout * 1000 if timeout < 1000 else timeout))
+                self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout_ms})
+            else:
+                self.client = genai.Client(api_key=api_key)
 
     def _upload_file(self, file_path: str, config: genai_types.UploadFileConfig) -> genai_types.File:
         # Cross-version compatibility: modern google-genai SDK uses 'file=', legacy v0.6.0 used 'path='

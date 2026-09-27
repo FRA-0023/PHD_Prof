@@ -17,7 +17,11 @@ class GeminiLlmAdapter(ILlmClient):
         daily_limit: int = 20,
         timeout: float = 300.0
     ):
-        self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
+        if timeout and timeout > 0:
+            timeout_ms = max(10_000, int(timeout * 1000 if timeout < 1000 else timeout))
+            self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout_ms})
+        else:
+            self.client = genai.Client(api_key=api_key)
         self.state_repo = state_repo
         self.model = model
         self.daily_limit = daily_limit
