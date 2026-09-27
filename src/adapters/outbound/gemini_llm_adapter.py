@@ -30,19 +30,21 @@ class GeminiLlmAdapter(ILlmClient):
         used = self.state_repo.get_daily_usage()
         return max(0, self.daily_limit - used)
 
-    def _check_and_increment_quota(self) -> None:
+    def _check_quota_available(self) -> None:
         used = self.state_repo.get_daily_usage()
         if used >= self.daily_limit:
             raise RuntimeError(
                 f"Limite giornaliero Gemini raggiunto ({self.daily_limit} RPD). "
                 "Riprova domani."
             )
+
+    def _record_successful_call(self) -> None:
         new_count = self.state_repo.increment_daily_usage()
         remaining = max(0, self.daily_limit - new_count)
-        print(f"    [Gemini] Chiamata {new_count}/{self.daily_limit} — rimaste oggi: {remaining}")
+        print(f"    [Gemini] Chiamata {new_count}/{self.daily_limit} completata — rimaste oggi: {remaining}")
 
     def generate_notes(self, prompt: str, content_payload: Any) -> str:
-        self._check_and_increment_quota()
+        self._check_quota_available()
 
         # Sanitize text payload if string
         if isinstance(content_payload, str):
@@ -69,13 +71,21 @@ class GeminiLlmAdapter(ILlmClient):
 
                     full_text = ""
                     for chunk in response_stream:
-                        if chunk.text:
-                            full_text += chunk.text
+                        try:
+                            if chunk.text:
+                                full_text += chunk.text
+                        except Exception:
+                            pass
+
+                    full_text = full_text.strip()
+                    if not full_text:
+                        raise RuntimeError("Risposta ricevuta da Gemini vuota o filtrata dai filtri di sicurezza.")
 
                     if current_model != self.model:
                         print(f"    [Gemini Info] Inferenza completata con successo usando il modello fallback '{current_model}'.")
                         self.model = current_model
 
+                    self._record_successful_call()
                     return full_text
 
                 except Exception as exc:

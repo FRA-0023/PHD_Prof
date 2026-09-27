@@ -20,6 +20,7 @@ class NotionApiAdapter(INotionClient):
     """
     def __init__(self, token: str):
         self.token = token
+        self._title_prop_cache: Dict[str, str] = {}
 
     def _headers(self) -> Dict[str, str]:
         return {
@@ -135,24 +136,46 @@ class NotionApiAdapter(INotionClient):
             )
         return inner[0]["id"]
 
+    def _get_title_property_name(self, database_id: str) -> str:
+        if database_id in self._title_prop_cache:
+            return self._title_prop_cache[database_id]
+        try:
+            r = requests.get(
+                f"{NOTION_API_BASE}/databases/{database_id}",
+                headers=self._headers(),
+                timeout=30,
+            )
+            if r.status_code == 200:
+                props = r.json().get("properties", {})
+                for name, pdata in props.items():
+                    if pdata.get("type") == "title":
+                        self._title_prop_cache[database_id] = name
+                        return name
+        except Exception:
+            pass
+        self._title_prop_cache[database_id] = "Name"
+        return "Name"
+
     def page_exists(self, database_id: str, title: str) -> bool:
+        title_prop = self._get_title_property_name(database_id)
         r = requests.post(
             f"{NOTION_API_BASE}/databases/{database_id}/query",
             headers=self._headers(),
-            json={"filter": {"property": "Name", "title": {"equals": title}}},
+            json={"filter": {"property": title_prop, "title": {"equals": title}}},
             timeout=30,
         )
         r.raise_for_status()
         return len(r.json().get("results", [])) > 0
 
     def create_page(self, database_id: str, title: str) -> str:
+        title_prop = self._get_title_property_name(database_id)
         r = requests.post(
             f"{NOTION_API_BASE}/pages",
             headers=self._headers(),
             json={
                 "parent": {"database_id": database_id},
                 "properties": {
-                    "Name": {"title": [{"type": "text", "text": {"content": title}}]}
+                    title_prop: {"title": [{"type": "text", "text": {"content": title[:2000]}}]}
                 },
             },
             timeout=30,
