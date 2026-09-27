@@ -54,10 +54,18 @@ def main() -> None:
     except ValueError:
         gemini_timeout = 300.0
 
+    # Gemini model configuration (default: gemini-2.5-flash with auto-fallback to gemini-2.0-flash)
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
     # Dependency Injection: Wiring Adapters to Ports
     state_repo = JsonStateRepository(state_file=state_file, usage_file=usage_file)
     staging_storage = FileSystemStaging(staging_dir=staging_dir)
-    llm_client = GeminiLlmAdapter(api_key=gemini_api_key, state_repo=state_repo, timeout=gemini_timeout)
+    llm_client = GeminiLlmAdapter(
+        api_key=gemini_api_key,
+        state_repo=state_repo,
+        model=gemini_model,
+        timeout=gemini_timeout,
+    )
     notion_client = NotionApiAdapter(token=notion_token)
 
     readers = {
