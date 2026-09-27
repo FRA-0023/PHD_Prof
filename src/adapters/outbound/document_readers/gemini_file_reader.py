@@ -1,24 +1,44 @@
 import time
+from typing import Any, Optional
 import google.genai as genai
 import google.genai.types as genai_types
-from typing import Any
 from src.core.domain.models import Document
 from src.ports.outbound.document_reader_port import IDocumentReader
 
 class GeminiFileReader(IDocumentReader):
     """
-    Multimodal document reader that uploads PDFs to the Gemini File API.
-    Essential for lecture slides where charts, figures, and spatial layouts convey meaning.
+    Multimodal document reader that uploads presentation slide decks and documents (PDF, PPTX)
+    to the Gemini File API.
+
+    Preserves multimodal visual context (charts, diagrams, equations, and spatial layouts)
+    by delegating parsing and rendering directly to Gemini's native document vision pipeline.
     """
-    def __init__(self, api_key: str, timeout: float = 60.0):
-        self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
+
+    SUPPORTED_MIME_TYPES = {
+        ".pdf": "application/pdf",
+        ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    }
+
+    def __init__(self, api_key: str = "", timeout: float = 60.0, client: Optional[Any] = None):
+        if client is not None:
+            self.client = client
+        else:
+            self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
 
     def read(self, document: Document) -> genai_types.File:
-        pdf_path = str(document.path)
-        print(f"    [Gemini File API] Uploading '{document.path.name}'...")
+        ext = document.path.suffix.lower()
+        mime_type = self.SUPPORTED_MIME_TYPES.get(ext)
+        if not mime_type:
+            raise ValueError(
+                f"Formato non supportato per GeminiFileReader: '{ext}'. "
+                f"Formati supportati: {', '.join(sorted(self.SUPPORTED_MIME_TYPES.keys()))}"
+            )
+
+        file_path = str(document.path)
+        print(f"    [Gemini File API] Uploading '{document.path.name}' ({mime_type})...")
         uploaded = self.client.files.upload(
-            path=pdf_path,
-            config=genai_types.UploadFileConfig(mime_type="application/pdf"),
+            path=file_path,
+            config=genai_types.UploadFileConfig(mime_type=mime_type),
         )
 
         while uploaded.state.name == "PROCESSING":
@@ -26,7 +46,7 @@ class GeminiFileReader(IDocumentReader):
             uploaded = self.client.files.get(name=uploaded.name)
 
         if uploaded.state.name == "FAILED":
-            raise RuntimeError(f"Gemini: elaborazione fallita per '{pdf_path}'.")
+            raise RuntimeError(f"Gemini: elaborazione fallita per '{file_path}'.")
 
         return uploaded
 
@@ -36,3 +56,4 @@ class GeminiFileReader(IDocumentReader):
                 self.client.files.delete(name=payload.name)
             except Exception:
                 pass  # Gemini files expire automatically after 48 hours
+
