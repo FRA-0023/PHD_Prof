@@ -25,6 +25,25 @@ class GeminiFileReader(IDocumentReader):
         else:
             self.client = genai.Client(api_key=api_key, http_options={"timeout": timeout})
 
+    def _upload_file(self, file_path: str, config: genai_types.UploadFileConfig) -> genai_types.File:
+        # Cross-version compatibility: modern google-genai SDK uses 'file=', legacy v0.6.0 used 'path='
+        try:
+            import inspect
+            sig = inspect.signature(self.client.files.upload)
+            if "file" in sig.parameters:
+                return self.client.files.upload(file=file_path, config=config)
+            if "path" in sig.parameters:
+                return self.client.files.upload(path=file_path, config=config)
+        except Exception:
+            pass
+
+        try:
+            return self.client.files.upload(file=file_path, config=config)
+        except TypeError as exc:
+            if "unexpected keyword argument" in str(exc) and "file" in str(exc):
+                return self.client.files.upload(path=file_path, config=config)
+            raise
+
     def read(self, document: Document) -> genai_types.File:
         ext = document.path.suffix.lower()
         mime_type = self.SUPPORTED_MIME_TYPES.get(ext)
@@ -36,10 +55,8 @@ class GeminiFileReader(IDocumentReader):
 
         file_path = str(document.path)
         print(f"    [Gemini File API] Uploading '{document.path.name}' ({mime_type})...")
-        uploaded = self.client.files.upload(
-            path=file_path,
-            config=genai_types.UploadFileConfig(mime_type=mime_type),
-        )
+        config = genai_types.UploadFileConfig(mime_type=mime_type)
+        uploaded = self._upload_file(file_path=file_path, config=config)
 
         while uploaded.state.name == "PROCESSING":
             time.sleep(3)

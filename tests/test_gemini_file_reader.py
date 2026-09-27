@@ -25,7 +25,7 @@ def test_gemini_file_reader_upload_pdf_mime_type(mock_genai_client):
     assert result == mock_file
     mock_genai_client.files.upload.assert_called_once()
     _, kwargs = mock_genai_client.files.upload.call_args
-    assert kwargs["path"] == str(Path("/tmp/lecture.pdf"))
+    assert (kwargs.get("file") or kwargs.get("path")) == str(Path("/tmp/lecture.pdf"))
     assert kwargs["config"].mime_type == "application/pdf"
 
 
@@ -41,7 +41,7 @@ def test_gemini_file_reader_upload_pptx_mime_type(mock_genai_client):
     assert result == mock_file
     mock_genai_client.files.upload.assert_called_once()
     _, kwargs = mock_genai_client.files.upload.call_args
-    assert kwargs["path"] == str(Path("/tmp/deck.pptx"))
+    assert (kwargs.get("file") or kwargs.get("path")) == str(Path("/tmp/deck.pptx"))
     assert kwargs["config"].mime_type == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
@@ -114,3 +114,80 @@ def test_gemini_file_reader_cleanup_ignores_non_file_payload(mock_genai_client):
     reader.cleanup("plain_text_payload")
 
     mock_genai_client.files.delete.assert_not_called()
+
+
+def test_gemini_file_reader_upload_modern_sdk_file_param():
+    mock_file = genai_types.File(name="files/modern", state="ACTIVE")
+
+    def modern_upload(*, file, config):
+        return mock_file
+
+    client = MagicMock()
+    client.files.upload = MagicMock(side_effect=modern_upload)
+    # Give the mock function a signature with 'file' parameter
+    import inspect
+    sig = inspect.Signature([
+        inspect.Parameter("file", inspect.Parameter.KEYWORD_ONLY),
+        inspect.Parameter("config", inspect.Parameter.KEYWORD_ONLY),
+    ])
+    client.files.upload.__signature__ = sig
+
+    reader = GeminiFileReader(client=client)
+    doc = Document(path=Path("/tmp/modern.pdf"), file_hash="h1", doc_type=DocumentType.SLIDES)
+    res = reader.read(doc)
+
+    assert res == mock_file
+    _, kwargs = client.files.upload.call_args
+    assert "file" in kwargs
+    assert kwargs["file"] == str(Path("/tmp/modern.pdf"))
+
+
+def test_gemini_file_reader_upload_legacy_sdk_path_param():
+    mock_file = genai_types.File(name="files/legacy", state="ACTIVE")
+
+    def legacy_upload(*, path, config):
+        return mock_file
+
+    client = MagicMock()
+    client.files.upload = MagicMock(side_effect=legacy_upload)
+    import inspect
+    sig = inspect.Signature([
+        inspect.Parameter("path", inspect.Parameter.KEYWORD_ONLY),
+        inspect.Parameter("config", inspect.Parameter.KEYWORD_ONLY),
+    ])
+    client.files.upload.__signature__ = sig
+
+    reader = GeminiFileReader(client=client)
+    doc = Document(path=Path("/tmp/legacy.pdf"), file_hash="h2", doc_type=DocumentType.SLIDES)
+    res = reader.read(doc)
+
+    assert res == mock_file
+    _, kwargs = client.files.upload.call_args
+    assert "path" in kwargs
+    assert kwargs["path"] == str(Path("/tmp/legacy.pdf"))
+
+
+def test_gemini_file_reader_upload_fallback_on_type_error():
+    mock_file = genai_types.File(name="files/fallback", state="ACTIVE")
+
+    def upload_func(**kwargs):
+        if "file" in kwargs:
+            raise TypeError("upload() got an unexpected keyword argument 'file'")
+        if "path" in kwargs:
+            return mock_file
+        raise ValueError("neither path nor file")
+
+    client = MagicMock()
+    client.files.upload = MagicMock(side_effect=upload_func)
+
+    reader = GeminiFileReader(client=client)
+    doc = Document(path=Path("/tmp/fallback.pptx"), file_hash="h3", doc_type=DocumentType.SLIDES)
+    res = reader.read(doc)
+
+    assert res == mock_file
+    assert client.files.upload.call_count == 2
+    # First call attempted file=, second call succeeded with path=
+    first_call_kwargs = client.files.upload.call_args_list[0][1]
+    second_call_kwargs = client.files.upload.call_args_list[1][1]
+    assert "file" in first_call_kwargs
+    assert "path" in second_call_kwargs
