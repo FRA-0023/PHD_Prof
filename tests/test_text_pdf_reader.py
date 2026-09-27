@@ -41,3 +41,56 @@ def test_text_pdf_reader_pptx_fallback_with_python_pptx():
     assert "Introduction to Econometrics" in result
     assert "Note del relatore" in result
     assert "Emphasize Gauss-Markov assumptions" in result
+
+
+def test_pptx_extractor_stdlib_fallback_when_dependencies_missing(tmp_path, monkeypatch):
+    import io
+    import zipfile
+    from src.adapters.outbound.document_readers.pptx_extractor import extract_pptx_to_markdown
+
+    # Create a synthetic minimal OpenXML PPTX
+    pptx_path = tmp_path / "synthetic.pptx"
+    slide_xml = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld>
+            <p:spTree>
+                <p:sp>
+                    <p:txBody>
+                        <a:p><a:r><a:t>Pure Stdlib Heading</a:t></a:r></a:p>
+                        <a:p><a:r><a:t>Body line without third party packages</a:t></a:r></a:p>
+                    </p:txBody>
+                </p:sp>
+            </p:spTree>
+        </p:cSld>
+    </p:sld>"""
+
+    note_xml = b"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <p:notes xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld>
+            <p:spTree>
+                <p:sp>
+                    <p:txBody>
+                        <a:p><a:r><a:t>Critical presenter remark</a:t></a:r></a:p>
+                    </p:txBody>
+                </p:sp>
+            </p:spTree>
+        </p:cSld>
+    </p:notes>"""
+
+    with zipfile.ZipFile(pptx_path, "w") as z:
+        z.writestr("ppt/slides/slide1.xml", slide_xml)
+        z.writestr("ppt/notesSlides/notesSlide1.xml", note_xml)
+
+    # Force Tier 1 and Tier 2 to be skipped by raising ImportError
+    import sys
+    monkeypatch.setitem(sys.modules, "markitdown", None)
+    monkeypatch.setitem(sys.modules, "pptx", None)
+
+    result = extract_pptx_to_markdown(pptx_path)
+
+    assert "## Slide 1" in result
+    assert "Pure Stdlib Heading" in result
+    assert "Body line without third party packages" in result
+    assert "Note del relatore" in result
+    assert "Critical presenter remark" in result
+

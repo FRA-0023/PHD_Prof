@@ -1,15 +1,20 @@
 from pathlib import Path
+import re
+import zipfile
+import xml.etree.ElementTree as ET
 
 def extract_pptx_to_markdown(path: Path) -> str:
     """
     Extracts structured Markdown from a PowerPoint (.pptx) file.
-    Follows the markitdown-conversion skill pipeline:
-    1. Attempts extraction via Microsoft's MarkItDown.
-    2. Falls back to python-pptx for robust extraction of titles, shapes, tables, and speaker notes.
+    Follows a 3-tier resilient extraction pipeline:
+    1. Primary: Microsoft's MarkItDown (if installed and dependencies are satisfied).
+    2. Fallback: python-pptx (for rich shapes, tables, and notes parsing).
+    3. Antifragile Zero-Dependency Fallback: Python standard library (zipfile + xml.etree)
+       which extracts all slide texts, shapes, and presenter notes directly from OpenXML without any third-party packages.
     """
     path_str = str(path)
 
-    # 1. Primary: MarkItDown (official markdown converter)
+    # Tier 1: MarkItDown (official markdown converter)
     try:
         from markitdown import MarkItDown
         md = MarkItDown()
@@ -20,7 +25,7 @@ def extract_pptx_to_markdown(path: Path) -> str:
     except Exception:
         pass
 
-    # 2. Resilient Fallback: python-pptx (direct structural parsing)
+    # Tier 2: python-pptx (direct structural parsing)
     try:
         from pptx import Presentation
         prs = Presentation(path_str)
@@ -50,6 +55,47 @@ def extract_pptx_to_markdown(path: Path) -> str:
         full_text = "\n\n---\n\n".join(slides_text).strip()
         if full_text:
             return full_text
+    except Exception:
+        pass
+
+    # Tier 3: Zero-dependency OpenXML extraction via Python standard library (zipfile + xml.etree)
+    try:
+        slides_content = []
+        with zipfile.ZipFile(path_str, "r") as z:
+            names = z.namelist()
+            slide_names = sorted(
+                [n for n in names if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
+                key=lambda x: int(re.search(r"\d+", x).group()) if re.search(r"\d+", x) else 0,
+            )
+
+            for idx, sname in enumerate(slide_names, 1):
+                root = ET.fromstring(z.read(sname))
+                paragraphs = []
+                for p in root.iter("{http://schemas.openxmlformats.org/drawingml/2006/main}p"):
+                    texts = [t.text for t in p.iter("{http://schemas.openxmlformats.org/drawingml/2006/main}t") if t.text]
+                    line = "".join(texts).strip()
+                    if line:
+                        paragraphs.append(line)
+
+                # Check if there are presenter notes
+                note_name = f"ppt/notesSlides/notesSlide{idx}.xml"
+                if note_name in names:
+                    note_root = ET.fromstring(z.read(note_name))
+                    notes_paragraphs = []
+                    for p in note_root.iter("{http://schemas.openxmlformats.org/drawingml/2006/main}p"):
+                        texts = [t.text for t in p.iter("{http://schemas.openxmlformats.org/drawingml/2006/main}t") if t.text]
+                        line = "".join(texts).strip()
+                        if line and line != str(idx):
+                            notes_paragraphs.append(line)
+                    if notes_paragraphs:
+                        paragraphs.append("> **Note del relatore**: " + " ".join(notes_paragraphs))
+
+                if paragraphs:
+                    slides_content.append(f"## Slide {idx}\n" + "\n\n".join(paragraphs))
+
+            full_text = "\n\n---\n\n".join(slides_content).strip()
+            if full_text:
+                return full_text
     except Exception as exc:
         raise RuntimeError(f"Impossibile estrarre testo dal file PPTX '{path_str}': {exc}")
 
