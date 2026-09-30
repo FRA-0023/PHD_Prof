@@ -28,6 +28,15 @@ def validate_env(env_vars: dict) -> None:
         raise EnvironmentError(f"Mancanti nel .env: {', '.join(missing)}")
 
 def main() -> None:
+    if sys.platform == "win32":
+        # RATIONALE (Console Encoding Resilience): Windows command prompts default to OEM codepages
+        # (CP850/CP437) which corrupt Unicode accents. Forcing UTF-8 on standard streams guarantees clean rendering.
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     load_dotenv(override=True)
 
     # CLI Language flag resolution: command line arg takes precedence over .env setting
@@ -58,6 +67,17 @@ def main() -> None:
     usage_file = root_dir / "gemini_usage.json"
     profiles_file = root_dir / "course_profiles.json"
     staging_dir = root_dir / "staging"
+
+    # RATIONALE (Zero-setup onboarding): If the local profiles file is absent, seeding it
+    # from the tracked example template guarantees the CLI immediately renders the fast-path
+    # profile selection menu rather than silently falling back to raw discovery questions.
+    example_profiles_file = root_dir / "course_profiles.example.json"
+    if not profiles_file.exists() and example_profiles_file.exists():
+        import shutil
+        try:
+            shutil.copyfile(example_profiles_file, profiles_file)
+        except OSError:
+            pass
 
     # Timeout configuration (default: 300s to avoid socket read timeouts on large uploads)
     raw_timeout = os.getenv("GEMINI_TIMEOUT_SECONDS")

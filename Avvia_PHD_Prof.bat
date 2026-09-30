@@ -1,4 +1,5 @@
 @echo off
+chcp 65001 > nul
 title PHD Prof - Document ETL to Notion
 cd /d "%~dp0"
 

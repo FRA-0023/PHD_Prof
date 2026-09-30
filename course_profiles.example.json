@@ -1,0 +1,24 @@
+{
+  "enterprise_architectures": {
+    "subject": "Enterprise Architectures",
+    "professor_type": "PhD Professor in Enterprise Architecture",
+    "doc_type": "slides",
+    "folder_path": "C:\\Documenti\\UNIMIB\\Enterprise Architecture",
+    "target": {
+      "database_id": "2d0b63e8-59c8-8007-81ed-ceb80c2c5f94",
+      "course_name": "Enterprise Architectures",
+      "database_title": "Notes"
+    }
+  },
+  "text_mining_and_search": {
+    "subject": "Text Mining and Search",
+    "professor_type": "PhD Professor in Text Mining & Natural Language Processing",
+    "doc_type": "slides",
+    "folder_path": "C:\\Documenti\\UNIMIB\\Text Mining",
+    "target": {
+      "database_id": "268b63e8-59c8-8095-8a3e-e71cf7d143e8",
+      "course_name": "Text Mining and Search",
+      "database_title": "Notes"
+    }
+  }
+}
