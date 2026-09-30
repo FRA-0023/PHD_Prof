@@ -61,12 +61,27 @@ class GeminiLlmAdapter(ILlmClient):
         max_retries = 5
         base_delay = 15
 
+        # Prepare contents list supporting single payload (str or File) or composite list
+        contents_list = [prompt]
+        if isinstance(content_payload, list):
+            if not content_payload:
+                raise ValueError("Il contenuto estratto dal documento è vuoto.")
+            for item in content_payload:
+                if isinstance(item, str):
+                    sanitized = item.replace("\x00", "").strip()
+                    if sanitized:
+                        contents_list.append(sanitized)
+                elif item is not None:
+                    contents_list.append(item)
+        else:
+            contents_list.append(content_payload)
+
         for current_model in candidate_models:
             for attempt in range(max_retries):
                 try:
                     response_stream = self.client.models.generate_content_stream(
                         model=current_model,
-                        contents=[prompt, content_payload],
+                        contents=contents_list,
                     )
 
                     full_text = ""

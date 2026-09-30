@@ -17,6 +17,7 @@ from src.adapters.outbound.gemini_llm_adapter import GeminiLlmAdapter
 from src.adapters.outbound.notion_api_adapter import NotionApiAdapter
 from src.adapters.outbound.document_readers.gemini_file_reader import GeminiFileReader
 from src.adapters.outbound.document_readers.text_pdf_reader import TextPdfReader
+from src.adapters.outbound.json_course_profile_repository import JsonCourseProfileRepository
 from src.adapters.inbound.cli_adapter import CLIAdapter
 
 def validate_env(env_vars: dict) -> None:
@@ -45,6 +46,7 @@ def main() -> None:
     root_dir = pathlib.Path(__file__).parent
     state_file = root_dir / "sync_state.json"
     usage_file = root_dir / "gemini_usage.json"
+    profiles_file = root_dir / "course_profiles.json"
     staging_dir = root_dir / "staging"
 
     # Timeout configuration (default: 300s to avoid socket read timeouts on large uploads)
@@ -59,6 +61,7 @@ def main() -> None:
 
     # Dependency Injection: Wiring Adapters to Ports
     state_repo = JsonStateRepository(state_file=state_file, usage_file=usage_file)
+    course_profile_repo = JsonCourseProfileRepository(file_path=profiles_file)
     staging_storage = FileSystemStaging(staging_dir=staging_dir)
     llm_client = GeminiLlmAdapter(
         api_key=gemini_api_key,
@@ -69,7 +72,11 @@ def main() -> None:
     notion_client = NotionApiAdapter(token=notion_token)
 
     readers = {
-        DocumentType.SLIDES: GeminiFileReader(api_key=gemini_api_key, timeout=gemini_timeout),
+        DocumentType.SLIDES: GeminiFileReader(
+            api_key=gemini_api_key,
+            timeout=gemini_timeout,
+            staging_dir=staging_dir,
+        ),
         DocumentType.PAPER_OR_BOOK: TextPdfReader(),
     }
 
@@ -86,6 +93,7 @@ def main() -> None:
         llm_client=llm_client,
         usecase=usecase,
         root_page_id=notion_root_page_id,
+        course_profile_repo=course_profile_repo,
     )
 
     cli.start()

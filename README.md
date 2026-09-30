@@ -22,12 +22,19 @@ Manually extracting findings from academic papers wastes cognitive bandwidth, bu
 ### 4. Hexagonal Architecture (Ports & Adapters)
 The codebase has been refactored into a modular, testable Ports & Adapters architecture (`src/`). The core business domain and use cases (`ProcessDocumentUseCase`) are fully decoupled from external APIs, enabling automated unit testing with offline mocks and zero vendor lock-in.
 
-### 5. Dual PDF Reading Strategies
+### 5. Multimodal Reading Strategies & Dual-Payload PPTX Engine
 Academic materials are not uniform. PHD Prof supports two dedicated ingestion modes:
-- **Visual / Slides Mode (`SLIDES`)**: Uses the Gemini File API for multimodal vision, preserving graphs, diagrams, and visual slide hierarchy to expand bullet points into clear pedagogical essays.
+- **Visual / Slides Mode (`SLIDES`) for PDF & PPTX**:
+  - *PDFs*: Directly ingested via Google Gemini File API for multimodal spatial awareness.
+  - *PPTX Decks*: Employs a **Dual-Payload Multimodal Architecture**. On Windows, converts PPTX slides into a vector PDF via headless PowerPoint COM (`win32com`) while simultaneously extracting speaker notes and footer commentary via `MarkItDown`/`python-pptx`. Gemini simultaneously cross-references visual diagrams (ADM cycles, metamodels, architecture blueprints) with detailed speaker commentary. Gracefully falls back to structured text extraction if COM is unavailable.
 - **Academic Paper / Book Mode (`PAPER_OR_BOOK`)**: Uses local text and Markdown extraction (via MarkItDown and PyMuPDF) to ingest dense multi-column academic papers, textbook chapters, and technical reports, distilling rigorous mathematical proofs, theorems, and empirical methodologies.
 
-### 6. Enhanced Notion Block Engine
+### 6. Persistent Course Profiles (Zero-Friction Execution)
+Course parameters (subject, professor persona, document type, local folder, and resolved Notion database ID) are invariant within an academic semester. PHD Prof persists these configurations in an atomic, gitignored `course_profiles.json` repository:
+- **One-Click Instant Execution**: Launching the CLI lists registered course profiles with live file counts. Hitting `Enter` on a saved profile boots the batch immediately with **zero network latency** and **zero Notion discovery round-trips**.
+- **Interactive Override & Auto-Learning**: Press `m` to adjust individual parameters or configure a new course with `+`; upon completion, the system automatically registers the profile for future one-click runs.
+
+### 7. Enhanced Notion Block Engine
 - **Fenced Code Blocks**: Native syntax-highlighted Notion code blocks (Python, R, SQL, Shell, etc.).
 - **LaTeX Math Support**: Inline equations (`$formula$`) and standalone equation blocks (`$$...$$`).
 - **Blockquotes & Dividers**: Quotes (`>`) and horizontal dividers (`---`) for structured readability.
@@ -46,6 +53,10 @@ All pipeline stages are decoupled. If the Notion API throttles requests or exper
 - Exponential backoff automatically handles transient 429 and 502 errors.
 - On script restart, already processed papers are skipped instantaneously.
 
+### 3. Comprehensive Test Suite
+Fully decoupled unit testing via `pytest` and offline mocks covering all ports and adapters:
+- **70/70 unit tests passing** in under 3 seconds.
+
 ---
 
 ## 🛠️ Reproduction & Setup
@@ -56,7 +67,7 @@ git clone https://github.com/FRA-0023/PHD_Prof.git
 cd PHD_Prof
 
 # 2. Install dependencies
-pip install google-genai python-dotenv requests pymupdf markitdown
+pip install google-genai python-dotenv requests pymupdf markitdown python-pptx pywin32 pytest
 
 # 3. Configure environment variables (.env)
 GEMINI_API_KEY=your_gemini_key
@@ -68,13 +79,9 @@ python pdf_to_notion.py
 ```
 
 The system will prompt you for:
-1. The academic subject.
-2. The professor's role (to profile the LLM persona).
-3. The document type:
-   - `[1] Slide di lezione` (Multimodal Gemini File API)
-   - `[2] Paper / Libro / Dispensa` (Local MarkItDown / PyMuPDF extraction)
-4. Your local PDF directory.
-5. Your target Notion database.
+1. Selecting a saved course profile (e.g. `[1] Enterprise Architecture`) or creating a new one.
+2. In manual setup: subject, professor role, document type (SLIDES vs PAPER), folder path, and Notion database.
+3. Automatically offers to remember new profiles for instant one-click runs in subsequent sessions.
 
 ---
 

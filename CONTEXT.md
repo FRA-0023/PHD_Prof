@@ -5,14 +5,60 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 
 ## Stato Attuale
 - **Architettura**: Esagonale (Ports & Adapters) in src/.
-- **Modello LLM**: Gemini 2.5 Flash con rate limiting e retry esponenziale.
-- **Test**: 28 unit test offline con mock completi.
+- **Modello LLM**: Gemini 2.5 Flash con rate limiting, retry esponenziale e fallback automatico a 2.0/1.5 Flash.
+- **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
+- **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
+- **Test**: 70 unit test offline con mock completi (100% passati).
 
 ## Prossimi Passi
 - Monitorare l'esecuzione batch in produzione su corsi reali Notion.
 - Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
 
 ## Log delle Sessioni
+
+### 2026-09-30 (Persistent Course Profiles & Fast CLI Selection)
+- **Eliminazione Attrito Operativo & Discovery Overhead**:
+  - Rimossa la necessità di re-inserire a ogni run materia, tipo di professore, doc type, cartella locale e navigazione ricorsiva delle API Notion.
+  - Introdotto il domain model `CourseProfile` ([models.py](file:///c:/Documenti/Bots/PHD_Prof/src/core/domain/models.py)) che incapsula la tupla invariante di corso.
+  - Creata la porta outbound `ICourseProfileRepository` e l'adapter `JsonCourseProfileRepository` ([json_course_profile_repository.py](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/outbound/json_course_profile_repository.py)) per persistenza atomica su file locale `course_profiles.json` (aggiunto in `.gitignore`).
+  - Aggiornato `CLIAdapter` ([cli_adapter.py](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/inbound/cli_adapter.py)):
+    - All'avvio elenca i corsi memorizzati con conteggio immediato dei file disponibili.
+    - Selezione immediata (invio/numero) a zero latenza e zero chiamate di rete.
+    - Supporto per override rapido (`m`), configurazione nuovo corso (`+`) e salvataggio automatico/richiesto al primo setup.
+- **Testing**: Aggiunti 7 nuovi unit test in `tests/test_course_profile_repository.py` e `tests/test_cli_adapter_profiles.py`. Test suite complessiva: 70/70 passati in 2.9s.
+
+### 2026-09-30 (Dual-Payload Multimodal Ingestion per Slide PPTX)
+- **Risoluzione Visual Blindness su PPTX**:
+  - Eliminato il collo di bottiglia che riduceva le presentazioni `.pptx` a puro testo Markdown, privando il modello della vista su diagrammi, grafici di sistema e schemi concettuali.
+  - Implementato in `GeminiFileReader` il bridge di rendering PowerPoint COM (`win32com.client.Dispatch("PowerPoint.Application")`), con salvataggio vettoriale del PDF in cache locale (`staging/{file_hash}_slides.pdf`).
+  - Mantenuta l'estrazione esaustiva delle note a piè di pagina e note dell'oratore tramite `extract_pptx_to_markdown`.
+  - Inviato a Gemini un payload composito `[notes_text, uploaded_pdf]` che unisce simultaneamente percezione visiva delle forme e contesto testuale delle note.
+- **Resilienza, Fallback & Idempotenza**:
+  - *Caching locale*: se il PDF prerenderizzato è già presente in `staging/`, la conversione COM viene saltata.
+  - *Fallback trasparente*: se PowerPoint COM non è disponibile (es. runtime non Windows o assenza di Office), la pipeline arretra automaticamente alla sola estrazione testuale senza interruzioni.
+  - *Cleanup sicuro*: `GeminiFileReader.cleanup` itera su payload compositi eliminando ogni `genai_types.File` remoto al termine dell'inferenza.
+  - *Sanitizzazione input*: `GeminiLlmAdapter` ripulisce da null byte ogni stringa presente in payload compositi.
+- **Test Suite**: Aggiunti 6 nuovi test unitari in `tests/test_gemini_file_reader.py` e `tests/test_gemini_llm_adapter.py`. 63/63 test superati in 2.3s.
+
+### 2026-09-29 (ArchiMate 3.2 Selective Reading Pipeline & Notion Sync)
+- **Estrazione Selettiva Manuale ArchiMate 3.2**:
+  - Estratte con precisione vettoriale le sezioni richieste per la lezione successiva: Ch 3 (3.3-3.4, 3.7-3.9), Ch 4 (4.5), Ch 5 (5.1-5.5 inclusa intro/connectors), Ch 8 (8.1-8.6).
+  - Pagine complessive estratte: 38 (31-33, 35-36, 43-60, 82-96).
+  - Generato PDF unico con albero segnalibri/TOC gerarchico completo (56 voci): [ArchiMate - Selected Sections (Ch 3, 4, 5, 8).pdf](file:///C:/Documenti/UNIMIB/Enterprise%20Architecture/ArchiMate_Selected_Sections/ArchiMate%20-%20Selected%20Sections%20(Ch%203,%204,%205,%208).pdf).
+  - File salvato in ArchiMate_Selected_Sections/ e duplicato nella root del corso per consultazione diretta.
+- **Esecuzione Pipeline Multimodale PHD_Prof**:
+  - Ingestione multimodale via Gemini File API (6.3 MB) per preservare layout visivo, sintassi grafica, forme, frecce e diagrammi del metamodello.
+  - Sintesi didattico-pedagogica ad alta densita con framework Tutor-Universale e modello PhD Professor in Enterprise Architecture (35.294 caratteri).
+  - Markdown archiviato in cache staging locale ([staging/2538841248a46aa73362432fac733b6c4e8a439ba50b5ad2d706b8224c35870b.md](file:///c:/Documenti/Bots/PHD_Prof/staging/2538841248a46aa73362432fac733b6c4e8a439ba50b5ad2d706b8224c35870b.md)).
+  - Creata nuova pagina Notion nel database Notes di Enterprise Architecture (3eab63e8-59c8-810d-88dd-de0dbd0f217d) con 211 blocchi ricchi (formule KaTeX, elenchi, callout, citazioni e blocchi di codice).
+  - Registrato stato crittografico SYNCED in sync_state.json.
+
+### 2026-09-29 (In-Place Notion Page Enhancement & Anti-Overengineering Decision)
+- **Elaborazione Remota Note Manuali**:
+  - Applicato il framework cognitivo `PHD_Prof` (Tutor-Universale, systems thinking, formalizzazione Enterprise Architecture) a una pagina Notion preesistente con appunti da conferenza senza slide di Jonas Van Riel (*Leading with Capabilities*).
+  - Inserito il link profilo di Jonas Van Riel e aggiornato il contenuto remoto direttamente tramite MCP Notion API Markdown.
+  - Decisione architetturale: mantenuta la separazione del core `src/` (nessuna complessità prematura introdotta per rari casi d'uso ad-hoc).
+  - Salvato backup in [staging/jonas_van_riel_leading_with_capabilities.md](file:///c:/Documenti/Bots/PHD_Prof/staging/jonas_van_riel_leading_with_capabilities.md).
 
 ### 2026-09-25 (Prompt Engineering: Anti-Tautology, Pruning & High Density)
 - **Eliminazione Inflazione & Ridondanze**:

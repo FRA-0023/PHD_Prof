@@ -147,3 +147,36 @@ def test_gemini_llm_adapter_timeout_converted_to_milliseconds(monkeypatch, mock_
     adapter_low = GeminiLlmAdapter(api_key="test_key", state_repo=mock_state_repo, timeout=2.0)
     assert captured_client_kwargs["http_options"]["timeout"] == 10000
 
+
+def test_gemini_llm_adapter_composite_list_payload(mock_state_repo, mock_genai_client):
+    chunk = MagicMock()
+    chunk.text = "Generated notes from multimodal"
+    mock_genai_client.models.generate_content_stream.return_value = [chunk]
+
+    adapter = GeminiLlmAdapter(
+        api_key="fake",
+        state_repo=mock_state_repo,
+    )
+    adapter.client = mock_genai_client
+
+    mock_file = MagicMock()
+    payload = ["Speaker notes text \x00sanitized", mock_file]
+
+    result = adapter.generate_notes(prompt="System prompt", content_payload=payload)
+
+    assert result == "Generated notes from multimodal"
+    call_args = mock_genai_client.models.generate_content_stream.call_args[1]
+    assert call_args["contents"] == ["System prompt", "Speaker notes text sanitized", mock_file]
+
+
+def test_gemini_llm_adapter_empty_list_payload_raises(mock_state_repo, mock_genai_client):
+    adapter = GeminiLlmAdapter(
+        api_key="fake",
+        state_repo=mock_state_repo,
+    )
+    adapter.client = mock_genai_client
+
+    with pytest.raises(ValueError, match="vuoto"):
+        adapter.generate_notes(prompt="System prompt", content_payload=[])
+
+

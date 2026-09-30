@@ -54,3 +54,55 @@ class ProcessingResult:
     page_id: Optional[str] = None
     error_message: Optional[str] = None
     skipped: bool = False
+
+@dataclass
+class CourseProfile:
+    """
+    Persistent course configuration profile.
+    Encapsulates subject metadata, professor role, document type, local folder, and Notion target.
+    """
+    subject: str
+    professor_type: str
+    doc_type: DocumentType
+    folder_path: Path
+    target: NotionTarget
+
+    @property
+    def key(self) -> str:
+        return self.subject.strip().lower().replace(" ", "_")
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "subject": self.subject,
+            "professor_type": self.professor_type,
+            "doc_type": self.doc_type.value,
+            "folder_path": str(self.folder_path),
+            "target": {
+                "database_id": self.target.database_id,
+                "course_name": self.target.course_name,
+                "database_title": self.target.database_title,
+            },
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CourseProfile":
+        target_data = data.get("target", {})
+        target = NotionTarget(
+            database_id=target_data.get("database_id", ""),
+            course_name=target_data.get("course_name", data.get("subject", "")),
+            database_title=target_data.get("database_title", "Notes"),
+        )
+        doc_type_val = data.get("doc_type", "slides")
+        try:
+            doc_type = DocumentType(doc_type_val)
+        except ValueError:
+            doc_type = DocumentType.SLIDES
+
+        return cls(
+            subject=data.get("subject", ""),
+            professor_type=data.get("professor_type", f"PhD Professor in {data.get('subject', '')}"),
+            doc_type=doc_type,
+            folder_path=Path(data.get("folder_path", "")),
+            target=target,
+        )
+

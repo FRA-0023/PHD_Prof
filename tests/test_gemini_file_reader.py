@@ -245,3 +245,95 @@ def test_gemini_file_reader_polling_retry_on_timeout(monkeypatch):
     assert res == ready_file
     assert client.files.get.call_count == 2
 
+
+def test_gemini_file_reader_pptx_dual_payload_when_converted_successfully(mock_genai_client, monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "src.adapters.outbound.document_readers.gemini_file_reader.extract_pptx_to_markdown",
+        lambda p: "## Slide 1: Introduction\n* Point A\n\n**Note del relatore:**\nSpiegazione dettagliata.",
+    )
+
+    dummy_pptx = tmp_path / "deck.pptx"
+    dummy_pptx.write_bytes(b"dummy_pptx_bytes")
+
+    mock_pdf_file = genai_types.File(name="files/converted-deck-id", state="ACTIVE")
+    mock_genai_client.files.upload.return_value = mock_pdf_file
+
+    reader = GeminiFileReader(client=mock_genai_client, staging_dir=tmp_path)
+
+    def fake_convert(pptx_path, out_pdf_path):
+        out_pdf_path.write_bytes(b"%PDF-1.4 dummy content")
+        return True
+
+    monkeypatch.setattr(reader, "_convert_pptx_to_pdf", fake_convert)
+
+    doc = Document(path=dummy_pptx, file_hash="deck_hash_123", doc_type=DocumentType.SLIDES)
+    payload = reader.read(doc)
+
+    assert isinstance(payload, list)
+    assert len(payload) == 2
+    assert "=== SLIDE SPEAKER NOTES & TEXT EXTRACTION ===" in payload[0]
+    assert "Spiegazione dettagliata" in payload[0]
+    assert payload[1] == mock_pdf_file
+
+    mock_genai_client.files.upload.assert_called_once()
+    _, kwargs = mock_genai_client.files.upload.call_args
+    assert kwargs["config"].mime_type == "application/pdf"
+
+
+def test_gemini_file_reader_pptx_reuses_cached_pdf_in_staging(mock_genai_client, monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "src.adapters.outbound.document_readers.gemini_file_reader.extract_pptx_to_markdown",
+        lambda p: "## Slide 1\nCached content",
+    )
+
+    dummy_pptx = tmp_path / "deck.pptx"
+    dummy_pptx.write_bytes(b"dummy_pptx_bytes")
+
+    cached_pdf = tmp_path / "cached_hash_slides.pdf"
+    cached_pdf.write_bytes(b"%PDF-1.4 cached pre-rendered slides")
+
+    mock_pdf_file = genai_types.File(name="files/cached-deck-id", state="ACTIVE")
+    mock_genai_client.files.upload.return_value = mock_pdf_file
+
+    reader = GeminiFileReader(client=mock_genai_client, staging_dir=tmp_path)
+
+    convert_mock = MagicMock(return_value=True)
+    monkeypatch.setattr(reader, "_convert_pptx_to_pdf", convert_mock)
+
+    doc = Document(path=dummy_pptx, file_hash="cached_hash", doc_type=DocumentType.SLIDES)
+    payload = reader.read(doc)
+
+    assert isinstance(payload, list)
+    assert payload[1] == mock_pdf_file
+    convert_mock.assert_not_called()
+    mock_genai_client.files.upload.assert_called_once()
+
+
+def test_gemini_file_reader_pptx_fallback_when_conversion_fails(mock_genai_client, monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "src.adapters.outbound.document_readers.gemini_file_reader.extract_pptx_to_markdown",
+        lambda p: "## Slide 1\nFallback markdown text only",
+    )
+
+    dummy_pptx = tmp_path / "deck.pptx"
+    dummy_pptx.write_bytes(b"dummy_pptx_bytes")
+
+    reader = GeminiFileReader(client=mock_genai_client, staging_dir=tmp_path)
+    monkeypatch.setattr(reader, "_convert_pptx_to_pdf", lambda p, o: False)
+
+    doc = Document(path=dummy_pptx, file_hash="failed_conv_hash", doc_type=DocumentType.SLIDES)
+    payload = reader.read(doc)
+
+    assert payload == "## Slide 1\nFallback markdown text only"
+    mock_genai_client.files.upload.assert_not_called()
+
+
+def test_gemini_file_reader_cleanup_composite_payload(mock_genai_client):
+    mock_file = genai_types.File(name="files/dual-payload-file", state="ACTIVE")
+    reader = GeminiFileReader(client=mock_genai_client)
+
+    composite_payload = ["Notes text string", mock_file]
+    reader.cleanup(composite_payload)
+
+    mock_genai_client.files.delete.assert_called_once_with(name="files/dual-payload-file")
+

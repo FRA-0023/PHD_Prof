@@ -2,6 +2,7 @@
 .env
 gemini_usage.json
 sync_state.json
+course_profiles.json
 staging/
 
 # Ambiente Python e Cache
