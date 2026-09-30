@@ -12,7 +12,9 @@ scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
 Set wshShell = CreateObject("WScript.Shell")
 wshShell.CurrentDirectory = scriptDir
 
-pythonExe = "C:\Users\3003f\AppData\Local\Programs\Python\Python311\python.exe"
+Dim localApp
+localApp = wshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%")
+pythonExe = localApp & "\Programs\Python\Python311\python.exe"
 If Not fso.FileExists(pythonExe) Then
     pythonExe = "python.exe"
 End If

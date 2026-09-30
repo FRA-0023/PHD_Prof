@@ -1,7 +1,21 @@
+# Environment & APIs
 python-dotenv
 google-genai
 requests
+
+# Document Readers & Extractors
 markitdown
 python-pptx
 PyMuPDF
+
+# Local Web Cockpit (Inbound Adapter)
+fastapi
+uvicorn
+sse-starlette
+pydantic
+
+# Platform-specific (Windows PowerPoint COM automation for dual-payload slides)
+pywin32; sys_platform == 'win32'
+
+# Testing Suite
 pytest

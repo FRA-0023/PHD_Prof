@@ -22,3 +22,10 @@ env/
 
 # Skills e Agent Workspace
 .agents/
+
+# Agent Internal Context & Local Utility Scripts
+CONTEXT.md
+DESIGN.md
+PRODUCT.md
+project.md
+scripts/

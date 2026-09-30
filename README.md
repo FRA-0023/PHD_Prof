@@ -18,25 +18,28 @@ Manually extracting findings from academic papers wastes cognitive bandwidth, bu
 - Ingests complex academic PDFs autonomously.
 - Enforces **cryptographic state tracking** via SHA-256 file fingerprints: renames are ignored, and extraction triggers strictly on mutated data.
 - Protects API budgets: if Notion endpoints fail, atomic checkpointing guarantees zero lost inference and zero duplicate pages upon restart.
+---
 
-### 4. Hexagonal Architecture (Ports & Adapters)
+## 🏗️ Core Capabilities
+
+### 1. Hexagonal Architecture (Ports & Adapters)
 The codebase is structured into a modular Ports & Adapters architecture (`src/`). The core domain and use cases (`ProcessDocumentUseCase`) are fully decoupled from external APIs and interface layers. It features interchangeable inbound adapters:
 - **CLI Adapter** (`src/adapters/inbound/cli_adapter.py`): Interactive terminal console with bilingual support (`IT`/`EN`).
 - **Web Cockpit Adapter** (`src/adapters/inbound/web/`): Local FastAPI server delivering a high-density, keyboard-driven single-page cockpit with real-time Server-Sent Events (SSE) telemetry, Plus Jakarta Sans typography, and automatic lifecycle management.
 
-### 5. Multimodal Reading Strategies & Dual-Payload PPTX Engine
+### 2. Multimodal Reading Strategies & Dual-Payload PPTX Engine
 Academic materials are not uniform. PHD Prof supports two dedicated ingestion modes:
 - **Visual / Slides Mode (`SLIDES`) for PDF & PPTX**:
   - *PDFs*: Directly ingested via Google Gemini File API for multimodal spatial awareness.
   - *PPTX Decks*: Employs a **Dual-Payload Multimodal Architecture**. On Windows, converts PPTX slides into a vector PDF via headless PowerPoint COM (`win32com`) while simultaneously extracting speaker notes and footer commentary via `MarkItDown`/`python-pptx`. Gemini simultaneously cross-references visual diagrams (ADM cycles, metamodels, architecture blueprints) with detailed speaker commentary. Gracefully falls back to structured text extraction if COM is unavailable.
 - **Academic Paper / Book Mode (`PAPER_OR_BOOK`)**: Uses local text and Markdown extraction (via MarkItDown and PyMuPDF) to ingest dense multi-column academic papers, textbook chapters, and technical reports, distilling rigorous mathematical proofs, theorems, and empirical methodologies.
 
-### 6. Persistent Course Profiles (Zero-Friction Execution)
+### 3. Persistent Course Profiles (Zero-Friction Execution)
 Course parameters (subject, professor persona, document type, local folder, and resolved Notion database ID) are invariant within an academic semester. PHD Prof persists these configurations in an atomic, gitignored `course_profiles.json` repository:
 - **Instant Execution**: Launching either the Web Cockpit or CLI lists registered course profiles with live file counts and cryptographic sync statuses.
 - **Interactive Override & Auto-Learning**: Configure or adjust course parameters on the fly; upon completion, the system automatically registers the profile for future one-click runs.
 
-### 7. Enhanced Notion Block Engine
+### 4. Enhanced Notion Block Engine
 - **Fenced Code Blocks**: Native syntax-highlighted Notion code blocks (Python, R, SQL, Shell, etc.).
 - **LaTeX Math Support**: Inline equations (`$formula$`) and standalone equation blocks (`$$...$$`).
 - **Blockquotes & Dividers**: Quotes (`>`) and horizontal dividers (`---`) for structured readability.
@@ -73,21 +76,25 @@ git clone https://github.com/FRA-0023/PHD_Prof.git
 cd PHD_Prof
 
 # 2. Install dependencies
-pip install google-genai python-dotenv requests pymupdf markitdown python-pptx pywin32 fastapi uvicorn sse-starlette pytest
+pip install -r requirements.txt
 
 # 3. Configure environment variables (.env)
-GEMINI_API_KEY=your_gemini_key
-NOTION_TOKEN=your_notion_token
-NOTION_ROOT_PAGE_ID=your_courses_page_or_database_id
-CLI_LANGUAGE=IT  # Optional: IT (Italian, default) or EN (English)
+copy .env.example .env     # Windows
+# cp .env.example .env      # Linux/macOS
+
+# Edit .env with your credentials:
+# GEMINI_API_KEY=your_gemini_key
+# NOTION_TOKEN=your_notion_token
+# NOTION_ROOT_PAGE_ID=your_courses_page_or_database_id
+# CLI_LANGUAGE=IT  # Optional: IT (Italian, default) or EN (English)
 
 # 4. Launching the Application
 # Option A: One-click Web Cockpit (Desktop Shortcut or VBS)
 wscript Avvia_PHD_Prof.vbs
 
 # Option B: Interactive Terminal CLI
-python pdf_to_notion.py
-python pdf_to_notion.py --lang EN
+python pdf_to_notion.py --mode cli
+python pdf_to_notion.py --mode cli --lang EN
 ```
 
 ---
