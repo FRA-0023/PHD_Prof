@@ -20,7 +20,9 @@ Manually extracting findings from academic papers wastes cognitive bandwidth, bu
 - Protects API budgets: if Notion endpoints fail, atomic checkpointing guarantees zero lost inference and zero duplicate pages upon restart.
 
 ### 4. Hexagonal Architecture (Ports & Adapters)
-The codebase has been refactored into a modular, testable Ports & Adapters architecture (`src/`). The core business domain and use cases (`ProcessDocumentUseCase`) are fully decoupled from external APIs, enabling automated unit testing with offline mocks and zero vendor lock-in.
+The codebase is structured into a modular Ports & Adapters architecture (`src/`). The core domain and use cases (`ProcessDocumentUseCase`) are fully decoupled from external APIs and interface layers. It features interchangeable inbound adapters:
+- **CLI Adapter** (`src/adapters/inbound/cli_adapter.py`): Interactive terminal console with bilingual support (`IT`/`EN`).
+- **Web Cockpit Adapter** (`src/adapters/inbound/web/`): Local FastAPI server delivering a high-density, keyboard-driven single-page cockpit with real-time Server-Sent Events (SSE) telemetry, Plus Jakarta Sans typography, and automatic lifecycle management.
 
 ### 5. Multimodal Reading Strategies & Dual-Payload PPTX Engine
 Academic materials are not uniform. PHD Prof supports two dedicated ingestion modes:
@@ -31,8 +33,8 @@ Academic materials are not uniform. PHD Prof supports two dedicated ingestion mo
 
 ### 6. Persistent Course Profiles (Zero-Friction Execution)
 Course parameters (subject, professor persona, document type, local folder, and resolved Notion database ID) are invariant within an academic semester. PHD Prof persists these configurations in an atomic, gitignored `course_profiles.json` repository:
-- **One-Click Instant Execution**: Launching the CLI lists registered course profiles with live file counts. Hitting `Enter` on a saved profile boots the batch immediately with **zero network latency** and **zero Notion discovery round-trips**.
-- **Interactive Override & Auto-Learning**: Press `m` to adjust individual parameters or configure a new course with `+`; upon completion, the system automatically registers the profile for future one-click runs.
+- **Instant Execution**: Launching either the Web Cockpit or CLI lists registered course profiles with live file counts and cryptographic sync statuses.
+- **Interactive Override & Auto-Learning**: Configure or adjust course parameters on the fly; upon completion, the system automatically registers the profile for future one-click runs.
 
 ### 7. Enhanced Notion Block Engine
 - **Fenced Code Blocks**: Native syntax-highlighted Notion code blocks (Python, R, SQL, Shell, etc.).
@@ -53,9 +55,13 @@ All pipeline stages are decoupled. If the Notion API throttles requests or exper
 - Exponential backoff automatically handles transient 429 and 502 errors.
 - On script restart, already processed papers are skipped instantaneously.
 
-### 3. Comprehensive Test Suite
-Fully decoupled unit testing via `pytest` and offline mocks covering all ports and adapters:
-- **74/74 unit tests passing** in under 3 seconds.
+### 3. Silent Desktop Launcher & Lifecycle Watchdog
+- **Windowless VBS Launcher**: `Avvia_PHD_Prof.vbs` executes the local FastAPI service invisibly (`WindowStyle = 0`) and opens the default browser directly to `http://localhost:8000`.
+- **Automatic Process Termination**: The browser cockpit continuously emits heartbeats. When the browser tab is closed, a beacon terminates the background server with zero dangling processes. During active batch extraction, the watchdog is automatically frozen to ensure uninterrupted processing even if the tab is placed in the background.
+
+### 4. Comprehensive Test Suite
+Fully decoupled unit testing via `pytest` and offline mocks covering all ports, use cases, and adapters:
+- **83/83 unit tests passing** in under 3 seconds.
 
 ---
 
@@ -67,7 +73,7 @@ git clone https://github.com/FRA-0023/PHD_Prof.git
 cd PHD_Prof
 
 # 2. Install dependencies
-pip install google-genai python-dotenv requests pymupdf markitdown python-pptx pywin32 pytest
+pip install google-genai python-dotenv requests pymupdf markitdown python-pptx pywin32 fastapi uvicorn sse-starlette pytest
 
 # 3. Configure environment variables (.env)
 GEMINI_API_KEY=your_gemini_key
@@ -75,15 +81,14 @@ NOTION_TOKEN=your_notion_token
 NOTION_ROOT_PAGE_ID=your_courses_page_or_database_id
 CLI_LANGUAGE=IT  # Optional: IT (Italian, default) or EN (English)
 
-# 4. Run pipeline (supports optional --lang flag: IT or EN)
+# 4. Launching the Application
+# Option A: One-click Web Cockpit (Desktop Shortcut or VBS)
+wscript Avvia_PHD_Prof.vbs
+
+# Option B: Interactive Terminal CLI
 python pdf_to_notion.py
 python pdf_to_notion.py --lang EN
 ```
-
-The system will prompt you for:
-1. Selecting a saved course profile (e.g. `[1] Enterprise Architecture`) or creating a new one.
-2. In manual setup: subject, professor role, document type (SLIDES vs PAPER), folder path, and Notion database.
-3. Automatically offers to remember new profiles for instant one-click runs in subsequent sessions.
 
 ---
 

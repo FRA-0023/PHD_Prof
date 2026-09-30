@@ -4,18 +4,40 @@
 ETL antifragile e crash-only per ingerire documenti e slide accademiche in formato PDF, sintetizzarli tramite LLM (Gemini) e archiviarli su Notion senza perdita di dati né duplicazione di token.
 
 ## Stato Attuale
-- **Architettura**: Esagonale (Ports & Adapters) in src/.
+- **Architettura**: Esagonale (Ports & Adapters) in `src/`.
+- **Inbound Web Adapter & Cockpit UI**: Server locale FastAPI (`127.0.0.1:8000`) con streaming telemetrico SSE (`/api/events`), single-page dark tech industrial (zero-build, hotkey da tastiera, WCAG 2.2 AA).
+- **Desktop Launcher**: Avvio rapido con un clic da `Avvia_PHD_Prof.bat` (target del collegamento desktop `PHD Prof.lnk`) con apertura automatica del browser predefinito.
 - **Modello LLM**: Gemini 2.5 Flash con rate limiting, retry esponenziale e fallback automatico a 2.0/1.5 Flash.
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (IT vs EN)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale senza impatto sul core.
-- **Test**: 74 unit test offline con mock completi (100% passati).
+- **Test Suite**: 83 unit test offline con mock completi (100% passati, 0 regressioni).
 
 ## Prossimi Passi
-- Monitorare l'esecuzione batch in produzione su corsi reali Notion.
+- Monitorare l'esperienza d'uso reale del cockpit web durante sessioni di studio continuative.
 - Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
 
 ## Log delle Sessioni
+
+### 2026-09-30 (Local Web Frontend Cockpit, Inbound Web Adapter & Desktop Launcher Integration)
+- **Documenti di Verità Visiva (PRODUCT.md & DESIGN.md)**:
+  - Redatti `PRODUCT.md` e `DESIGN.md` secondo i framework Impeccable Design (Modalità Operate), Frontend UX Excellence e Design Taste Frontend.
+  - Definiti token semantici Dark Tech Industriale, contrasto verificato WCAG 2.2 AA (>= 4.5:1), modular scale (Minor Third), griglia spaziale a multipli di 8pt e contratti a 9 stati per ciascun controllo.
+- **Inbound Web Adapter, Telemetria & Heartbeat Watchdog**:
+  - Implementato `WebAdapter` (`src/adapters/inbound/web/web_adapter.py`) con endpoint REST per profili corso, esplorazione file locale e quota Gemini.
+  - Implementato `TelemetryStreamer` (`telemetry_streamer.py`) con duplicazione dello stdout per trasmettere in tempo reale i log interni della pipeline ETL via Server-Sent Events (`/api/events`).
+  - Introdotto sistema Heartbeat/Keepalive (`/api/heartbeat`, `/api/unload`) con watchdog a 10s: quando l'utente chiude la finestra del browser, il processo Python in background si arresta automaticamente senza processi orfani.
+- **Raffinamento Tipografico (Anti-Mechanical Polish)**:
+  - Eliminato l'uso pervasivo e asettico del font monospace su etichette, badge, percorsi e tabelle.
+  - Introdotto **Plus Jakarta Sans** come tipografia primaria (sans-serif geometrico-umanista ad alta densità e calore visivo).
+  - Confinato il font monospace (`JetBrains Mono`) strettamente agli hash crittografici SHA-256 e alla console telemetrica.
+- **Silent Launcher Desktop Unificato (Zero-CMD Flash)**:
+  - Creato `Avvia_PHD_Prof.vbs` per lanciare il server Python in background con finestra CMD completamente invisibile (`WindowStyle = 0`).
+  - Aggiornato `Avvia_PHD_Prof.bat` per delegare allo script VBS ed uscire istantaneamente.
+  - Riconfigurato il collegamento desktop `PHD Prof.lnk` per puntare direttamente ad `Avvia_PHD_Prof.vbs`, aprendo il browser con un doppio clic a zero attrito e zero finestre di terminale residue.
+- **Test Suite**:
+  - Suite estesa con test su endpoint `/api/heartbeat` e `/api/unload` in `tests/test_web_adapter.py`.
+  - Suite complessiva: 83/83 passati in 2.84s (0 regressioni).
 
 ### 2026-09-30 (Course Profiles Local Seeding, UTF-8 Console & Web Design Skills Setup)
 - **Materializzazione Profili su Disco (course_profiles.json)**:

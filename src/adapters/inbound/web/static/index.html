@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PHD Prof — Cockpit Industriale ETL</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">PD</div>
+      <span class="brand-title">PHD Prof Cockpit</span>
+      <span class="brand-version">v2.0 ESAGONALE</span>
+    </div>
+
+    <div class="topbar-telemetry">
+      <div class="telemetry-pill">
+        <span id="system-status-dot" class="pulse-dot"></span>
+        <span id="system-status-text">LOCAL HOST</span>
+      </div>
+
+      <div class="telemetry-pill quota-meter">
+        <span>GEMINI QUOTA:</span>
+        <span id="quota-display" class="quota-value">-- RPM</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- COCKPIT CONTAINER -->
+  <div class="cockpit-container">
+    
+    <!-- CONTROL RAIL (Sidebar 320px) -->
+    <aside class="control-rail">
+      <div class="rail-section">
+        <div class="rail-header">
+          <span class="section-label">Corsi Memorizzati</span>
+          <button id="btn-add-profile" class="btn-secondary" style="padding: 2px 8px; font-size: 11px;">+ Nuovo</button>
+        </div>
+      </div>
+
+      <div id="profile-list" class="profile-list">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+
+      <!-- Spec Inspector -->
+      <div id="spec-inspector" class="spec-inspector">
+        <div class="rail-header" style="margin-bottom: 4px;">
+          <span class="section-label">Specifiche Corso</span>
+          <button id="btn-edit-profile" class="btn-icon" title="Modifica corso" style="padding: 0 4px; font-size: 11px;">Modifica</button>
+        </div>
+        <div class="spec-row">
+          <span class="spec-key">Materia:</span>
+          <span id="spec-subject" class="spec-val">--</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-key">Professore:</span>
+          <span id="spec-prof" class="spec-val">--</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-key">DocType:</span>
+          <span id="spec-doctype" class="spec-val">--</span>
+        </div>
+        <div class="spec-row">
+          <span class="spec-key">Notion DB:</span>
+          <span id="spec-notion" class="spec-val">--</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- WORKSPACE VIEWPORT -->
+    <main class="workspace-viewport">
+      
+      <!-- File Queue Deck -->
+      <section class="queue-deck">
+        <div class="deck-toolbar">
+          <div class="deck-title-group">
+            <h2 id="active-course-title" class="deck-title">Coda Documenti</h2>
+            <span id="active-course-path" class="deck-path">Seleziona un corso...</span>
+          </div>
+
+          <div class="deck-actions">
+            <button id="btn-select-all" class="btn-secondary" title="Inverti selezione">Tutti / Nessuno</button>
+            <button id="btn-refresh-files" class="btn-secondary" title="Riscansiona disco">Aggiorna</button>
+            <button id="btn-run-batch" class="btn-primary" disabled title="Esegui ETL (Ctrl+Invio)">
+              <span>Sincronizza Selezionati</span>
+              <span id="batch-selected-count" class="badge badge-count" style="margin-left: 4px;">0</span>
+            </button>
+            <button id="btn-stop-batch" class="btn-danger" style="display: none;" title="Arresta dopo il file corrente">
+              Arresta
+            </button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 32px;"><input type="checkbox" id="master-checkbox" checked></th>
+                <th>Nome Documento</th>
+                <th style="width: 60px;">Tipo</th>
+                <th style="width: 80px;">Dimensione</th>
+                <th style="width: 110px;">Hash SHA-256</th>
+                <th style="width: 120px;">Stato Sync</th>
+                <th style="width: 90px; text-align: right;">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="file-table-body">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+
+          <div id="empty-state" style="display: none; padding: 48px; text-align: center; color: var(--text-tertiary);">
+            <p style="font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Nessun documento rilevato</p>
+            <p style="font-size: 12px;">La cartella configurata non contiene file accademici (.pdf, .pptx).</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Telemetry Console -->
+      <section class="telemetry-deck">
+        <div class="telemetry-toolbar">
+          <div class="telemetry-title">
+            <span class="pulse-dot" style="width: 6px; height: 6px;"></span>
+            <span>Console Telemetrica ETL in Tempo Reale</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer;">
+              <input type="checkbox" id="autoscroll-toggle" checked> Auto-scroll
+            </label>
+            <button id="btn-copy-log" class="btn-secondary" style="padding: 2px 8px; font-size: 10px;">Copia Log</button>
+            <button id="btn-clear-log" class="btn-secondary" style="padding: 2px 8px; font-size: 10px;">Pulisci</button>
+          </div>
+        </div>
+
+        <div id="log-pane" class="log-scroll-pane">
+          <!-- Live streaming logs dynamically appended -->
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- MODAL: ADD / EDIT COURSE PROFILE -->
+  <div id="profile-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title" class="modal-title">Configura Profilo Corso</h3>
+        <button id="modal-close" class="btn-icon" aria-label="Chiudi">&times;</button>
+      </div>
+
+      <form id="profile-form">
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="form-subject">Materia / Corso</label>
+            <input type="text" id="form-subject" class="form-input" required placeholder="Es. Enterprise Architecture">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-prof">Ruolo Professorale (Prompt)</label>
+            <input type="text" id="form-prof" class="form-input" placeholder="Es. PhD Professor in Enterprise Architecture">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-doctype">Natura del Documento</label>
+            <select id="form-doctype" class="form-select">
+              <option value="slides">Slides (Multimodale, grafici, note relatore)</option>
+              <option value="paper_or_book">Paper or Book (Testuale denso, formule, paper scientifici)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-folder">Cartella Locale Slide/Paper</label>
+            <input type="text" id="form-folder" class="form-input" required placeholder="C:\Documenti\UNIMIB\...">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-db-id">Notion Database ID</label>
+            <input type="text" id="form-db-id" class="form-input" required placeholder="UUID database Notion o seleziona">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="form-course-name">Notion Course Name</label>
+            <input type="text" id="form-course-name" class="form-input" placeholder="Es. Enterprise Architecture">
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" id="modal-cancel" class="btn-secondary">Annulla</button>
+          <button type="submit" class="btn-primary">Salva Profilo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

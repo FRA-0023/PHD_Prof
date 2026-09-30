@@ -21,6 +21,7 @@ import argparse
 from src.adapters.outbound.json_course_profile_repository import JsonCourseProfileRepository
 from src.adapters.inbound.i18n import I18n
 from src.adapters.inbound.cli_adapter import CLIAdapter
+from src.adapters.inbound.web.web_adapter import WebAdapter
 
 def validate_env(env_vars: dict) -> None:
     missing = [k for k, v in env_vars.items() if not v]
@@ -39,8 +40,11 @@ def main() -> None:
 
     load_dotenv(override=True)
 
-    # CLI Language flag resolution: command line arg takes precedence over .env setting
+    # Interaction mode & language resolution: CLI args take precedence over defaults
     parser = argparse.ArgumentParser(description="PHD Prof: Academic Document ETL Pipeline")
+    parser.add_argument("--mode", choices=["web", "cli"], default="web", help="Interface mode (web vs cli)")
+    parser.add_argument("--port", type=int, default=8000, help="Web server port (default: 8000)")
+    parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
     parser.add_argument("--lang", choices=["IT", "EN", "it", "en"], help="Interaction language (IT vs EN)")
     args, _ = parser.parse_known_args()
 
@@ -118,16 +122,33 @@ def main() -> None:
         staging_storage=staging_storage,
     )
 
-    cli = CLIAdapter(
-        notion_client=notion_client,
-        llm_client=llm_client,
-        usecase=usecase,
-        root_page_id=notion_root_page_id,
-        course_profile_repo=course_profile_repo,
-        i18n=i18n,
-    )
-
-    cli.start()
+    if args.mode == "web":
+        web = WebAdapter(
+            notion_client=notion_client,
+            llm_client=llm_client,
+            usecase=usecase,
+            root_page_id=notion_root_page_id,
+            course_profile_repo=course_profile_repo,
+            state_repo=state_repo,
+            host="127.0.0.1",
+            port=args.port,
+        )
+        if not args.no_browser:
+            import webbrowser
+            import threading
+            threading.Timer(0.8, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}")).start()
+        print(f"\n  [Web] Cockpit avviato su http://127.0.0.1:{args.port}\n")
+        web.start()
+    else:
+        cli = CLIAdapter(
+            notion_client=notion_client,
+            llm_client=llm_client,
+            usecase=usecase,
+            root_page_id=notion_root_page_id,
+            course_profile_repo=course_profile_repo,
+            i18n=i18n,
+        )
+        cli.start()
 
 if __name__ == "__main__":
     main()

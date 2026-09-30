@@ -12,7 +12,12 @@ __pycache__/
 venv/
 env/
 .pytest_cache
-staging/
+
+# Editor & System Artifacts
+*.tmp
+*.log
+.vscode/
+.idea/
 
 # Skills e Agent Workspace
 .agents/
