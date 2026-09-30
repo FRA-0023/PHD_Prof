@@ -58,8 +58,9 @@ All pipeline stages are decoupled. If the Notion API throttles requests or exper
 - Exponential backoff automatically handles transient 429 and 502 errors.
 - On script restart, already processed papers are skipped instantaneously.
 
-### 3. Silent Desktop Launcher & Lifecycle Watchdog
-- **Windowless VBS Launcher**: `Avvia_PHD_Prof.vbs` executes the local FastAPI service invisibly (`WindowStyle = 0`) and opens the default browser directly to `http://localhost:8000`.
+### 3. Silent Cross-Platform Desktop Launchers & Lifecycle Watchdog
+- **Windowless Windows Launcher (`Avvia_PHD_Prof.vbs`)**: Executes the local FastAPI service invisibly (`WindowStyle = 0`) and opens the default browser directly to `http://localhost:8000`.
+- **One-Click macOS Launcher (`Avvia_PHD_Prof.command` / `Avvia_PHD_Prof.sh`)**: Double-clickable in Finder. Resolves Python 3 across virtual environments, Homebrew (Apple Silicon / Intel), or system paths, executes detached in the background via `nohup`, auto-closes the launching Terminal window, and surfaces the browser cockpit.
 - **Automatic Process Termination**: The browser cockpit continuously emits heartbeats. When the browser tab is closed, a beacon terminates the background server with zero dangling processes. During active batch extraction, the watchdog is automatically frozen to ensure uninterrupted processing even if the tab is placed in the background.
 
 ### 4. Comprehensive Test Suite
@@ -89,8 +90,10 @@ copy .env.example .env     # Windows
 # CLI_LANGUAGE=IT  # Optional: IT (Italian, default) or EN (English)
 
 # 4. Launching the Application
-# Option A: One-click Web Cockpit (Desktop Shortcut or VBS)
-wscript Avvia_PHD_Prof.vbs
+# Option A: One-click Web Cockpit
+wscript Avvia_PHD_Prof.vbs          # Windows (or double-click Avvia_PHD_Prof.bat)
+./Avvia_PHD_Prof.command            # macOS (or double-click in Finder)
+./Avvia_PHD_Prof.sh                 # Linux / POSIX shell
 
 # Option B: Interactive Terminal CLI
 python pdf_to_notion.py --mode cli
