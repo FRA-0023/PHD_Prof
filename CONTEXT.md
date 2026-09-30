@@ -17,6 +17,16 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 
 ## Log delle Sessioni
 
+### 2026-09-30 (Course Profiles Local Seeding, UTF-8 Console & Web Design Skills Setup)
+- **Materializzazione Profili su Disco (course_profiles.json)**:
+  - Creato e popolato course_profiles.json su disco con le coordinate operative reali di 4 corsi UNIMIB (Enterprise Architectures, Text Mining and Search, Big Data, Time Series Analysis), associando ciascuno al rispettivo database Notion 'Notes' e cartella locale.
+  - Implementato in pdf_to_notion.py il fallback di auto-seeding da course_profiles.example.json (tracciato su Git) per evitare regressioni o avvii con lista profili vuota.
+- **Console UTF-8 Resilience**:
+  - Configurato chcp 65001 > nul in Avvia_PHD_Prof.bat e forzato sys.stdout.reconfigure(encoding='utf-8') in pdf_to_notion.py per garantire resa impeccabile di caratteri accentati nei prompt su Windows.
+- **Orchestrazione Competenze Web Design**:
+  - Aggiornato .agents/profile.json montando le skill specialistiche rontend-ux-excellence, impeccable-design, design-taste-frontend e rchitecture-design in .agents/skills/ tramite Skills_Orchestrator/main.py.
+- **Test Suite**: 74/74 unit test verificati con successo.
+
 ### 2026-09-30 (Bilingual Interaction Flag IT vs EN & Useful-Comments Audit)
 - **Visualizzazione Bilingue Terminale (IT vs EN)**:
   - Introdotto il modulo di presentazione `I18n` ([i18n.py](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/inbound/i18n.py)) che incapsula tutte le stringhe di visualizzazione CLI in italiano e inglese.
