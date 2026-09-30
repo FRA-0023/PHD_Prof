@@ -374,6 +374,7 @@ class WebAdapter:
                 })
                 self.streamer.log(f"[{index}/{total}] Elaborazione {doc_path.name}...")
 
+                result = None
                 try:
                     file_hash = compute_file_hash(doc_path)
                     doc = Document(path=doc_path, file_hash=file_hash, doc_type=profile.doc_type)
@@ -410,9 +411,15 @@ class WebAdapter:
                         "status": "FAILED",
                         "error": str(exc),
                     })
+                    # Fast-fail on quota exhaustion to prevent repeated failures across remaining queue
+                    err_lower = str(exc).lower()
+                    if "limite giornaliero" in err_lower or "quota" in err_lower:
+                        self.streamer.log("Quota giornaliera LLM esaurita. Arresto immediato del batch per proteggere lo stato.", level="error")
+                        self.stop_requested = True
+                        break
 
-                # Pacing pause with quick interruption responsiveness
-                if index < total and not self.stop_requested:
+                # Pacing pause: only enforce delay if network/LLM inference was actually executed
+                if index < total and not self.stop_requested and (result is not None and not result.skipped):
                     self.streamer.log(f"Pausa di sicurezza ({SLEEP_BETWEEN_FILES}s)...")
                     for _ in range(SLEEP_BETWEEN_FILES * 2):
                         if self.stop_requested:

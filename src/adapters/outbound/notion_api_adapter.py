@@ -29,14 +29,77 @@ class NotionApiAdapter(INotionClient):
             "Notion-Version": NOTION_VERSION,
         }
 
+    def _request_with_retry(
+        self,
+        method: str,
+        url: str,
+        max_retries: int = 4,
+        base_delay: float = 1.0,
+        **kwargs
+    ) -> requests.Response:
+        """
+        Executes HTTP requests against Notion API with exponential backoff.
+        Handles rate limits (HTTP 429) respecting 'Retry-After' header, and recovers from
+        transient gateway instability (HTTP 500, 502, 503, 504).
+        """
+        headers = kwargs.pop("headers", self._headers())
+        timeout = kwargs.pop("timeout", 30)
+
+        m = method.upper()
+        fn = requests.get if m == "GET" else (requests.post if m == "POST" else (requests.patch if m == "PATCH" else requests.request))
+
+        last_exc = None
+        for attempt in range(max_retries):
+            try:
+                if fn in (requests.get, requests.post, requests.patch):
+                    r = fn(url, headers=headers, timeout=timeout, **kwargs)
+                else:
+                    r = requests.request(method, url, headers=headers, timeout=timeout, **kwargs)
+
+                if r.status_code == 429 or (500 <= r.status_code <= 504):
+                    if attempt == max_retries - 1:
+                        r.raise_for_status()
+
+                    retry_after = r.headers.get("Retry-After") if hasattr(r, "headers") else None
+                    if retry_after:
+                        try:
+                            delay = float(retry_after)
+                        except ValueError:
+                            delay = base_delay * (2 ** attempt)
+                    else:
+                        delay = base_delay * (2 ** attempt)
+
+                    print(f"    [Notion API] Rate limit o errore server ({r.status_code}). Attesa {delay:.1f}s (tentativo {attempt + 1}/{max_retries})...")
+                    time.sleep(delay)
+                    continue
+
+                r.raise_for_status()
+                return r
+
+            except requests.RequestException as exc:
+                last_exc = exc
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                if status and status < 500 and status != 429:
+                    raise exc
+
+                if attempt == max_retries - 1:
+                    raise exc
+
+                delay = base_delay * (2 ** attempt)
+                print(f"    [Notion API] Errore di rete ({exc}). Attesa {delay:.1f}s prima del riprova...")
+                time.sleep(delay)
+
+        if last_exc:
+            raise last_exc
+        raise RuntimeError("Impossibile completare la richiesta Notion.")
+
     def _fetch_children(self, parent_id: str) -> List[Dict[str, Any]]:
         results: List[Dict[str, Any]] = []
         params: Dict[str, Any] = {"page_size": 100}
         url: Optional[str] = f"{NOTION_API_BASE}/blocks/{parent_id}/children"
 
         while url:
-            r = requests.get(url, headers=self._headers(), params=params, timeout=30)
-            r.raise_for_status()
+            r = self._request_with_retry("GET", url, params=params)
             data = r.json()
             results.extend(data.get("results", []))
             if data.get("has_more"):
@@ -53,8 +116,7 @@ class NotionApiAdapter(INotionClient):
 
         try:
             while url:
-                r = requests.post(url, headers=self._headers(), json=payload, timeout=30)
-                r.raise_for_status()
+                r = self._request_with_retry("POST", url, json=payload)
                 data = r.json()
                 for page in data.get("results", []):
                     title = "Senza titolo"
@@ -86,12 +148,7 @@ class NotionApiAdapter(INotionClient):
 
     def _fetch_database_title(self, database_id: str) -> str:
         try:
-            r = requests.get(
-                f"{NOTION_API_BASE}/databases/{database_id}",
-                headers=self._headers(),
-                timeout=30,
-            )
-            r.raise_for_status()
+            r = self._request_with_retry("GET", f"{NOTION_API_BASE}/databases/{database_id}")
             data = r.json()
             parts = data.get("title", [])
             return parts[0].get("plain_text", "") if parts else ""
@@ -140,11 +197,7 @@ class NotionApiAdapter(INotionClient):
         if database_id in self._title_prop_cache:
             return self._title_prop_cache[database_id]
         try:
-            r = requests.get(
-                f"{NOTION_API_BASE}/databases/{database_id}",
-                headers=self._headers(),
-                timeout=30,
-            )
+            r = self._request_with_retry("GET", f"{NOTION_API_BASE}/databases/{database_id}")
             if r.status_code == 200:
                 props = r.json().get("properties", {})
                 for name, pdata in props.items():
@@ -158,51 +211,43 @@ class NotionApiAdapter(INotionClient):
 
     def page_exists(self, database_id: str, title: str) -> bool:
         title_prop = self._get_title_property_name(database_id)
-        r = requests.post(
+        r = self._request_with_retry(
+            "POST",
             f"{NOTION_API_BASE}/databases/{database_id}/query",
-            headers=self._headers(),
             json={"filter": {"property": title_prop, "title": {"equals": title}}},
-            timeout=30,
         )
-        r.raise_for_status()
         return len(r.json().get("results", [])) > 0
 
     def create_page(self, database_id: str, title: str) -> str:
         title_prop = self._get_title_property_name(database_id)
-        r = requests.post(
+        r = self._request_with_retry(
+            "POST",
             f"{NOTION_API_BASE}/pages",
-            headers=self._headers(),
             json={
                 "parent": {"database_id": database_id},
                 "properties": {
                     title_prop: {"title": [{"type": "text", "text": {"content": title[:2000]}}]}
                 },
             },
-            timeout=30,
         )
-        r.raise_for_status()
         return r.json()["id"]
 
     def append_blocks(self, page_id: str, blocks: List[Dict[str, Any]]) -> None:
         for i in range(0, len(blocks), 100):
             batch = blocks[i:i + 100]
-            r = requests.patch(
+            self._request_with_retry(
+                "PATCH",
                 f"{NOTION_API_BASE}/blocks/{page_id}/children",
-                headers=self._headers(),
                 json={"children": batch},
-                timeout=30,
             )
-            r.raise_for_status()
             time.sleep(SLEEP_NOTION_BATCH)
 
     def archive_page(self, page_id: str) -> None:
         try:
-            r = requests.patch(
+            self._request_with_retry(
+                "PATCH",
                 f"{NOTION_API_BASE}/pages/{page_id}",
-                headers=self._headers(),
                 json={"archived": True},
-                timeout=30,
             )
-            r.raise_for_status()
         except Exception as exc:
             print(f"    [ATTENZIONE] Impossibile archiviare la pagina orfana {page_id}: {exc}")

@@ -214,9 +214,21 @@
           </span>
         </td>
         <td style="text-align: right;">
-          <button class="btn-secondary btn-single-sync" data-filename="${escapeHtml(file.name)}" style="padding: 2px 6px; font-size: 10px;">
-            Sync
-          </button>
+          ${
+            file.status === "SYNCED" && file.page_id
+              ? `<div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                  <a href="https://www.notion.so/${file.page_id.replace(/-/g, '')}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-notion-link" title="Apri nota su Notion" style="padding: 2px 8px; font-size: 11px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: var(--accent-primary);">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    Notion
+                  </a>
+                  <button class="btn-secondary btn-single-sync" data-filename="${escapeHtml(file.name)}" title="Riprocessa file" style="padding: 2px 6px; font-size: 10px;">
+                    Sync
+                  </button>
+                </div>`
+              : `<button class="btn-secondary btn-single-sync" data-filename="${escapeHtml(file.name)}" style="padding: 2px 6px; font-size: 10px;">
+                  Sync
+                </button>`
+          }
         </td>
       `;
 
@@ -422,7 +434,7 @@
   }
 
   function updateQuotaDisplay(remaining) {
-    el.quotaDisplay.textContent = `${remaining} RPM`;
+    el.quotaDisplay.textContent = `${remaining} RPD`;
     el.quotaDisplay.classList.remove("warning", "danger");
 
     if (remaining <= 0) {

@@ -325,6 +325,7 @@ class CLIAdapter:
 
         for index, doc_path in enumerate(doc_files, start=1):
             print(f"  [{index:>2}/{total}] {doc_path.name}")
+            result = None
             try:
                 file_hash = compute_file_hash(doc_path)
                 doc = Document(path=doc_path, file_hash=file_hash, doc_type=doc_type)
@@ -334,7 +335,7 @@ class CLIAdapter:
                     success += 1
 
                 # Checkpoint confirmation after first item: gives the user a chance to inspect Notion before processing entire queue
-                if index == 1 and total > 1:
+                if index == 1 and total > 1 and not result.skipped:
                     print(f"\n  {self.i18n.t('first_file_done')}")
                     print(f"  {self.i18n.t('remaining_files', count=total - 1)}")
                     go = input(f"  {self.i18n.t('continue_prompt')}").strip()
@@ -348,7 +349,7 @@ class CLIAdapter:
             except Exception as exc:
                 print(f"    [ERRORE] {exc}\n")
 
-            if index < total:
+            if index < total and (result is not None and not result.skipped):
                 print(f"    {self.i18n.t('pause_seconds', seconds=SLEEP_BETWEEN_FILES)}")
                 time.sleep(SLEEP_BETWEEN_FILES)
                 print()

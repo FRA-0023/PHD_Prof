@@ -11,13 +11,29 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (IT vs EN)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale senza impatto sul core.
-- **Test Suite**: 83 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 84 unit test offline con mock completi (100% passati, 0 regressioni).
 
 ## Prossimi Passi
 - Monitorare l'esperienza d'uso reale del cockpit web durante sessioni di studio continuative.
-- Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
+- Esplorare l'estensione della riconciliazione automatica per cartelle nested o esportazioni Moodle complesse (es. Big Data).
 
 ## Log delle Sessioni
+
+### 2026-09-30 (System Optimization, Notion Backoff Retry, Zero-Latency Pacing & EA State Reconciliation)
+- **Eliminazione Latenza Morta sui File Saltati**:
+  - Aggiornato il loop di batching in [`web_adapter.py`](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/inbound/web/web_adapter.py) e [`cli_adapter.py`](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/inbound/cli_adapter.py): la pausa di sicurezza `SLEEP_BETWEEN_FILES` viene ora applicata *esclusivamente* quando un file richiede inferenza o scrittura di rete (`not result.skipped`). I file con hash invariato avanzano istantaneamente a 0ms, eliminando oltre 2 minuti di attesa a vuoto sui corsi già sincronizzati.
+- **Exponential Backoff & Retry su Notion API**:
+  - Implementato `_request_with_retry` in [`NotionApiAdapter`](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/outbound/notion_api_adapter.py) a protezione di tutte le chiamate REST (creazione pagine, append blocchi, query database, recupero figli).
+  - Gestione trasparente di HTTP 429 con lettura del parametro header `Retry-After`, e recovery automatico da errori gateway 500, 502, 503, 504 con backoff esponenziale.
+  - Aggiunto unit test dedicato `test_notion_api_adapter_retries_on_rate_limit` in `tests/test_notion_api_adapter.py`.
+- **Interrompibilità Fail-Fast su Quota Esaurita**:
+  - Introdotto blocco immediato del batch al rilevamento di saturazione quota giornaliera Gemini (`RuntimeError` quota limit), impedendo la generazione di decine di errori a catena sui file rimanenti in coda.
+- **Rifiniture UX & Deep-Linking Notion**:
+  - Corretta la metrica di testata nel Cockpit Web da `RPM` a `RPD` (*Requests Per Day*) in conformità con la quota giornaliera di 20 chiamate tracciata in `gemini_usage.json`.
+  - Aggiunto deep-link diretto "Notion" nelle righe file con stato `SYNCED`, consentendo di aprire con un solo clic la pagina Notion corrispondente (`https://www.notion.so/<page_id>`).
+- **Riconciliazione Storica EA2627-02-W2.pptx**:
+  - Censito e collegato il file `EA2627-02-W2.pptx` (hash `650811237420501ee9e250243e113eb9645ddf21a06ca78a5c0326d46a0f5050`) alla corrispondente pagina Notion già esistente `Business Architecture with ArchiMate` (`3e8b63e8-59c8-81c1-99e6-e795ddf4c976`), sanando lo stato nel Cockpit da `IDLE` a `SYNCED`.
+- **Test Suite**: 84/84 unit test passati con successo (0 regressioni).
 
 ### 2026-09-30 (Text Mining and Search Cryptographic State Reconciliation)
 - **Riconciliazione Idempotente di Stato Storico**:

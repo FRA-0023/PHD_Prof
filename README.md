@@ -61,7 +61,7 @@ All pipeline stages are decoupled. If the Notion API throttles requests or exper
 
 ### 4. Comprehensive Test Suite
 Fully decoupled unit testing via `pytest` and offline mocks covering all ports, use cases, and adapters:
-- **83/83 unit tests passing** in under 3 seconds.
+- **84/84 unit tests passing** in under 3 seconds.
 
 ---
 
