@@ -12,13 +12,14 @@ Progettare e sviluppare un frontend web locale di livello eccellente (modalità 
 3. **Single-Page Cockpit Industriale**: Realizzata l'interfaccia ad alta densità (`index.html`, `app.css`, `app.js`) a zero build step con hotkey operative (`1-9` selezione rapida, `Ctrl+Enter` avvio batch, `Esc` chiusura/stop).
 4. **Desktop Launcher Unificato**: Configurato [Avvia_PHD_Prof.vbs](file:///c:/Documenti/Bots/PHD_Prof/Avvia_PHD_Prof.vbs) per avviare il server in background a finestra invisibile e invocare istantaneamente il browser a `http://localhost:8000`, con spegnimento automatico del processo server alla chiusura del tab/finestra.
 5. **Verifica & Test Suite**: Aggiunta suite di test unitari asincroni in [test_web_adapter.py](file:///c:/Documenti/Bots/PHD_Prof/tests/test_web_adapter.py) con 83/83 test passati con successo (0 regressioni).
+6. **Riconciliazione Idempotente Stato Storico**: Censiti e riconciliati 30/30 documenti del corso Text Mining su Notion via [reconcile_text_mining.py](file:///c:/Documenti/Bots/PHD_Prof/scripts/reconcile_text_mining.py), popolando crittograficamente `sync_state.json` a costo zero (0 token spesi, 0 duplicati).
 
 ## Next Actions
 - Monitorare l'esperienza d'uso reale del cockpit web durante sessioni di studio continuative.
-- Valutare eventuale utility di riconciliazione automatica per popolare gli hash dei documenti storici già presenti su Notion senza re-inferenza.
+- Esplorare l'estensione della riconciliazione automatica agli altri corsi se presenti documenti pregressi.
 
 ## Blockers
 - None
 
 ## Definition of Done
-Verificato al 100%: Il collegamento desktop PHD Prof apre l'interfaccia nel browser a latenza zero; gestione profili corso, scansione code file e streaming telemetrico operativi; 83/83 test unitari verdi.
+Verificato al 100%: Il collegamento desktop PHD Prof apre l'interfaccia nel browser a latenza zero; gestione profili corso, scansione code file e streaming telemetrico operativi; stato sincronizzato per tutti i file di Enterprise Architecture e Text Mining; 83/83 test unitari verdi.

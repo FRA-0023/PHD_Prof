@@ -1,7 +1,8 @@
 # Ignora password e configurazioni locali
 .env
 gemini_usage.json
-sync_state.json
+sync_state.json*
+*.bak
 course_profiles.json
 staging/
 

@@ -19,6 +19,15 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 
 ## Log delle Sessioni
 
+### 2026-09-30 (Text Mining and Search Cryptographic State Reconciliation)
+- **Riconciliazione Idempotente di Stato Storico**:
+  - Risolto il disallineamento sul corso "Text Mining and Search": le 30 pagine pre-esistenti su Notion (caricate prima dell'introduzione del tracking crittografico a stati) sono state censite e mappate biunivocamente 1-to-1 sui rispettivi 30 file PDF locali.
+  - Implementato lo script di riconciliazione atomica [`scripts/reconcile_text_mining.py`](file:///c:/Documenti/Bots/PHD_Prof/scripts/reconcile_text_mining.py): ha calcolato l'impronta crittografica SHA-256 dei PDF e iniettato le voci con stato `SYNCED` e i rispettivi `page_id` Notion in `sync_state.json`.
+  - Zero token LLM consumati, zero chiamate di riscrittura Notion, zero pagine duplicate.
+  - Creata copia di sicurezza automatica preventiva `sync_state.json.bak` e aggiornato `.gitignore` con pattern `sync_state.json*` e `*.bak`.
+  - Cockpit Web verificato: tutti i 28 file scansionati nella root del corso mostrano ora lo stato nominale verde `SYNCED`.
+- **Test Suite**: 83/83 unit test verificati con successo (0 regressioni).
+
 ### 2026-09-30 (Local Web Frontend Cockpit, Inbound Web Adapter & Desktop Launcher Integration)
 - **Documenti di Verità Visiva (PRODUCT.md & DESIGN.md)**:
   - Redatti `PRODUCT.md` e `DESIGN.md` secondo i framework Impeccable Design (Modalità Operate), Frontend UX Excellence e Design Taste Frontend.
