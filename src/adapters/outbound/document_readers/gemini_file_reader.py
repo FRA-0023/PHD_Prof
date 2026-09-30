@@ -176,12 +176,16 @@ class GeminiFileReader(IDocumentReader):
                 f"Formati supportati: {', '.join(sorted(self.SUPPORTED_MIME_TYPES.keys()))}"
             )
 
-        # PPTX files: Dual-Payload Multimodal (PDF for visual layout + Markdown for speaker notes)
+        # PPTX files: Dual-Payload Multimodal Architecture.
+        # TRADE-OFF: Standard PowerPoint PDF export preserves high-res vector graphics and diagrams
+        # but strips all speaker notes. To eliminate visual blindness without losing lecture commentary,
+        # we decouple the input into a visual PDF payload and a local Markdown notes payload.
         if ext == ".pptx":
             print(f"    [MarkItDown / python-pptx] Estrazione locale slide e note da '{document.path.name}'...")
             notes_text = extract_pptx_to_markdown(document.path)
             print(f"    [MarkItDown / python-pptx] Estratti {len(notes_text)} caratteri in Markdown strutturato.")
 
+            # IDEMPOTENCY: Use SHA-256 fingerprint in staging cache to avoid re-invoking COM automation on reruns
             pdf_cached_path = self.staging_dir / f"{document.file_hash}_slides.pdf"
             pdf_ready = False
 
@@ -207,6 +211,8 @@ class GeminiFileReader(IDocumentReader):
                 )
                 return [notes_payload, uploaded_pdf]
 
+            # GRACEFUL DEGRADATION: If PowerPoint COM is unavailable (e.g. Linux container or headless server),
+            # fall back to pure text extraction so batch processing never crashes.
             print("    [Fallback] Conversione PDF non disponibile. Procedo con la sola estrazione testuale.")
             return notes_text
 

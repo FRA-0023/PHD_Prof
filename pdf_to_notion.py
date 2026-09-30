@@ -17,7 +17,9 @@ from src.adapters.outbound.gemini_llm_adapter import GeminiLlmAdapter
 from src.adapters.outbound.notion_api_adapter import NotionApiAdapter
 from src.adapters.outbound.document_readers.gemini_file_reader import GeminiFileReader
 from src.adapters.outbound.document_readers.text_pdf_reader import TextPdfReader
+import argparse
 from src.adapters.outbound.json_course_profile_repository import JsonCourseProfileRepository
+from src.adapters.inbound.i18n import I18n
 from src.adapters.inbound.cli_adapter import CLIAdapter
 
 def validate_env(env_vars: dict) -> None:
@@ -26,12 +28,20 @@ def validate_env(env_vars: dict) -> None:
         raise EnvironmentError(f"Mancanti nel .env: {', '.join(missing)}")
 
 def main() -> None:
-    print("\n" + "=" * 58)
-    print("  PHD PROF: THE ANTIFRAGILE DOCUMENT ETL")
-    print("  Hexagonal Architecture & Crash-Only Pipeline")
-    print("=" * 58)
-
     load_dotenv(override=True)
+
+    # CLI Language flag resolution: command line arg takes precedence over .env setting
+    parser = argparse.ArgumentParser(description="PHD Prof: Academic Document ETL Pipeline")
+    parser.add_argument("--lang", choices=["IT", "EN", "it", "en"], help="Interaction language (IT vs EN)")
+    args, _ = parser.parse_known_args()
+
+    cli_lang = args.lang.upper() if args.lang else os.getenv("CLI_LANGUAGE", "IT").upper()
+    i18n = I18n(lang=cli_lang)
+
+    print("\n" + "=" * 58)
+    print(f"  {i18n.t('banner_title')}")
+    print(f"  {i18n.t('banner_subtitle')} [{i18n.lang}]")
+    print("=" * 58)
 
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     notion_token = os.getenv("NOTION_TOKEN")
@@ -94,6 +104,7 @@ def main() -> None:
         usecase=usecase,
         root_page_id=notion_root_page_id,
         course_profile_repo=course_profile_repo,
+        i18n=i18n,
     )
 
     cli.start()

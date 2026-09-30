@@ -61,7 +61,8 @@ class GeminiLlmAdapter(ILlmClient):
         max_retries = 5
         base_delay = 15
 
-        # Prepare contents list supporting single payload (str or File) or composite list
+        # RATIONALE (gRPC Serialization Safety): Binary slide streams occasionally embed null bytes (\x00),
+        # which corrupt protobuf serialization in the Google GenAI SDK. Stripping them preserves payload integrity.
         contents_list = [prompt]
         if isinstance(content_payload, list):
             if not content_payload:
@@ -76,6 +77,8 @@ class GeminiLlmAdapter(ILlmClient):
         else:
             contents_list.append(content_payload)
 
+        # ARCHITECTURE (Waterfall Resilience): If user-configured 2.5 Flash encounters regional unavailability (404/400),
+        # fall back sequentially to 2.0 Flash then 1.5 Flash without manual human intervention.
         for current_model in candidate_models:
             for attempt in range(max_retries):
                 try:

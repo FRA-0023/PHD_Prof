@@ -8,13 +8,24 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Modello LLM**: Gemini 2.5 Flash con rate limiting, retry esponenziale e fallback automatico a 2.0/1.5 Flash.
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
-- **Test**: 70 unit test offline con mock completi (100% passati).
+- **Bilingual Interaction (IT vs EN)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale senza impatto sul core.
+- **Test**: 74 unit test offline con mock completi (100% passati).
 
 ## Prossimi Passi
 - Monitorare l'esecuzione batch in produzione su corsi reali Notion.
 - Valutare eventuale caching vettoriale locale se la libreria di PDF cresce ulteriormente.
 
 ## Log delle Sessioni
+
+### 2026-09-30 (Bilingual Interaction Flag IT vs EN & Useful-Comments Audit)
+- **Visualizzazione Bilingue Terminale (IT vs EN)**:
+  - Introdotto il modulo di presentazione `I18n` ([i18n.py](file:///c:/Documenti/Bots/PHD_Prof/src/adapters/inbound/i18n.py)) che incapsula tutte le stringhe di visualizzazione CLI in italiano e inglese.
+  - Risoluzione del flag a doppio livello: priorità al parametro CLI `--lang IT|EN`, con fallback sulla variabile d'ambiente `CLI_LANGUAGE=IT` in `.env`.
+  - Zero impatto sui processi interni: il core domain, le use case, l'estrazione documenti e i prompt di sintesi didattica rimangono inalterati.
+  - Parser di conferma bilingue: accetta indistintamente input affermativi (`s`, `si`, `y`, `yes`) e negativi (`n`, `no`).
+- **Code Audit & Useful Comments**:
+  - Applicata la skill `useful-comments` sull'intera codebase: eliminati commenti parafrasativi o banali, documentando il *perché* architetturale (scrittura atomica con swap `.tmp` per prevenire corruzione da crash, decontaminazione byte nulli `\x00` per stabilità gRPC, cascading waterfall resilient dei modelli LLM, disaccoppiamento visivo/testuale PPTX).
+- **Test Suite**: Aggiunti 4 nuovi test in `tests/test_i18n.py`. Test suite complessiva: 74/74 passati in 2.27s.
 
 ### 2026-09-30 (Persistent Course Profiles & Fast CLI Selection)
 - **Eliminazione Attrito Operativo & Discovery Overhead**:

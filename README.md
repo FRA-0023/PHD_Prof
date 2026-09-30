@@ -55,7 +55,7 @@ All pipeline stages are decoupled. If the Notion API throttles requests or exper
 
 ### 3. Comprehensive Test Suite
 Fully decoupled unit testing via `pytest` and offline mocks covering all ports and adapters:
-- **70/70 unit tests passing** in under 3 seconds.
+- **74/74 unit tests passing** in under 3 seconds.
 
 ---
 
@@ -73,9 +73,11 @@ pip install google-genai python-dotenv requests pymupdf markitdown python-pptx p
 GEMINI_API_KEY=your_gemini_key
 NOTION_TOKEN=your_notion_token
 NOTION_ROOT_PAGE_ID=your_courses_page_or_database_id
+CLI_LANGUAGE=IT  # Optional: IT (Italian, default) or EN (English)
 
-# 4. Run pipeline
+# 4. Run pipeline (supports optional --lang flag: IT or EN)
 python pdf_to_notion.py
+python pdf_to_notion.py --lang EN
 ```
 
 The system will prompt you for:

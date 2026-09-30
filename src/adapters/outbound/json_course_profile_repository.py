@@ -25,6 +25,8 @@ class JsonCourseProfileRepository(ICourseProfileRepository):
 
     def _save_data(self, data: Dict[str, Any]) -> None:
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        # RATIONALE (Atomic Persistence): Writing to a sibling .tmp file before atomic replacement
+        # prevents race conditions and corrupted zero-byte JSON states if interrupted mid-flush.
         temp_file = self.file_path.with_suffix(".tmp")
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
@@ -37,11 +39,14 @@ class JsonCourseProfileRepository(ICourseProfileRepository):
             try:
                 profiles.append(CourseProfile.from_dict(item))
             except Exception:
+                # Fault isolation: an invalid record does not crash the entire list
                 continue
         return sorted(profiles, key=lambda p: p.subject.lower())
 
     def get_profile(self, subject_or_key: str) -> Optional[CourseProfile]:
         data = self._load_data()
+        # RATIONALE: Attempt O(1) direct dictionary lookup first on the normalized key;
+        # fall back to linear scan only for free-form user query variations.
         norm = subject_or_key.strip().lower().replace(" ", "_")
         if norm in data:
             try:
@@ -49,7 +54,7 @@ class JsonCourseProfileRepository(ICourseProfileRepository):
             except Exception:
                 return None
 
-        # Fallback to matching subject directly
+        # Fallback linear search matching normalized subject titles
         target_name = subject_or_key.strip().lower()
         for key, item in data.items():
             if item.get("subject", "").strip().lower() == target_name:
