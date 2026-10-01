@@ -10,14 +10,17 @@ from src.ports.outbound.course_profile_repository_port import ICourseProfileRepo
 from src.core.usecases.process_document import ProcessDocumentUseCase
 
 def test_i18n_default_and_normalization():
-    it = I18n()
-    assert it.lang == "IT"
+    default_i18n = I18n()
+    assert default_i18n.lang == "EN"
 
     en = I18n("en")
     assert en.lang == "EN"
 
+    it = I18n("it")
+    assert it.lang == "IT"
+
     invalid = I18n("FR")
-    assert invalid.lang == "IT"
+    assert invalid.lang == "EN"
 
 def test_i18n_translation_and_formatting():
     it = I18n("IT")

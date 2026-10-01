@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Avvia_PHD_Prof.command
-# Launcher one-click per macOS (Finder) e Linux.
+# One-click desktop launcher for macOS (Finder) and Linux.
 #
-# Comportamento equivalente ad Avvia_PHD_Prof.vbs su Windows:
-# 1. Risolve la directory del progetto.
-# 2. Individua l'interprete Python 3 (venv locale, Homebrew Apple Silicon/Intel, PATH).
-# 3. Avvia il server FastAPI in background disaccoppiato dal terminale.
-# 4. Apre il browser predefinito a http://127.0.0.1:8000.
-# 5. Chiude automaticamente la finestra di Terminal.app creata da Finder.
-# 6. Alla chiusura del browser, il watchdog interno termina il processo Python.
+# Equivalent behavior to Avvia_PHD_Prof.vbs on Windows:
+# 1. Resolves canonical project directory.
+# 2. Discovers Python 3 interpreter (local venv, Homebrew Apple Silicon/Intel, PATH).
+# 3. Launches FastAPI server in background detached from terminal.
+# 4. Automatically opens default browser to http://127.0.0.1:8000.
+# 5. Silently closes Terminal.app window spawned by Finder.
+# 6. On browser tab close, the internal watchdog shuts down the Python process.
 # ==============================================================================
 
-# Risoluzione canonica della directory dello script (gestisce symlink e spazi)
+# Canonical script directory resolution (handles symlinks and whitespace)
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do
     DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
@@ -22,7 +22,7 @@ done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_DIR" || exit 1
 
-# Risoluzione dinamica interprete Python 3
+# Dynamic Python 3 interpreter resolution
 PYTHON_BIN=""
 if [ -x "$SCRIPT_DIR/.venv/bin/python3" ]; then
     PYTHON_BIN="$SCRIPT_DIR/.venv/bin/python3"
@@ -42,25 +42,25 @@ fi
 
 if [ -z "$PYTHON_BIN" ]; then
     echo "=========================================================="
-    echo "  [ERRORE] Python 3 non e' stato trovato su questo sistema."
-    echo "  Installa Python da https://www.python.org/downloads/"
-    echo "  oppure tramite Homebrew: brew install python"
+    echo "  [ERROR] Python 3 was not found on this system."
+    echo "  Install Python from https://www.python.org/downloads/"
+    echo "  or via Homebrew: brew install python"
     echo "=========================================================="
-    read -n 1 -s -r -p "Premi un tasto per chiudere..."
+    read -n 1 -s -r -p "Press any key to close..."
     echo ""
     exit 1
 fi
 
-# Copia automatica .env.example se .env non esiste
+# Auto-copy .env.example if .env does not exist
 if [ ! -f "$SCRIPT_DIR/.env" ] && [ -f "$SCRIPT_DIR/.env.example" ]; then
     cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
 fi
 
-# Avvio del server in background disaccoppiato dal terminale
-# Il log viene indirizzato su phd_prof.log (ignorato da .gitignore)
+# Launch background server detached from terminal
+# Output is routed to phd_prof.log (ignored in .gitignore)
 nohup "$PYTHON_BIN" pdf_to_notion.py --mode web > "$SCRIPT_DIR/phd_prof.log" 2>&1 &
 
-# Su macOS, chiusura silenziosa della finestra di Terminal aperta da Finder
+# On macOS, silently close Terminal window spawned by Finder
 if [ "$(uname)" = "Darwin" ]; then
     osascript -e '
     tell application "Terminal"

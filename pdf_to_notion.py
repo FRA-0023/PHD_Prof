@@ -48,7 +48,7 @@ def main() -> None:
     parser.add_argument("--lang", choices=["IT", "EN", "it", "en"], help="Interaction language (IT vs EN)")
     args, _ = parser.parse_known_args()
 
-    cli_lang = args.lang.upper() if args.lang else os.getenv("CLI_LANGUAGE", "IT").upper()
+    cli_lang = args.lang.upper() if args.lang else os.getenv("CLI_LANGUAGE", "EN").upper()
     i18n = I18n(lang=cli_lang)
 
     print("\n" + "=" * 58)

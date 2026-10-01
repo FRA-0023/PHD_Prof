@@ -50,7 +50,7 @@ class CLIAdapter:
         self.root_page_id = root_page_id
         self.course_profile_repo = course_profile_repo
         # Presentation layer localization: keeps UI text cleanly decoupled from core business domain
-        self.i18n = i18n if i18n is not None else I18n("IT")
+        self.i18n = i18n if i18n is not None else I18n("EN")
 
     def _is_yes(self, value: str, default: bool = True) -> bool:
         """

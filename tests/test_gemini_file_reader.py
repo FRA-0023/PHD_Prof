@@ -249,7 +249,7 @@ def test_gemini_file_reader_polling_retry_on_timeout(monkeypatch):
 def test_gemini_file_reader_pptx_dual_payload_when_converted_successfully(mock_genai_client, monkeypatch, tmp_path):
     monkeypatch.setattr(
         "src.adapters.outbound.document_readers.gemini_file_reader.extract_pptx_to_markdown",
-        lambda p: "## Slide 1: Introduction\n* Point A\n\n**Note del relatore:**\nSpiegazione dettagliata.",
+        lambda p: "## Slide 1: Introduction\n* Point A\n\n**Speaker Notes:**\nDetailed technical explanation.",
     )
 
     dummy_pptx = tmp_path / "deck.pptx"
@@ -272,7 +272,7 @@ def test_gemini_file_reader_pptx_dual_payload_when_converted_successfully(mock_g
     assert isinstance(payload, list)
     assert len(payload) == 2
     assert "=== SLIDE SPEAKER NOTES & TEXT EXTRACTION ===" in payload[0]
-    assert "Spiegazione dettagliata" in payload[0]
+    assert "Detailed technical explanation" in payload[0]
     assert payload[1] == mock_pdf_file
 
     mock_genai_client.files.upload.assert_called_once()

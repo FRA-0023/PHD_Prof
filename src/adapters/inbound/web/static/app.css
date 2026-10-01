@@ -1,33 +1,33 @@
 /* ==========================================================================
    PHD Prof Cockpit — Living Design System CSS
-   Conformità: Impeccable Design (Operate Mode), Frontend UX Excellence, WCAG 2.2 AA
+   Compliance: Impeccable Design (Operate Mode), Frontend UX Excellence, WCAG 2.2 AA
    ========================================================================== */
 
 :root {
-  /* --- Superfici (Elevation Layers) --- */
+  /* --- Elevation Layers --- */
   --bg-canvas:       #0A0E17;
   --bg-surface:      #111827;
   --bg-surface-elev: #1B2436;
   --bg-surface-sub:  #0F1522;
 
-  /* --- Confini & Separatori (Anti-Cardception: 1px divider) --- */
+  /* --- Borders & Dividers (Anti-Cardception: 1px divider) --- */
   --border-subtle:   #1E293B;
   --border-muted:    #334155;
   --border-focus:    #38BDF8;
 
-  /* --- Gerarchia Tipografica --- */
+  /* --- Typographic Hierarchy --- */
   --text-primary:    #F1F5F9; /* 14.2:1 */
   --text-secondary:  #94A3B8; /* 6.5:1 */
   --text-tertiary:   #64748B; /* 4.5:1 */
   --text-disabled:   #475569; /* 3.1:1 */
 
-  /* --- Accento Funzionale --- */
+  /* --- Functional Accent --- */
   --accent-primary:  #0284C7;
   --accent-hover:    #0369A1;
   --accent-glow:     rgba(56, 189, 248, 0.15);
   --text-on-accent:  #FFFFFF;
 
-  /* --- Stati Semantici --- */
+  /* --- Semantic States --- */
   --status-idle-bg:       #1E293B;
   --status-idle-fg:       #94A3B8;
   --status-syncing-bg:    #0C2B47;
@@ -39,11 +39,11 @@
   --status-warning-bg:    #382405;
   --status-warning-fg:    #FBBF24;
 
-  /* --- Tipografia --- */
+  /* --- Typography --- */
   --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 
-  /* --- Spaziatura 8pt --- */
+  /* --- 8pt Spacing Grid --- */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -52,7 +52,7 @@
   --space-8: 32px;
   --space-12: 48px;
 
-  /* --- Raggi & Transizioni --- */
+  /* --- Radii & Transitions --- */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;

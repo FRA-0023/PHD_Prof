@@ -171,15 +171,17 @@ class I18n:
         }
     }
 
-    def __init__(self, lang: str = "IT"):
-        normalized = lang.strip().upper() if lang else "IT"
-        self.lang = normalized if normalized in self.SUPPORTED_LANGUAGES else "IT"
+    def __init__(self, lang: str = "EN"):
+        normalized = lang.strip().upper() if lang else "EN"
+        self.lang = normalized if normalized in self.SUPPORTED_LANGUAGES else "EN"
 
     def t(self, key: str, **kwargs: Any) -> str:
-        # Fallback cascade: requested language -> IT default -> raw key string
+        # Fallback cascade: requested language -> EN default -> IT fallback -> raw key string
         msg = self.MESSAGES.get(self.lang, {}).get(key)
         if msg is None:
-            msg = self.MESSAGES["IT"].get(key, key)
+            msg = self.MESSAGES.get("EN", {}).get(key)
+        if msg is None:
+            msg = self.MESSAGES.get("IT", {}).get(key, key)
         if kwargs:
             return msg.format(**kwargs)
         return msg
