@@ -534,6 +534,47 @@ python -m pytest
 - **Resolution**:
   - The Web Cockpit topbar displays your live remaining RPD. PHD Prof halts the queue cleanly without burning tokens or creating duplicate records. Quota counters automatically reset every 24 hours (tracked via `gemini_usage.json`). You can link a billing card in Google AI Studio for pay-as-you-go high throughput.
 
+### 4. `ValueError: Il contenuto estratto dal documento è vuoto` (Scanned Bitmaps or Cloud Stubs)
+- **Root Cause**:
+  1. *Scanned Image PDFs in `PAPER_OR_BOOK` mode*: The file consists of bitmap image scans without an embedded digital text layer. Local extractors (`PyMuPDF` / `MarkItDown`) detect zero selectable characters.
+  2. *Cloud-Only Placeholder Files (OneDrive / iCloud / Google Drive "Files On-Demand")*: The operating system has not downloaded the physical file content to local storage, presenting a 0-byte stub to Python.
+- **Resolution**:
+  - *For Scanned PDFs*: In your course profile settings, switch `doc_type` to **`slides`**. Slides mode uploads the PDF directly to Google Gemini's multimodal vision API, executing neural visual OCR over mathematical formulas, handwritten margins, and rasterized figures.
+  - *For Cloud Files*: Right-click the folder in Windows Explorer or macOS Finder and select **"Always keep on this device"** (or trigger a full local download) before running synchronization.
+
+### 5. `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process`
+- **Root Cause**: The PDF or PPTX document is currently opened in an external desktop application (e.g. Microsoft PowerPoint, Adobe Acrobat, Foxit PDF Reader) with an exclusive file lock on Windows.
+- **Resolution**: Close the file in your viewer or presentation editor before launching batch processing.
+
+### 6. `OSError: [Errno 10048 / 98] address already in use` (Port Conflict)
+- **Root Cause**: Default port `8000` is already bound by another local process (e.g. Docker container, another web development server, or a dangling Python process).
+- **Resolution**: Launch PHD Prof specifying an explicit alternative port:
+  ```bash
+  python pdf_to_notion.py --mode web --port 8080
+  ```
+
+### 7. `[PPTX to PDF Warning] Conversione COM fallita` (macOS / Linux or Headless Windows)
+- **Root Cause**: Dual-payload slide extraction (converting slides to high-resolution vector PDF to preserve diagrams for Gemini Vision) relies on Microsoft PowerPoint COM automation on Windows (`win32com`). This interface is unavailable on macOS, Linux, or Windows machines lacking desktop PowerPoint.
+- **Behavior & Resolution**: PHD Prof automatically and gracefully falls back to extracting slide titles, body bullet points, and speaker notes via `python-pptx` / `MarkItDown`. While textual synthesis remains exhaustive, vision models will not inspect graphical layouts. To ensure full multimodal diagram fidelity on macOS or Linux, export your presentation to vector PDF directly from Keynote or PowerPoint before dropping it into the monitored course directory.
+
+### 8. Windows PowerShell `PSSecurityException` (`Activate.ps1 cannot be loaded`)
+- **Root Cause**: Default Windows security policies restrict running PowerShell scripts within the user scope.
+- **Resolution**: Open PowerShell and configure execution policy for the current user:
+  ```powershell
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+  ```
+
+### 9. Launcher Privileges on macOS / Linux (`Permission denied` on `.command` or `.sh`)
+- **Root Cause**: Cloning or extracting archives on Unix-like platforms can strip execution bits from shell scripts.
+- **Resolution**: Mark the launchers executable from Terminal:
+  ```bash
+  chmod +x Avvia_PHD_Prof.command Avvia_PHD_Prof.sh
+  ```
+
+### 10. Integration Not Listed in Notion Menu ("Connect to" Empty)
+- **Root Cause**: When the internal integration token was generated at [notion.so/profile/integrations](https://www.notion.so/profile/integrations), it was associated with Workspace A (e.g., Personal), while the academic database is located in Workspace B (e.g., University / Organization account).
+- **Resolution**: Check the **Associated workspace** dropdown in Notion Integrations. Internal integrations cannot traverse workspace boundaries; recreate the integration within the target workspace hosting your course hub.
+
 ---
 
 **Author:** Francesco Colombini  
