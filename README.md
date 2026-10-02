@@ -24,6 +24,7 @@
 4. [Project File Taxonomy & Runtime State Map](#-project-file-taxonomy--runtime-state-map)
 5. [Execution Modes: Web Cockpit vs Terminal CLI](#-execution-modes-web-cockpit-vs-terminal-cli)
 6. [Technical Architecture & Verification Test Suite](#-technical-architecture--verification-test-suite)
+7. [Troubleshooting & Diagnostic Guide](#-troubleshooting--diagnostic-guide)
 
 ---
 
@@ -258,14 +259,23 @@ The pipeline models university knowledge in a **3-tier hierarchical structure**:
 
 #### Step 3: Authorize the Integration on Notion (Critical Step!)
 > [!CAUTION]
-> Notion employs a zero-trust model: **integrations cannot access any page or database until explicitly invited**. Skipping this step causes the Notion API to return `HTTP 404 Object Not Found`.
+> Notion operates under a strict zero-trust sandbox: **integrations have zero visibility into any page or database until explicitly invited**. Skipping this authorization step will cause all page creation calls to fail.
 
-1. In Notion, navigate to your root parent page (e.g., "University").
-2. Click the three dots icon (**`...`**) in the top right corner.
-3. Scroll down to **"Connections"**.
-4. Click **"Connect to"**.
-5. Search for your integration name (`PHD Prof`) and confirm access.
-6. The integration now has recursive read/write permissions for that root page, all course sub-pages, and all nested databases.
+> [!WARNING]
+> **Diagnostic Symptom: `Error on <file>: 404 Client Error: Not found for url: https://api.notion.com/v1/pages`**  
+> In Notion's REST API architecture, querying or modifying an unauthorized resource deliberately returns **`HTTP 404 Object Not Found`** instead of `403 Forbidden` (to prevent resource enumeration). If you see this error when synchronizing documents, your integration token is valid but **has not been connected to the specific course page or database**, or your `database_id` is invalid.
+
+##### How to Authorize Access:
+- **Approach A (Direct Course/Database Connection — Recommended & Bulletproof)**:
+  1. In Notion, navigate directly to your specific **Course Page** (e.g., "Econometrics") or open the inner target **Notes Database** as a full page.
+  2. Click the three dots icon (**`...`**) in the top right corner of the window.
+  3. Scroll down to **"Connections"** (or **"Connect to"**).
+  4. Search for your integration name (e.g., `PHD Prof`) and confirm.
+  5. The integration now possesses direct read, write, and page creation permissions inside that database.
+- **Approach B (Recursive Root Connection)**:
+  1. In Notion, navigate to your root parent page (e.g., "University" specified in `NOTION_ROOT_PAGE_ID`).
+  2. Click `...` -> **"Connections"** -> **"Connect to"** -> select `PHD Prof`.
+  3. *Note*: If your course page or database was created outside this root tree, or if page permissions are set to private/custom, inheritance will not apply. When in doubt, always apply **Approach A** directly on the Course Page or the target database.
 
 #### Step 4: Extracting NOTION_ROOT_PAGE_ID and Course Database IDs
 1. **Root Page ID (`NOTION_ROOT_PAGE_ID`)**:
@@ -274,9 +284,14 @@ The pipeline models university knowledge in a **3-tier hierarchical structure**:
    - Notion URLs look like: `https://www.notion.so/workspace/University-3a8b2c4d5e6f708192a3b4c5d6e7f890`
    - The ID is the **32-character hexadecimal string** at the end of the URL slug.
 2. **Course Database ID (`database_id`)**:
-   - Open the specific course's "Notes" database as a full page.
+   - Open the specific course's "Notes" database as a full page (hover over the database header and click "Open as page", or click `...` on the database block).
    - Click `...` -> **"Copy link"**.
-   - The 32-character string preceding `?v=` is your course's `database_id` (used in `course_profiles.json` or entered via the Web Cockpit).
+   - Notion database URLs look like: `https://www.notion.so/workspace/3e8b63e859c881c199e6e795ddf4c976?v=...`
+   - The **32-character hexadecimal string** preceding `?v=` is your course's `database_id` (used in `course_profiles.json` or entered via the Web Cockpit modal).
+   - > [!IMPORTANT]
+   - > - **Replace Template Placeholders**: Never leave the template placeholder (`"your_notion_notes_database_id_here"` from `course_profiles.example.json`). It will immediately cause a 404 error.
+   - > - **Must Be a Database (Not a Plain Page)**: The target must be an inline or full-page Notion **Database** (with columns/properties), not a plain text page. Supplying a Page ID in `database_id` causes `POST /v1/pages` to fail with `404 Object Not Found`.
+   - > - **Clean UUID**: Strip query parameters like `?v=...` when configuring manually.
 
 ---
 
@@ -495,6 +510,29 @@ The codebase includes comprehensive unit tests with full offline mocks covering 
 python -m pytest
 ```
 *All 84/84 unit tests execute in under 3 seconds with zero external network dependencies.*
+
+---
+
+## 🛠️ Troubleshooting & Diagnostic Guide
+
+### 1. `Error on <file>: 404 Client Error: Not found for url: https://api.notion.com/v1/pages`
+- **Root Cause**: Notion REST API responds with `404 Not Found` (rather than `403 Forbidden`) whenever:
+  1. The Notion integration has **not been invited/connected** to the specific Course Page or target Database.
+  2. The `database_id` configured in your course profile is still set to the template placeholder (`your_notion_notes_database_id_here`), contains extraneous query parameters (`?v=...`), or points to a regular Page instead of a Database.
+- **Resolution**:
+  1. In Notion, navigate to your Course Page or open the "Notes" database directly.
+  2. Click the three dots icon (**`...`**) in the top right corner $\rightarrow$ **Connections** (or **Connect to**) $\rightarrow$ select your integration (`PHD Prof`).
+  3. Verify in the Web Cockpit (or in `course_profiles.json`) that `database_id` is your real 32-character hexadecimal database UUID.
+
+### 2. `400 Client Error: validation_error` on Notion API
+- **Root Cause**: The target Notion database is missing a Title property, or an invalid property schema was provided.
+- **Resolution**:
+  - Open your Notion database in the browser and ensure it contains a Title column (default is `Name` or `Title`). PHD Prof automatically queries the database schema and maps to whichever column has `type: "title"`.
+
+### 3. `Quota giornaliera LLM esaurita` / RPD Cap Reached
+- **Root Cause**: Google Gemini API Free Tier enforces a daily request cap (typically 15–20 RPD on Flash models).
+- **Resolution**:
+  - The Web Cockpit topbar displays your live remaining RPD. PHD Prof halts the queue cleanly without burning tokens or creating duplicate records. Quota counters automatically reset every 24 hours (tracked via `gemini_usage.json`). You can link a billing card in Google AI Studio for pay-as-you-go high throughput.
 
 ---
 
