@@ -66,9 +66,9 @@ PHD Prof features a zero-build, local-first single-page cockpit running on `http
 |  [1] Enterprise Architectures      | [All / None] [Refresh] [Sync Selected (3)]       |
 |  [2] Machine Learning              |                                                  |
 |  [3] Text Mining and Search        | Document Data Table:                             |
-|  [+ New Course Profile]            |  [x] Week_01_Intro.pptx | 14.2 MB | SYNCED [Notion]|
-|                                    |  [x] Week_02_Arch.pptx  |  8.6 MB | IDLE           |
-| Active Course Specification:       |  [ ] Paper_KDD.pdf      |  2.1 MB | IDLE           |
+|  [+ New Course Profile]            |  [x] Week_01_Intro.pdf | 4.2 MB | SYNCED [Notion]|
+|                                    |  [x] Week_02_Arch.pptx  | 8.6 MB | IDLE          |
+| Active Course Specification:       |  [ ] Paper_KDD.pdf      | 2.1 MB | IDLE          |
 |  - DocType: Slides                 |                                                  |
 |  - Role: PhD Professor in EA       | Real-Time Streaming Telemetry Console:           |
 |  - Notion DB: Notes                |  [14:10:02] SHA-256: 65081123... (Computed)      |
