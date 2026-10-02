@@ -529,12 +529,14 @@ python -m pytest
 - **Resolution**:
   - Open your Notion database in the browser and ensure it contains a Title column (default is `Name` or `Title`). PHD Prof automatically queries the database schema and maps to whichever column has `type: "title"`.
 
-### 3. `Quota giornaliera LLM esaurita` / RPD Cap Reached
+### 3. Daily LLM Quota Exhausted / RPD Cap Reached (`429 RESOURCE_EXHAUSTED`)
+- **Diagnostic Log**: Emitted in telemetry as `Daily LLM quota exhausted` (or `Quota giornaliera LLM esaurita`).
 - **Root Cause**: Google Gemini API Free Tier enforces a daily request cap (typically 15–20 RPD on Flash models).
 - **Resolution**:
   - The Web Cockpit topbar displays your live remaining RPD. PHD Prof halts the queue cleanly without burning tokens or creating duplicate records. Quota counters automatically reset every 24 hours (tracked via `gemini_usage.json`). You can link a billing card in Google AI Studio for pay-as-you-go high throughput.
 
-### 4. `ValueError: Il contenuto estratto dal documento è vuoto` (Scanned Bitmaps or Cloud Stubs)
+### 4. Empty Document Extraction / Zero Content (`ValueError: Empty document content`)
+- **Diagnostic Log**: Emitted when extracting zero selectable characters (`ValueError: Il contenuto estratto dal documento è vuoto`).
 - **Root Cause**:
   1. *Scanned Image PDFs in `PAPER_OR_BOOK` mode*: The file consists of bitmap image scans without an embedded digital text layer. Local extractors (`PyMuPDF` / `MarkItDown`) detect zero selectable characters.
   2. *Cloud-Only Placeholder Files (OneDrive / iCloud / Google Drive "Files On-Demand")*: The operating system has not downloaded the physical file content to local storage, presenting a 0-byte stub to Python.
@@ -553,7 +555,8 @@ python -m pytest
   python pdf_to_notion.py --mode web --port 8080
   ```
 
-### 7. `[PPTX to PDF Warning] Conversione COM fallita` (macOS / Linux or Headless Windows)
+### 7. Headless PPTX Vector Conversion Fallback (`[PPTX to PDF Warning] COM conversion failed`)
+- **Diagnostic Log**: Emitted in telemetry as `[PPTX to PDF Warning] Conversione COM fallita`.
 - **Root Cause**: Dual-payload slide extraction (converting slides to high-resolution vector PDF to preserve diagrams for Gemini Vision) relies on Microsoft PowerPoint COM automation on Windows (`win32com`). This interface is unavailable on macOS, Linux, or Windows machines lacking desktop PowerPoint.
 - **Behavior & Resolution**: PHD Prof automatically and gracefully falls back to extracting slide titles, body bullet points, and speaker notes via `python-pptx` / `MarkItDown`. While textual synthesis remains exhaustive, vision models will not inspect graphical layouts. To ensure full multimodal diagram fidelity on macOS or Linux, export your presentation to vector PDF directly from Keynote or PowerPoint before dropping it into the monitored course directory.
 
