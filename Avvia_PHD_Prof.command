@@ -7,7 +7,7 @@
 # 1. Resolves canonical project directory.
 # 2. Discovers Python 3 interpreter (local venv, Homebrew Apple Silicon/Intel, PATH).
 # 3. Launches FastAPI server in background detached from terminal.
-# 4. Automatically opens default browser to http://127.0.0.1:8000.
+# 4. Automatically opens default browser to https://phdprof.test (or http://127.0.0.1).
 # 5. Silently closes Terminal.app window spawned by Finder.
 # 6. On browser tab close, the internal watchdog shuts down the Python process.
 # ==============================================================================

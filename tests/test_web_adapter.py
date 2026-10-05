@@ -204,3 +204,25 @@ async def test_web_adapter_heartbeat_and_unload(mock_dependencies):
         unload_res = await client.post("/api/unload")
         assert unload_res.status_code == 200
         assert unload_res.json()["status"] == "acknowledged"
+
+def test_web_adapter_default_port_is_80(mock_dependencies):
+    adapter = mock_dependencies["adapter"]
+    assert adapter.port == 80
+    assert adapter.host == "127.0.0.1"
+
+def test_web_adapter_ssl_configuration(mock_dependencies):
+    ssl_adapter = WebAdapter(
+        notion_client=mock_dependencies["adapter"].notion_client,
+        llm_client=mock_dependencies["adapter"].llm_client,
+        usecase=mock_dependencies["adapter"].usecase,
+        root_page_id="root_id",
+        host="127.0.0.1",
+        port=443,
+        ssl_keyfile="certs/server.key",
+        ssl_certfile="certs/server.crt",
+    )
+    assert ssl_adapter.port == 443
+    assert ssl_adapter.ssl_keyfile == "certs/server.key"
+    assert ssl_adapter.ssl_certfile == "certs/server.crt"
+
+

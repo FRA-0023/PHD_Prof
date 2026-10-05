@@ -43,7 +43,11 @@ def main() -> None:
     # Interaction mode & language resolution: CLI args take precedence over defaults
     parser = argparse.ArgumentParser(description="PHD Prof: Academic Document ETL Pipeline")
     parser.add_argument("--mode", choices=["web", "cli"], default="web", help="Interface mode (web vs cli)")
-    parser.add_argument("--port", type=int, default=8000, help="Web server port (default: 8000)")
+    parser.add_argument("--port", type=int, default=None, help="Web server port (default: 80, or from WEB_PORT)")
+    parser.add_argument("--host", type=str, default=None, help="Web server host (default: 127.0.0.1, or from WEB_HOST)")
+    parser.add_argument("--domain", type=str, default=None, help="Local domain name (default: phdprof.test, or from WEB_DOMAIN)")
+    parser.add_argument("--ssl", action="store_true", default=None, help="Enable HTTPS mode (auto-detected if certs exist)")
+    parser.add_argument("--no-ssl", dest="ssl", action="store_false", help="Disable HTTPS mode")
     parser.add_argument("--no-browser", action="store_true", help="Do not open browser automatically")
     parser.add_argument("--lang", choices=["IT", "EN", "it", "en"], help="Interaction language (IT vs EN)")
     args, _ = parser.parse_known_args()
@@ -123,6 +127,62 @@ def main() -> None:
     )
 
     if args.mode == "web":
+        import socket
+        import webbrowser
+        import threading
+
+        # Certificate detection & HTTPS mode resolution
+        certs_dir = root_dir / "certs"
+        server_crt = certs_dir / "server.crt"
+        server_key = certs_dir / "server.key"
+        certs_available = server_crt.exists() and server_key.exists()
+        use_ssl = args.ssl if args.ssl is not None else certs_available
+
+        # Resolve networking parameters (CLI takes precedence over .env)
+        raw_env_port = os.getenv("WEB_PORT")
+        default_port = int(raw_env_port) if raw_env_port and raw_env_port.isdigit() else (443 if use_ssl else 80)
+        web_port = args.port if args.port is not None else default_port
+        web_host = args.host if args.host is not None else os.getenv("WEB_HOST", "127.0.0.1")
+        web_domain = args.domain if args.domain is not None else os.getenv("WEB_DOMAIN", "phdprof.test")
+
+        # Port binding resilience: check if privileged/standard ports are available
+        def _check_port(h: str, p: int) -> bool:
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s.bind((h, p))
+                    return True
+            except OSError:
+                return False
+
+        if use_ssl and web_port == 443 and not _check_port(web_host, web_port):
+            print("\n  [Web] Avviso: porta 443 non accessibile o occupata. Fallback su porta 8443...")
+            web_port = 8443
+        elif not use_ssl and web_port == 80 and not _check_port(web_host, web_port):
+            print("\n  [Web] Avviso: porta 80 non accessibile o occupata. Fallback su porta 8000...")
+            web_port = 8000
+
+        # Check local domain resolution
+        resolves_domain = False
+        try:
+            socket.gethostbyname(web_domain)
+            resolves_domain = True
+        except socket.error:
+            resolves_domain = False
+
+        protocol = "https" if use_ssl else "http"
+        is_standard_port = (use_ssl and web_port == 443) or (not use_ssl and web_port == 80)
+        port_suffix = "" if is_standard_port else f":{web_port}"
+
+        if resolves_domain:
+            target_url = f"{protocol}://{web_domain}{port_suffix}"
+        else:
+            target_url = f"{protocol}://127.0.0.1{port_suffix}"
+            if web_domain not in ("127.0.0.1", "localhost"):
+                print(f"\n  [!] Nota: '{web_domain}' non risulta ancora configurato nel file hosts.")
+                print(f"      Esegui 'Configura_Dominio_Locale.bat' come Amministratore per attivarlo.")
+                print(f"      Accesso temporaneo fallback: {target_url}\n")
+
         web = WebAdapter(
             notion_client=notion_client,
             llm_client=llm_client,
@@ -130,14 +190,14 @@ def main() -> None:
             root_page_id=notion_root_page_id,
             course_profile_repo=course_profile_repo,
             state_repo=state_repo,
-            host="127.0.0.1",
-            port=args.port,
+            host=web_host,
+            port=web_port,
+            ssl_keyfile=str(server_key) if use_ssl else None,
+            ssl_certfile=str(server_crt) if use_ssl else None,
         )
         if not args.no_browser:
-            import webbrowser
-            import threading
-            threading.Timer(0.8, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}")).start()
-        print(f"\n  [Web] Cockpit avviato su http://127.0.0.1:{args.port}\n")
+            threading.Timer(0.8, lambda: webbrowser.open(target_url)).start()
+        print(f"\n  [Web] Cockpit avviato su {target_url} (in ascolto su {web_host}:{web_port}, SSL={use_ssl})\n")
         web.start()
     else:
         cli = CLIAdapter(

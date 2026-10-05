@@ -80,7 +80,9 @@ class WebAdapter:
         course_profile_repo: Optional[ICourseProfileRepository] = None,
         state_repo: Optional[IStateRepository] = None,
         host: str = "127.0.0.1",
-        port: int = 8000,
+        port: int = 80,
+        ssl_keyfile: Optional[str] = None,
+        ssl_certfile: Optional[str] = None,
     ):
         self.notion_client = notion_client
         self.llm_client = llm_client
@@ -90,6 +92,8 @@ class WebAdapter:
         self.state_repo = state_repo
         self.host = host
         self.port = port
+        self.ssl_keyfile = ssl_keyfile
+        self.ssl_certfile = ssl_certfile
 
         self.streamer = TelemetryStreamer()
         self.is_batch_running = False
@@ -486,6 +490,16 @@ class WebAdapter:
             watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True)
             watchdog_thread.start()
 
-        config = uvicorn.Config(self.app, host=self.host, port=self.port, log_level="warning")
+        config_kwargs = {
+            "app": self.app,
+            "host": self.host,
+            "port": self.port,
+            "log_level": "warning",
+        }
+        if self.ssl_keyfile and self.ssl_certfile:
+            config_kwargs["ssl_keyfile"] = self.ssl_keyfile
+            config_kwargs["ssl_certfile"] = self.ssl_certfile
+
+        config = uvicorn.Config(**config_kwargs)
         self.server = uvicorn.Server(config)
         self.server.run()

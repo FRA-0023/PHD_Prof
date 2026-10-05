@@ -54,7 +54,7 @@ PHD Prof operates as a **Crash-Only, Idempotent Document ETL Pipeline**:
 
 ## 🖥️ The Web Cockpit (Industrial Local Dashboard)
 
-PHD Prof features a zero-build, local-first single-page cockpit running on `http://127.0.0.1:8000`, built according to the *Operate* visitor mode and WCAG 2.2 AA accessibility standards:
+PHD Prof features a zero-build, local-first single-page cockpit accessible securely at `https://phdprof.test` (or `http://127.0.0.1`), running on standard HTTPS port `443` (with automatic fallback to port `8443` or `80/8000`). Built according to the *Operate* visitor mode and WCAG 2.2 AA accessibility standards:
 
 ```
 +---------------------------------------------------------------------------------------+
@@ -284,14 +284,13 @@ The pipeline models university knowledge in a **3-tier hierarchical structure**:
    - Notion URLs look like: `https://www.notion.so/workspace/University-3a8b2c4d5e6f708192a3b4c5d6e7f890`
    - The ID is the **32-character hexadecimal string** at the end of the URL slug.
 2. **Course Database ID (`database_id`)**:
-   - Open the specific course's "Notes" database as a full page (hover over the database header and click "Open as page", or click `...` on the database block).
-   - Click `...` -> **"Copy link"**.
-   - Notion database URLs look like: `https://www.notion.so/workspace/3e8b63e859c881c199e6e795ddf4c976?v=...`
-   - The **32-character hexadecimal string** preceding `?v=` is your course's `database_id` (used in `course_profiles.json` or entered via the Web Cockpit modal).
+   - Open the target "Notes" database as a full page (hover over the header -> "Open as page", or click `...` on the database block) and click **"Copy link"**.
+   - Notion URLs follow the structure: `https://www.notion.so/{workspace}/<DATABASE_ID>?v=<VIEW_ID>`.
+   - **Database ID vs. View ID**: Use strictly the **32-character hexadecimal string before `?v=`** (`<DATABASE_ID>`). The string *after* `?v=` is only the UI View ID; passing the View ID will trigger an API `404 Object Not Found`.
    - > [!IMPORTANT]
+   - > - **Database ID vs View ID**: Extract only the token preceding `?v=`. The `?v=...` suffix belongs to the view and must be omitted.
    - > - **Replace Template Placeholders**: Never leave the template placeholder (`"your_notion_notes_database_id_here"` from `course_profiles.example.json`). It will immediately cause a 404 error.
    - > - **Must Be a Database (Not a Plain Page)**: The target must be an inline or full-page Notion **Database** (with columns/properties), not a plain text page. Supplying a Page ID in `database_id` causes `POST /v1/pages` to fail with `404 Object Not Found`.
-   - > - **Clean UUID**: Strip query parameters like `?v=...` when configuring manually.
 
 ---
 
@@ -455,8 +454,10 @@ Provides full visual observability and selective batch control:
   ```bash
   python pdf_to_notion.py --mode web
   # Optional arguments:
-  # --port 8080        (customizes HTTP port, default: 8000)
-  # --no-browser       (prevents opening browser automatically)
+  # --domain phdprof.test (customizes local domain name, default: phdprof.test)
+  # --ssl / --no-ssl      (enables/disables HTTPS; auto-enabled when certs/ exists)
+  # --port 443            (customizes port, default: 443 for HTTPS, 80 for HTTP)
+  # --no-browser          (prevents opening browser automatically)
   ```
 
 ---
@@ -518,11 +519,11 @@ python -m pytest
 ### 1. `Error on <file>: 404 Client Error: Not found for url: https://api.notion.com/v1/pages`
 - **Root Cause**: Notion REST API responds with `404 Not Found` (rather than `403 Forbidden`) whenever:
   1. The Notion integration has **not been invited/connected** to the specific Course Page or target Database.
-  2. The `database_id` configured in your course profile is still set to the template placeholder (`your_notion_notes_database_id_here`), contains extraneous query parameters (`?v=...`), or points to a regular Page instead of a Database.
+  2. The `database_id` configured in your course profile is still set to the template placeholder (`your_notion_notes_database_id_here`), mistakenly uses the View ID (the string after `?v=`) instead of the Database ID (the string before `?v=`), or points to a regular Page instead of a Database.
 - **Resolution**:
   1. In Notion, navigate to your Course Page or open the "Notes" database directly.
   2. Click the three dots icon (**`...`**) in the top right corner $\rightarrow$ **Connections** (or **Connect to**) $\rightarrow$ select your integration (`PHD Prof`).
-  3. Verify in the Web Cockpit (or in `course_profiles.json`) that `database_id` is your real 32-character hexadecimal database UUID.
+  3. Verify in the Web Cockpit (or in `course_profiles.json`) that `database_id` is the real 32-character hexadecimal database UUID (the string before `?v=`), and not a View ID or plain Page ID.
 
 ### 2. `400 Client Error: validation_error` on Notion API
 - **Root Cause**: The target Notion database is missing a Title property, or an invalid property schema was provided.
@@ -548,11 +549,13 @@ python -m pytest
 - **Root Cause**: The PDF or PPTX document is currently opened in an external desktop application (e.g. Microsoft PowerPoint, Adobe Acrobat, Foxit PDF Reader) with an exclusive file lock on Windows.
 - **Resolution**: Close the file in your viewer or presentation editor before launching batch processing.
 
-### 6. `OSError: [Errno 10048 / 98] address already in use` (Port Conflict)
-- **Root Cause**: Default port `8000` is already bound by another local process (e.g. Docker container, another web development server, or a dangling Python process).
-- **Resolution**: Launch PHD Prof specifying an explicit alternative port:
+### 6. Local Domain & Trusted HTTPS Setup (`https://phdprof.test`)
+- **Local Domain & Root SSL Setup**: To navigate directly to `https://phdprof.test` without security warnings or port numbers, double-click `Configura_Dominio_Locale.bat` (Windows) or execute `sudo ./scripts/setup_local_domain.sh` (macOS/Linux). This script performs two actions in one step:
+  1. Maps `127.0.0.1 phdprof.test` into your local `hosts` file and flushes DNS cache.
+  2. Generates local SSL certificates (if absent) and installs the Root CA into the Windows Trusted Root Certificate Store, enabling green-padlock HTTPS in all browsers.
+- **Port Conflict Handling**: PHD Prof binds by default to standard HTTPS port `443` (or `80` if HTTPS is disabled). If port 443 is occupied by another local service, the server automatically falls back to port `8443` (or `8000` for HTTP). You can also specify an explicit port:
   ```bash
-  python pdf_to_notion.py --mode web --port 8080
+  python pdf_to_notion.py --mode web --port 8443
   ```
 
 ### 7. Headless PPTX Vector Conversion Fallback (`[PPTX to PDF Warning] COM conversion failed`)
