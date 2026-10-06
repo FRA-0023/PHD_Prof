@@ -49,6 +49,10 @@ PHD Prof operates as a **Crash-Only, Idempotent Document ETL Pipeline**:
 3. **Structured Notion Pedagogical Output**:
    - Compiles output into native Notion blocks: inline LaTeX equations (`$formula$`), standalone display equations (`$$...$$`), syntax-highlighted code blocks (Python, R, SQL, Shell), analytical callouts, executive summaries, and rigorous exam preparation questions.
    - Enforces **1900-character safe chunking** to eliminate HTTP 400 payload rejections caused by Notion's strict 2000-character limit per rich text block.
+4. **Hierarchical Spatial Visual Extraction (Cloudflare R2)**:
+   - Gemini acts as a native spatial Object Detector, emitting precise bounding-box coordinates for critical architectural diagrams or empirical matrices (e.g. `![caption](figure://slide_N?crop=ymin,xmin,ymax,xmax)`).
+   - `PyMuPDF` renders the specific slide locally at 300 DPI, crops the region, and the `S3ImageAdapter` uploads the PNG to a Cloudflare R2 Bucket organized hierarchically (`notion/universita/{course_name}/`).
+   - Notion receives native `image` blocks pointing to the public offuscated URLs, bypassing binary upload limitations.
 
 ---
 
@@ -373,6 +377,13 @@ GEMINI_API_KEY=AIzaSyYourGeneratedGeminiKeyHere
 NOTION_TOKEN=secret_YourNotionInternalSecretTokenHere
 NOTION_ROOT_PAGE_ID=3a8b2c4d5e6f708192a3b4c5d6e7f890
 
+# Cloudflare R2 Image Storage (Optional: enables visual diagram extraction)
+R2_ENDPOINT_URL=https://<account-id>.r2.cloudflarestorage.com
+R2_ACCESS_KEY=<your-access-key>
+R2_SECRET_KEY=<your-secret-key>
+R2_BUCKET_NAME=phd-prof-assets
+R2_PUBLIC_DOMAIN=https://pub-xxxxxx.r2.dev
+
 # Optional Configurations
 GEMINI_TIMEOUT_SECONDS=300
 GEMINI_MODEL=gemini-2.5-flash
@@ -386,6 +397,11 @@ CLI_LANGUAGE=EN
 | `GEMINI_API_KEY` | **Yes** | Google Gemini API key obtained from [Google AI Studio](https://aistudio.google.com/) | *None* |
 | `NOTION_TOKEN` | **Yes** | Notion Internal Integration secret token (`secret_...` / `ntn_...`) | *None* |
 | `NOTION_ROOT_PAGE_ID` | **Yes** | 32-character ID of root Notion page or master course database | *None* |
+| `R2_ENDPOINT_URL` | No | Cloudflare R2 global endpoint (do NOT use `.eu.` jurisdictional endpoints) | *None* |
+| `R2_ACCESS_KEY` | No | R2 API Token Access Key | *None* |
+| `R2_SECRET_KEY` | No | R2 API Token Secret Key | *None* |
+| `R2_BUCKET_NAME` | No | Name of the R2 bucket where images are stored | *None* |
+| `R2_PUBLIC_DOMAIN` | No | R2 Public URL (e.g. `https://pub-xxxx.r2.dev`) | *None* |
 | `GEMINI_MODEL` | No | Gemini model identifier (supports automatic fallbacks) | `gemini-2.5-flash` |
 | `GEMINI_TIMEOUT_SECONDS` | No | Timeout in seconds for large file uploads and inference | `300` |
 | `CLI_LANGUAGE` | No | CLI interface language (`EN` or `IT`) | `EN` |
