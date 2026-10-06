@@ -289,6 +289,22 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             })
             continue
 
+        # ── Images ──────────────────────────────────────────────────────────
+        import re
+        img_match = re.match(r'^!\[([^\]]*)\]\((https?://[^\)]+)\)$', s)
+        if img_match:
+            # alt_text = img_match.group(1) # Notion image blocks don't natively support alt text in the API structure for external URLs directly in the same way, but we could add caption
+            img_url = img_match.group(2)
+            blocks.append({
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": img_url}
+                }
+            })
+            continue
+
         # ── Paragraph ───────────────────────────────────────────────────────
         blocks.append({
             "object": "block",

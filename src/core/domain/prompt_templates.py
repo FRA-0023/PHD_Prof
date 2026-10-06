@@ -50,6 +50,11 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
 - Emphasis: Use **bold** text strategically for key terms and newly defined variables within the narrative flow.
 - Mathematics & Formulas: Extract all formal equations. Format inline math with `$` (e.g., $E=mc^2$) and display math on its own line with `$$` (e.g., $$\\hat{{y}} = \\sigma(Wx+b)$$). Never use code blocks for math.
 - Code Snippets: Format code inside fenced blocks with the language tag (e.g., ```python, ```r).
+- Visual Diagrams & Figures:
+  * If a slide contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
+  * Use the format: `![Brief technical caption](figure://slide_N)` where N is the 1-based slide/page number.
+  * Optional: To crop a specific box, use `![...](figure://slide_N?crop=ymin,xmin,ymax,xmax)` where coordinates are 0-1000.
+  * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text slides or syllabus overviews.
 - References: Place all citations exclusively at the end in a `### 📚 References` section. No inline citations in the body.
 - Language & Tone: British English exclusively. Direct, rigorous, academic tone. Output ONLY the finalized study notes without conversational meta-commentary or tags.
 </formatting_rules>
@@ -104,6 +109,11 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
 - Emphasis: Highlight critical terms, theorems, definitions, and variables in **bold**.
 - Mathematics & Formulas: Extract and explain all mathematical formulations. Format inline math with `$` (e.g., $L(\\theta)$) and display equations on standalone lines with `$$` (e.g., $$\\nabla_\\theta J(\\theta) = \\mathbb{{E}}[ \\dots ]$$). Never use code blocks for math.
 - Code & Algorithms: Format pseudo-code or algorithms inside fenced code blocks with language identifiers (e.g., ```python, ```r).
+- Visual Diagrams & Figures:
+  * If the document contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
+  * Use the format: `![Brief technical caption](figure://slide_N)` where N is the 1-based page number.
+  * Optional: To crop a specific box, use `![...](figure://slide_N?crop=ymin,xmin,ymax,xmax)` where coordinates are 0-1000.
+  * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text pages.
 - References: Consolidate formal bibliographic citations in a final `### 📚 References` section. No inline citations in the body.
 - Language & Tone: British English exclusively. Direct, rigorous, academic tone. Output ONLY the finalized notes without conversational padding or tags.
 </formatting_rules>

@@ -118,12 +118,30 @@ def main() -> None:
         DocumentType.PAPER_OR_BOOK: TextPdfReader(),
     }
 
+    # Configurazione Opzionale: Cloudflare R2 / S3 Image Hosting
+    r2_endpoint = os.getenv("R2_ENDPOINT_URL")
+    r2_access = os.getenv("R2_ACCESS_KEY")
+    r2_secret = os.getenv("R2_SECRET_KEY")
+    r2_bucket = os.getenv("R2_BUCKET_NAME")
+    r2_domain = os.getenv("R2_PUBLIC_DOMAIN")
+    
+    image_host_client = None
+    if all([r2_endpoint, r2_access, r2_secret, r2_bucket, r2_domain]):
+        from src.adapters.outbound.s3_image_adapter import S3ImageAdapter
+        image_host_client = S3ImageAdapter(r2_endpoint, r2_access, r2_secret, r2_bucket, r2_domain)
+
+    # Configurazione Extractor Visivo
+    from src.adapters.outbound.pymupdf_visual_extractor import PyMuPdfVisualExtractor
+    visual_extractor = PyMuPdfVisualExtractor()
+
     usecase = ProcessDocumentUseCase(
         readers=readers,
         llm_client=llm_client,
         notion_client=notion_client,
         state_repo=state_repo,
         staging_storage=staging_storage,
+        visual_extractor=visual_extractor,
+        image_host_client=image_host_client,
     )
 
     if args.mode == "web":

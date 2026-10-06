@@ -41,12 +41,73 @@ class ProcessDocumentUseCase:
         notion_client: INotionClient,
         state_repo: IStateRepository,
         staging_storage: IStagingStorage,
+        visual_extractor: Optional[Any] = None,
+        image_host_client: Optional[Any] = None,
     ):
         self.readers = readers
         self.llm_client = llm_client
         self.notion_client = notion_client
         self.state_repo = state_repo
         self.staging_storage = staging_storage
+        self.visual_extractor = visual_extractor
+        self.image_host_client = image_host_client
+
+    def _process_figures(self, markdown_text: str, document: Document) -> str:
+        """
+        Intercetta i marker `figure://slide_X` nel markdown testuale,
+        esegue l'estrazione visiva, carica su R2 e sostituisce l'URL.
+        Se l'infrastruttura R2 non è configurata, lascia il marker testuale come quote.
+        """
+        import re
+        import uuid
+        
+        # Pattern: ![alt](figure://slide_X) o ![alt](figure://slide_X?crop=ymin,xmin,ymax,xmax)
+        pattern = re.compile(r'!\[([^\]]*)\]\(figure://slide_(\d+)(?:\?crop=([\d.]+),([\d.]+),([\d.]+),([\d.]+))?\)')
+        
+        if not self.visual_extractor or not self.image_host_client:
+            # Fallback antifragile: convertiamo in testo se manca il setup
+            return pattern.sub(r'> 📷 **\1** *(Figura alla slide \2)*', markdown_text)
+            
+        def replacer(match):
+            alt_text = match.group(1)
+            page_num = int(match.group(2))
+            
+            crop_box = None
+            if match.group(3):
+                try:
+                    crop_box = (
+                        float(match.group(3)),
+                        float(match.group(4)),
+                        float(match.group(5)),
+                        float(match.group(6)),
+                    )
+                except ValueError:
+                    pass
+            
+            # 1. Estrazione in locale
+            tmp_dir = Path("staging/figures")
+            tmp_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Usiamo un UUID crittografico per obfuscation dell'URL (No directory listing pubblica)
+            img_id = uuid.uuid4().hex
+            tmp_path = tmp_dir / f"{img_id}.png"
+            
+            print(f"    [Local] Estrazione visiva {img_id[:8]}... da slide {page_num}")
+            try:
+                self.visual_extractor.extract_figure(document, page_num, crop_box, tmp_path)
+                
+                # 2. Upload su Storage
+                remote_name = f"figures/{img_id}.png"
+                print(f"    [Cloudflare R2] Caricamento {remote_name}...")
+                public_url = self.image_host_client.upload_image(tmp_path, remote_name)
+                
+                # Sostituiamo con il tag markdown standard che il NotionBlockBuilder convertirà in image external
+                return f"![{alt_text}]({public_url})"
+            except Exception as e:
+                print(f"    [Errore] Fallita estrazione/caricamento figura slide {page_num}: {e}")
+                return f"> 📷 **{alt_text}** *(Errore estrazione slide {page_num})*"
+                
+        return pattern.sub(replacer, markdown_text)
 
     def execute(self, document: Document, target: NotionTarget, prompt: str) -> ProcessingResult:
         file_hash = document.file_hash
@@ -78,6 +139,9 @@ class ProcessDocumentUseCase:
                 self.staging_storage.save(file_hash, markdown_text)
             finally:
                 reader.cleanup(payload)
+
+        # Nuova Fase Intermedia: Sostituzione dinamica figure
+        markdown_text = self._process_figures(markdown_text, document)
 
         # 4. Notion Loading
         print("    [Notion] Creazione pagina...")

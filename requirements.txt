@@ -19,3 +19,6 @@ pywin32; sys_platform == 'win32'
 
 # Testing Suite
 pytest
+
+# Cloud Storage
+boto3
