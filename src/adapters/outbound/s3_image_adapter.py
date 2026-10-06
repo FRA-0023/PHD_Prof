@@ -8,17 +8,21 @@ class S3ImageAdapter(IImageHostClient):
     Adapter per caricare immagini su Cloudflare R2 o bucket AWS S3-compatibili.
     """
     def __init__(self, endpoint_url: str, access_key: str, secret_key: str, bucket_name: str, public_domain: str):
-        self.bucket_name = bucket_name
+        self.bucket_name = bucket_name.strip()
         # Assicuriamo che public_domain finisca senza slash
-        self.public_domain = public_domain.rstrip('/') if public_domain else ""
+        self.public_domain = public_domain.strip().rstrip('/') if public_domain else ""
         
+        # Pulizia dell'endpoint URL (rimuove slash finali e spazi)
+        clean_endpoint = endpoint_url.strip().rstrip('/')
+        
+        from botocore.config import Config
         self.s3 = boto3.client(
             's3',
-            endpoint_url=endpoint_url,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-            # R2 usa una region vuota o auto, ma boto3 spesso richiede un valore fittizio
-            region_name='auto' 
+            endpoint_url=clean_endpoint,
+            aws_access_key_id=access_key.strip(),
+            aws_secret_access_key=secret_key.strip(),
+            region_name='auto',
+            config=Config(s3={'addressing_style': 'path'})
         )
 
     def upload_image(self, file_path: Path, object_name: str) -> str:
