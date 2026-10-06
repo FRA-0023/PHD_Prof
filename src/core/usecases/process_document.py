@@ -52,11 +52,10 @@ class ProcessDocumentUseCase:
         self.visual_extractor = visual_extractor
         self.image_host_client = image_host_client
 
-    def _process_figures(self, markdown_text: str, document: Document) -> str:
+    def _process_figures(self, markdown_text: str, document: Document, target: NotionTarget) -> str:
         """
         Intercetta i marker `figure://slide_X` nel markdown testuale,
-        esegue l'estrazione visiva, carica su R2 e sostituisce l'URL.
-        Se l'infrastruttura R2 non è configurata, lascia il marker testuale come quote.
+        esegue l'estrazione visiva, carica su R2 in gerarchia e sostituisce l'URL.
         """
         import re
         import uuid
@@ -88,7 +87,6 @@ class ProcessDocumentUseCase:
             tmp_dir = Path("staging/figures")
             tmp_dir.mkdir(parents=True, exist_ok=True)
             
-            # Usiamo un UUID crittografico per obfuscation dell'URL (No directory listing pubblica)
             img_id = uuid.uuid4().hex
             tmp_path = tmp_dir / f"{img_id}.png"
             
@@ -96,12 +94,15 @@ class ProcessDocumentUseCase:
             try:
                 self.visual_extractor.extract_figure(document, page_num, crop_box, tmp_path)
                 
-                # 2. Upload su Storage
-                remote_name = f"figures/{img_id}.png"
+                # 2. Upload su Storage con path gerarchico: notion/universita/{course_name}/
+                # Sanitizzazione del nome corso per URL safe (rimozione spazi, lower)
+                course_slug = target.course_name.lower().replace(" ", "_").replace("/", "-")
+                remote_name = f"notion/universita/{course_slug}/{img_id}.png"
+                
                 print(f"    [Cloudflare R2] Caricamento {remote_name}...")
                 public_url = self.image_host_client.upload_image(tmp_path, remote_name)
                 
-                # Sostituiamo con il tag markdown standard che il NotionBlockBuilder convertirà in image external
+                # Sostituiamo con il tag markdown standard
                 return f"![{alt_text}]({public_url})"
             except Exception as e:
                 print(f"    [Errore] Fallita estrazione/caricamento figura slide {page_num}: {e}")
@@ -140,8 +141,8 @@ class ProcessDocumentUseCase:
             finally:
                 reader.cleanup(payload)
 
-        # Nuova Fase Intermedia: Sostituzione dinamica figure
-        markdown_text = self._process_figures(markdown_text, document)
+        # Nuova Fase Intermedia: Sostituzione dinamica figure (con path gerarchico)
+        markdown_text = self._process_figures(markdown_text, document, target)
 
         # 4. Notion Loading
         print("    [Notion] Creazione pagina...")
