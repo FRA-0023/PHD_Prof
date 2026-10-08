@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 95 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 99 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
@@ -20,7 +20,13 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 
 ## Log delle Sessioni
 
-### 2026-10-08 (Fix Visual Extractor Document.file_path & Native Notion GFM Table Rendering)
+### 2026-10-08 (Fix Visual Extractor, Native Notion GFM Tables & Hierarchical Nested Lists)
+- **Supporto Gerarchico per Liste Annidate e Bullet Points in Notion**:
+  - Implementato stack di indentazione in `build_notion_blocks` (`src/adapters/outbound/notion_block_builder.py`) con preservazione dell'albero dei sotto-punti elenco e numerati tramite la proprietà nativa Notion `children`.
+  - Eliminato l'appiattimento di elenchi gerarchici (es. MapReduce *Mapping* -> *Chunk 1, 2, 3*) allo stesso livello radice.
+  - Gestito il vincolo architetturale dell'API di Notion: divieto di chiavi `"children": []` vuote (che innescano HTTP 400 validation error) e incapsulamento difensivo con capping della profondità massima a 2 livelli di annidamento per singola chiamata batch.
+  - Supporto alla continuazione di testo indentato (>= 2 spazi) per preservare la numerazione sequenziale senza spezzare la gerarchia logica.
+  - Aggiunti 4 unit test specifici in `tests/test_notion_block_builder.py`.
 - **Fix Disallineamento Document.path in PyMuPdfVisualExtractor**:
   - Risolto l'AttributeError: 'Document' object has no attribute 'file_path' in `src/adapters/outbound/pymupdf_visual_extractor.py`, armonizzando l'adapter con il dominio `Document.path`.
   - Aggiunta property alias retrocompatibile `file_path` su `Document` (`src/core/domain/models.py`) e risoluzione polimorfica difensiva nell'adapter.
@@ -31,11 +37,13 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
   - Tolleranza antifragile per newline accidentali tra righe di tabella e normalizzazione delle celle.
   - Aggiunti 3 unit test dedicati in `tests/test_notion_block_builder.py`.
 - **Deduplicazione Idempotente Asset Visivi & Skip Check (R2 & Staging)**:
-  - Eliminato l'identificatore casuale uuid.uuid4() per le immagini in _process_figures: introdotto hashing SHA-256 deterministico basato su document.file_hash, numero slide e crop box.
-  - Implementato image_exists (via HEAD request S3) in S3ImageAdapter e nell'interfaccia IImageHostClient.
-  - Aggiunto skip multilivello in ProcessDocumentUseCase: se l'immagine e gia presente su Cloudflare R2 salta estrazione e upload; se e presente solo in staging locale salta il rendering PyMuPDF ed esegue solo l'upload.
-  - Aggiunti 2 unit test in 	ests/test_process_document_usecase.py per validare lo skip remoto e locale.
-- **Test Suite**: Estesa a 95 unit test passati con successo (100%, 0 regressioni).
+  - Eliminato l'identificatore casuale `uuid.uuid4()` per le immagini in `_process_figures`: introdotto hashing SHA-256 deterministico basato su `document.file_hash`, numero slide e crop box.
+  - Implementato `image_exists` (via HEAD request S3) in `S3ImageAdapter` e nell'interfaccia `IImageHostClient`.
+  - Aggiunto skip multilivello in `ProcessDocumentUseCase`: se l'immagine è già presente su Cloudflare R2 salta estrazione e upload; se è presente solo in staging locale salta il rendering PyMuPDF ed esegue solo l'upload.
+  - Aggiunti 2 unit test in `tests/test_process_document_usecase.py` per validare lo skip remoto e locale.
+- **Rollback Self-Healing Big Data**:
+  - Resettato lo stato di `BigData_Session_1_2026_2027.pdf` su `sync_state.json` a `SYNCING` per innescare l'archiviazione automatica della pagina incompleta precedente e il ricaricamento con tabelle e gerarchie native.
+- **Test Suite**: Estesa a 99 unit test passati con successo (100%, 0 regressioni).
 
 ### 2026-10-06 (Hierarchical Cloudflare R2 Spatial Visual Extraction)
 - **Object Detection via Gemini**: Integrazione dell'estrazione visiva spaziale: il prompt di sistema di Gemini è stato esteso per forzare il ruolo di "Object Detector". Gemini restituisce coordinate `figure://slide_X?crop=...` per diagrammi architetturali e matrici di vitale importanza formativa all'interno delle slide.

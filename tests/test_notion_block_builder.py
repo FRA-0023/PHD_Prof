@@ -234,5 +234,92 @@ def test_build_notion_blocks_table_with_escaped_pipe():
     assert len(table["children"]) == 2
 
 
+def test_build_notion_blocks_nested_bullet_points():
+    md = (
+        "* **Mapping (List(K2, V2)):** Each chunk is processed by a map function.\n"
+        "    * Chunk 1: (Deer, 1)\n"
+        "    * Chunk 2: (Car, 1)\n"
+        "* **Shuffling (K2, List(V2)):** All pairs grouped by word."
+    )
+    blocks = build_notion_blocks(md)
+    # Only 2 root blocks: Mapping and Shuffling
+    assert len(blocks) == 2
+    assert blocks[0]["type"] == "bulleted_list_item"
+    assert blocks[1]["type"] == "bulleted_list_item"
+
+    # Mapping must contain 2 nested children
+    mapping_payload = blocks[0]["bulleted_list_item"]
+    assert "children" in mapping_payload
+    assert len(mapping_payload["children"]) == 2
+    assert mapping_payload["children"][0]["type"] == "bulleted_list_item"
+    assert mapping_payload["children"][1]["type"] == "bulleted_list_item"
+    assert "Chunk 1" in mapping_payload["children"][0]["bulleted_list_item"]["rich_text"][0]["text"]["content"]
+    assert "Chunk 2" in mapping_payload["children"][1]["bulleted_list_item"]["rich_text"][0]["text"]["content"]
+
+    # Leaf children must NEVER contain an empty 'children' key (Notion API rejects empty children with 400)
+    assert "children" not in mapping_payload["children"][0]["bulleted_list_item"]
+    assert "children" not in mapping_payload["children"][1]["bulleted_list_item"]
+
+    # Shuffling has no children -> no 'children' key
+    assert "children" not in blocks[1]["bulleted_list_item"]
+
+
+def test_build_notion_blocks_mixed_nested_lists():
+    md = (
+        "1. Primary Phase\n"
+        "    - Sub-bullet A\n"
+        "    - Sub-bullet B\n"
+        "2. Secondary Phase"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 2
+    assert blocks[0]["type"] == "numbered_list_item"
+    assert blocks[1]["type"] == "numbered_list_item"
+
+    p1 = blocks[0]["numbered_list_item"]
+    assert "children" in p1
+    assert len(p1["children"]) == 2
+    assert p1["children"][0]["type"] == "bulleted_list_item"
+    assert p1["children"][1]["type"] == "bulleted_list_item"
+
+
+def test_build_notion_blocks_list_continuation():
+    md = (
+        "1. **Training MSE:** For this specific model, residuals are zero.\n"
+        "    Consequently, the training MSE will be exactly 0.\n"
+        "2. **Test MSE:** High variance expected."
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 2
+    assert blocks[0]["type"] == "numbered_list_item"
+    assert blocks[1]["type"] == "numbered_list_item"
+
+    # Continuation text is merged into the first item's rich_text
+    full_text = " ".join(
+        t["text"]["content"] for t in blocks[0]["numbered_list_item"]["rich_text"] if "text" in t
+    )
+    assert "residuals are zero" in full_text
+    assert "Consequently, the training MSE will be exactly 0" in full_text
+
+
+def test_build_notion_blocks_max_depth_safety():
+    # Notion API limits nesting to 2 levels in batch append
+    md = (
+        "- Level 0\n"
+        "    - Level 1\n"
+        "        - Level 2\n"
+        "            - Level 3 (should be capped at level 2 without error)"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    lvl0 = blocks[0]["bulleted_list_item"]
+    assert len(lvl0["children"]) == 1
+    lvl1 = lvl0["children"][0]["bulleted_list_item"]
+    assert len(lvl1["children"]) == 2  # Level 2 and Level 3 both placed under Level 1 as siblings
+    lvl2 = lvl1["children"][0]["bulleted_list_item"]
+    assert "children" not in lvl2  # Not deeply nested beyond level 2
+
+
+
 
 

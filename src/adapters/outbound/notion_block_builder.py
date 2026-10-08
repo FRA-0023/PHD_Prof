@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple, Optional
 
 NOTION_MAX_BLOCK_CHARS = 1900
 
@@ -173,6 +173,22 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
     table_buf: List[str] = []
 
+    # ARCHITETTURA: Stack di indentazione per preservare la gerarchia ad albero dei bullet points
+    # e delle liste numerate verso Notion. Notion accetta 'children' annidati all'interno del blocco genitore.
+    list_root_blocks: List[Dict[str, Any]] = []
+    list_stack: List[Dict[str, Any]] = [
+        {"indent": -1, "type": "root", "payload": None, "children": list_root_blocks}
+    ]
+
+    def flush_list() -> None:
+        nonlocal list_root_blocks, list_stack
+        if list_root_blocks:
+            blocks.extend(list_root_blocks)
+            list_root_blocks = []
+        list_stack = [
+            {"indent": -1, "type": "root", "payload": None, "children": list_root_blocks}
+        ]
+
     def flush_table() -> None:
         nonlocal table_buf
         if not table_buf:
@@ -236,6 +252,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
         # ── Code Block Handling ──────────────────────────────────────────────
         if s.startswith("```"):
             flush_table()
+            flush_list()
             if in_code_block:
                 # Close code block
                 full_code = "\n".join(code_block_buf)
@@ -273,6 +290,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
         # ── Display Math ($$...$$) ──────────────────────────────────────────
         if s == "$$":
             flush_table()
+            flush_list()
             if in_display_math:
                 expr = "\n".join(display_math_buf).strip()
                 blocks.append({
@@ -293,6 +311,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
         # Single line $$equation$$
         if s.startswith("$$") and s.endswith("$$") and len(s) > 4:
             flush_table()
+            flush_list()
             expr = s[2:-2].strip()
             blocks.append({
                 "object": "block",
@@ -320,6 +339,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # ── Markdown Table Lines (| ... |) ───────────────────────────────────
         if s.startswith("|") and "|" in s[1:]:
+            flush_list()
             table_buf.append(s)
             continue
         else:
@@ -327,12 +347,14 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # ── Horizontal Divider ──────────────────────────────────────────────
         if s == "---":
+            flush_list()
             if blocks and blocks[-1]["type"] != "divider":
                 blocks.append({"object": "block", "type": "divider", "divider": {}})
             continue
 
         # ── Blockquote ──────────────────────────────────────────────────────
         if s.startswith(">"):
+            flush_list()
             content = s[1:].strip()
             if content:
                 blocks.append({
@@ -344,6 +366,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # ── Headings with Dividers ──────────────────────────────────────────
         if s.startswith("# ") and not s.startswith("## "):
+            flush_list()
             if blocks and blocks[-1]["type"] != "divider":
                 blocks.append({"object": "block", "type": "divider", "divider": {}})
             content = s[2:].strip()
@@ -355,6 +378,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             continue
 
         if s.startswith("## ") and not s.startswith("### "):
+            flush_list()
             if blocks and blocks[-1]["type"] != "divider":
                 blocks.append({"object": "block", "type": "divider", "divider": {}})
             content = s[3:].strip()
@@ -366,6 +390,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             continue
 
         if s.startswith("### "):
+            flush_list()
             content = s[4:].strip()
             blocks.append({
                 "object": "block",
@@ -376,6 +401,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # Fallback for H4 (Notion does not have heading_4; downgrade to heading_3)
         if s.startswith("#### "):
+            flush_list()
             content = s[5:].strip()
             blocks.append({
                 "object": "block",
@@ -384,29 +410,65 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             })
             continue
 
-        # ── Lists ───────────────────────────────────────────────────────────
-        if s.startswith(("- ", "* ")):
-            content = s[2:].strip()
-            blocks.append({
+        # ── Lists & Indented Hierarchy ──────────────────────────────────────
+        expanded = line.expandtabs(4)
+        l_stripped = expanded.lstrip(" ")
+        indent = len(expanded) - len(l_stripped)
+
+        bullet_match = re.match(r"^[-*+]\s+(.*)$", l_stripped)
+        num_match = re.match(r"^(\d+[.)])\s+(.*)$", l_stripped)
+
+        if bullet_match or num_match:
+            flush_table()
+            item_type = "bulleted_list_item" if bullet_match else "numbered_list_item"
+            content = bullet_match.group(1).strip() if bullet_match else num_match.group(2).strip()
+            new_block = {
                 "object": "block",
-                "type": "bulleted_list_item",
-                "bulleted_list_item": {"rich_text": parse_rich_text(content)},
-            })
+                "type": item_type,
+                item_type: {
+                    "rich_text": parse_rich_text(content)
+                }
+            }
+
+            # ARCHITETTURA: Gestione della gerarchia ad albero tramite stack di indentazione.
+            # Riavvolge lo stack finché l'indentazione dell'elemento in cima è strettamente minore
+            # di quella della riga corrente, identificando il corretto nodo genitore.
+            while len(list_stack) > 1 and indent <= list_stack[-1]["indent"]:
+                list_stack.pop()
+
+            parent = list_stack[-1]
+            if parent["payload"] is not None and "children" not in parent["payload"]:
+                parent["payload"]["children"] = parent["children"]
+
+            parent["children"].append(new_block)
+
+            # TRADE-OFF: Notion API impone un vincolo rigido di massimo 2 livelli di nidificazione
+            # all'interno di una singola chiamata 'append block children' (radice -> figli -> nipoti).
+            # Limitando la profondità dello stack a 2 (len(list_stack) < 3), qualsiasi ulteriore sotto-livello
+            # viene posizionato come elemento affine evitando errori HTTP 400 (validation_error).
+            if len(list_stack) < 3:
+                list_stack.append({
+                    "indent": indent,
+                    "type": item_type,
+                    "payload": new_block[item_type],
+                    "children": []
+                })
             continue
 
-        if len(s) > 2 and s[0].isdigit() and s[1] in ".)" and s[2] == " ":
-            content = s[3:].strip()
-            blocks.append({
-                "object": "block",
-                "type": "numbered_list_item",
-                "numbered_list_item": {"rich_text": parse_rich_text(content)},
-            })
-            continue
+        # ── List Continuation Handling ──────────────────────────────────────
+        # Se una riga di testo è indentata (>= 2 spazi) e segue un elemento di lista attivo,
+        # la accorpiamo all'elemento corrente per preservare la numerazione e il flusso logico.
+        if len(list_stack) > 1 and indent >= 2 and not s.startswith(("#", "```", "$$", ">", "|", "---", "![")):
+            parent = list_stack[-1]
+            if parent["payload"] is not None:
+                parent["payload"]["rich_text"].append({"type": "text", "text": {"content": " "}})
+                parent["payload"]["rich_text"].extend(parse_rich_text(s))
+                continue
 
         # ── Images ──────────────────────────────────────────────────────────
-        import re
         img_match = re.match(r'^!\[([^\]]*)\]\((https?://[^\)]+)\)$', s)
         if img_match:
+            flush_list()
             img_url = img_match.group(2)
             blocks.append({
                 "object": "block",
@@ -419,6 +481,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             continue
 
         # ── Paragraph ───────────────────────────────────────────────────────
+        flush_list()
         blocks.append({
             "object": "block",
             "type": "paragraph",
@@ -426,4 +489,5 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
         })
 
     flush_table()
+    flush_list()
     return blocks
