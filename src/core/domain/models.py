@@ -28,6 +28,12 @@ class Document:
     def stem(self) -> str:
         return self.path.stem
 
+    @property
+    def file_path(self) -> Path:
+        # ARCHITETTURA: Alias retrocompatibile verso self.path per garantire tolleranza
+        # ai contratti di interfaccia outbound che invocano file_path.
+        return self.path
+
 @dataclass
 class NotionTarget:
     database_id: str

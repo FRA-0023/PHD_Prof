@@ -11,10 +11,16 @@ class PyMuPdfVisualExtractor(IVisualExtractor):
     """
     
     def extract_figure(self, document: Document, page_number: int, crop_box: Optional[Tuple[float, float, float, float]], output_path: Path) -> None:
-        if not document.file_path.exists():
-            raise FileNotFoundError(f"Il documento {document.file_path} non esiste.")
+        # ARCHITETTURA: Risoluzione polimorfica di path/file_path per disaccoppiare l'adapter
+        # da eventuali alias o variazioni del modello di dominio Document.
+        target_path = getattr(document, "path", None) or getattr(document, "file_path", None)
+        if not target_path or not target_path.exists():
+            raise FileNotFoundError(f"Il documento {target_path} non esiste.")
             
-        doc = fitz.open(str(document.file_path))
+        # PERFORMANCE: Assicura la presenza della cartella di output prima del rendering
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        doc = fitz.open(str(target_path))
         
         # Gli LLM (come Gemini) restituiscono page 1-based, PyMuPDF è 0-based.
         # Dobbiamo assicurarci di non sforare.

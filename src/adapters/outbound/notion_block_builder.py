@@ -118,12 +118,43 @@ def parse_rich_text(line: str, annotations: Dict[str, bool] = None) -> List[Dict
     return parts or [{"type": "text", "text": {"content": ""}}]
 
 
+def split_table_row(line: str) -> List[str]:
+    """
+    Estrae le singole celle da una riga di tabella Markdown delimitata da pipe.
+    Gestisce pipe escapati (\\|) per evitare split incorretti su formule matematiche.
+    """
+    content = line.strip()
+    if content.startswith("|"):
+        content = content[1:]
+    if content.endswith("|"):
+        content = content[:-1]
+
+    # PERFORMANCE: Preserviamo i pipe escapati tramite placeholder temporaneo
+    placeholder = "___ESCAPED_PIPE___"
+    content = content.replace(r"\|", placeholder)
+    return [c.replace(placeholder, "|").strip() for c in content.split("|")]
+
+def is_table_separator(line: str) -> bool:
+    """
+    Verifica se una riga corrisponde alla riga separatore della tabella Markdown GFM
+    (composta da caratteri '-', ':', spazi e delimitatori pipe).
+    """
+    cells = split_table_row(line)
+    if not cells:
+        return False
+    return all(
+        ("-" in c) and (set(c.strip()) <= {"-", ":", " "})
+        for c in cells
+    )
+
+
 def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
     """
     Parses full Markdown text into a list of Notion-compliant block dictionaries.
     Supports:
       - Multiline and single-line LaTeX display equations ($$...$$)
       - Fenced code blocks (```lang ... ```)
+      - GFM Tables (| header | ... |) rendered to native Notion table blocks
       - Blockquotes (> ...)
       - Headings (H1, H2, H3) with automatic dividers
       - Bulleted and numbered lists
@@ -140,11 +171,71 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
     code_block_lang = "plain text"
     code_block_buf: List[str] = []
 
-    for line in lines:
+    table_buf: List[str] = []
+
+    def flush_table() -> None:
+        nonlocal table_buf
+        if not table_buf:
+            return
+
+        # ARCHITETTURA: Conformità alle specifiche Notion API per il blocco 'table'.
+        # Richiede table_width costante e ogni riga table_row con lista di celle corrispondente.
+        if len(table_buf) >= 2 and is_table_separator(table_buf[1]):
+            headers = split_table_row(table_buf[0])
+            table_width = len(headers)
+            if table_width > 0:
+                header_cells = [parse_rich_text(c) if c else [] for c in headers]
+                row_children = [
+                    {
+                        "type": "table_row",
+                        "table_row": {"cells": header_cells}
+                    }
+                ]
+                for row_line in table_buf[2:]:
+                    if is_table_separator(row_line):
+                        continue
+                    cells = split_table_row(row_line)
+                    # TRADE-OFF: Normalizzazione difensiva della larghezza per prevenire
+                    # HTTP 400 da Notion API in caso di righe con colonne disallineate.
+                    if len(cells) < table_width:
+                        cells.extend([""] * (table_width - len(cells)))
+                    else:
+                        cells = cells[:table_width]
+                    row_cells = [parse_rich_text(c) if c else [] for c in cells]
+                    row_children.append({
+                        "type": "table_row",
+                        "table_row": {"cells": row_cells}
+                    })
+
+                blocks.append({
+                    "object": "block",
+                    "type": "table",
+                    "table": {
+                        "table_width": table_width,
+                        "has_column_header": True,
+                        "has_row_header": False,
+                        "children": row_children
+                    }
+                })
+                table_buf = []
+                return
+
+        # TRADE-OFF: Se la struttura non è una tabella GFM valida, degrada a paragrafi
+        # individuali preservando l'integrità del testo originale senza scartare contenuti.
+        for raw_line in table_buf:
+            blocks.append({
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {"rich_text": parse_rich_text(raw_line)},
+            })
+        table_buf = []
+
+    for line_idx, line in enumerate(lines):
         s = line.strip()
 
         # ── Code Block Handling ──────────────────────────────────────────────
         if s.startswith("```"):
+            flush_table()
             if in_code_block:
                 # Close code block
                 full_code = "\n".join(code_block_buf)
@@ -181,6 +272,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # ── Display Math ($$...$$) ──────────────────────────────────────────
         if s == "$$":
+            flush_table()
             if in_display_math:
                 expr = "\n".join(display_math_buf).strip()
                 blocks.append({
@@ -200,6 +292,7 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
 
         # Single line $$equation$$
         if s.startswith("$$") and s.endswith("$$") and len(s) > 4:
+            flush_table()
             expr = s[2:-2].strip()
             blocks.append({
                 "object": "block",
@@ -208,8 +301,29 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             })
             continue
 
+        # ── Blank Line Handling ──────────────────────────────────────────────
         if not s or s.isspace():
+            if table_buf:
+                # TOLERANCE: Se stiamo parsando una tabella, controlliamo se la prossima
+                # riga non vuota è ancora parte della tabella (es. newline accidentali tra righe).
+                next_non_empty = None
+                for peek_line in lines[line_idx + 1:]:
+                    peek_s = peek_line.strip()
+                    if peek_s:
+                        next_non_empty = peek_s
+                        break
+                if next_non_empty and next_non_empty.startswith("|") and "|" in next_non_empty[1:]:
+                    continue
+                else:
+                    flush_table()
             continue
+
+        # ── Markdown Table Lines (| ... |) ───────────────────────────────────
+        if s.startswith("|") and "|" in s[1:]:
+            table_buf.append(s)
+            continue
+        else:
+            flush_table()
 
         # ── Horizontal Divider ──────────────────────────────────────────────
         if s == "---":
@@ -293,7 +407,6 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
         import re
         img_match = re.match(r'^!\[([^\]]*)\]\((https?://[^\)]+)\)$', s)
         if img_match:
-            # alt_text = img_match.group(1) # Notion image blocks don't natively support alt text in the API structure for external URLs directly in the same way, but we could add caption
             img_url = img_match.group(2)
             blocks.append({
                 "object": "block",
@@ -312,4 +425,5 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             "paragraph": {"rich_text": parse_rich_text(s)},
         })
 
+    flush_table()
     return blocks

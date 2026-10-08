@@ -175,4 +175,64 @@ def test_build_notion_blocks_bullet_with_equation():
     assert any(r.get("type") == "equation" and r["equation"]["expression"] == "n_i = |F_i|" for r in rich_text)
 
 
+def test_build_notion_blocks_standard_table():
+    md = (
+        "| Feature | CPU | GPU |\n"
+        "| :--- | :--- | :--- |\n"
+        "| **Role** | Expert | Workers |\n"
+        "| **Cores** | 4-128 | 10,000+ |"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "table"
+    table = blocks[0]["table"]
+    assert table["table_width"] == 3
+    assert table["has_column_header"] is True
+    assert len(table["children"]) == 3  # 1 header + 2 rows
+
+    # Header verification
+    header_row = table["children"][0]["table_row"]["cells"]
+    assert len(header_row) == 3
+    assert header_row[0][0]["text"]["content"] == "Feature"
+    assert header_row[1][0]["text"]["content"] == "CPU"
+    assert header_row[2][0]["text"]["content"] == "GPU"
+
+    # Data row with formatting
+    row1 = table["children"][1]["table_row"]["cells"]
+    assert row1[0][0]["text"]["content"] == "Role"
+    assert row1[0][0]["annotations"]["bold"] is True
+    assert row1[1][0]["text"]["content"] == "Expert"
+
+
+def test_build_notion_blocks_table_with_blank_lines():
+    # Tollera righe vuote accidentali tra le righe della tabella
+    md = (
+        "| Feature | CPU | GPU |\n\n"
+        "| :--- | :--- | :--- |\n\n"
+        "| **Role** | Expert | Workers |\n\n"
+        "| **Cores** | 4-128 | 10,000+ |\n"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "table"
+    table = blocks[0]["table"]
+    assert table["table_width"] == 3
+    assert len(table["children"]) == 3
+
+
+def test_build_notion_blocks_table_with_escaped_pipe():
+    md = (
+        "| Expression | Meaning |\n"
+        "| :--- | :--- |\n"
+        "| $P(A \\| B)$ | Conditional probability |"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "table"
+    table = blocks[0]["table"]
+    assert table["table_width"] == 2
+    assert len(table["children"]) == 2
+
+
+
 

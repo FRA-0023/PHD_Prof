@@ -27,7 +27,6 @@ env/
 .agents/
 
 # Agent Internal Context & Local Utility Scripts
-CONTEXT.md
 DESIGN.md
 PRODUCT.md
 project.md
