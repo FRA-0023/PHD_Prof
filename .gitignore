@@ -36,3 +36,5 @@ scripts/*
 !scripts/setup_local_domain.ps1
 !scripts/prune_r2_duplicates.py
 !scripts/extract_stage2_study_artifacts.py
+scratch/
+

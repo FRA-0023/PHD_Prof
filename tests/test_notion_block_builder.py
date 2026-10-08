@@ -416,6 +416,21 @@ def test_build_notion_blocks_large_code_block_preserves_single_block_integrity()
     assert total_reconstructed == long_code.strip()
 
 
+def test_sanitize_mermaid_flowchart_normalizes_subgraph_style_to_transparent():
+    # ARCHITETTURA: Previene bug 'bianco su bianco' in Notion Dark Mode dove
+    # fill:#f8fafc forza uno sfondo chiaro sotto il titolo renderizzato in bianco.
+    raw_flowchart = (
+        "graph TD\n"
+        "  subgraph BDF [Big Data Fundamentals]\n"
+        "    BDF1[Node 1]\n"
+        "  end\n"
+        "  style BDF fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert "style BDF fill:none,stroke:#64748b,stroke-width:1px,stroke-dasharray: 3 3" in sanitized
+
+
+
 
 
 

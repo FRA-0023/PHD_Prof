@@ -86,7 +86,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
          - **Bottlenecks & Failure Modes**: `classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,color:#881337;` (physical limits, performance walls, failure conditions).
       2. **Enlarged Prominent Headers**:
          - **Origin/Root Node**: Format with large bold font: `ROOT["<span style='font-size:18px;font-weight:800;'>Architecture Title</span><br/><span style='font-size:12px;opacity:0.8;'>Overview</span>"]:::rootNode` with `classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;`.
-         - **Subgraph Box Titles**: Enlarge subtitle font size: `subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Topic Area Title</span>"]` and style the container box neutrally: `style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3`.
+         - **Subgraph Box Titles**: Enlarge subtitle font size: `subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Topic Area Title</span>"]` and style the container box neutrally with transparent fill: `style SG_ID fill:none,stroke:#64748b,stroke-width:1.5px,stroke-dasharray: 4 4`.
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
       4. **Topology Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID [Subgraph Title]`.
     ```mermaid
@@ -103,7 +103,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
         Channel --> Lim["<b>Weak Instrument Limit</b><br/>F-stat < 10 inference breakdown"]:::bottleneckNode
       end
 
-      style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3
+      style SG_ID fill:none,stroke:#64748b,stroke-width:1.5px,stroke-dasharray: 4 4
       ROOT --> Shock
     ```
     ---
@@ -203,7 +203,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
          - **Threats to Validity & Boundary Failures**: `classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,color:#881337;` (exclusion restriction violations, weak instruments, endogeneity).
       2. **Enlarged Prominent Headers**:
          - **Origin/Root Node**: Format with large bold font: `ROOT["<span style='font-size:18px;font-weight:800;'>Paper Framework</span><br/><span style='font-size:12px;opacity:0.8;'>Identification Architecture</span>"]:::rootNode` with `classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;`.
-         - **Subgraph Box Titles**: Enlarge subtitle font size: `subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Topic Area Title</span>"]` and style the container box neutrally: `style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3`.
+         - **Subgraph Box Titles**: Enlarge subtitle font size: `subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Topic Area Title</span>"]` and style the container box neutrally with transparent fill: `style SG_ID fill:none,stroke:#64748b,stroke-width:1.5px,stroke-dasharray: 4 4`.
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
       4. **Topology Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID [Subgraph Title]`.
     ```mermaid
@@ -220,7 +220,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
         Channel --> Lim["<b>Violation of Exclusion Restriction</b><br/>Direct unobserved channel Z -> Y"]:::bottleneckNode
       end
 
-      style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3
+      style SG_ID fill:none,stroke:#64748b,stroke-width:1.5px,stroke-dasharray: 4 4
       ROOT --> Shock
     ```
     ---
@@ -261,7 +261,7 @@ Deconstruct the provided synthesized study notes into high-signal conceptual stu
 1. Mermaid Mindmap: A clean, hierarchical taxonomy of core pillars and sub-concepts (depth 3-4).
 2. Mermaid Flowchart (`graph TD` or `graph LR`): The core cause-and-effect chain, empirical transmission mechanism, or identification flowchart. Follow these visual and mathematical standards:
    - **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire architecture, NOT monochromatic by subgraph box. Use semantic pastel fills (theory/definitions in blue, compute/hardware in amber, pipelines/flow in purple, engineering/storage in green, bottlenecks/failure modes in coral).
-   - **Enlarged Prominent Headers**: Format the root/origin node with large bold font (`ROOT["<span style='font-size:18px;font-weight:800;'>Title</span>"]`) and subgraph box titles with subtitle size (`subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Title</span>"]`) with neutral container box styling (`style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3`).
+   - **Enlarged Prominent Headers**: Format the root/origin node with large bold font (`ROOT["<span style='font-size:18px;font-weight:800;'>Title</span>"]`) and subgraph box titles with subtitle size (`subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Title</span>"]`) with neutral container box styling (`style SG_ID fill:none,stroke:#64748b,stroke-width:1.5px,stroke-dasharray: 4 4`).
    - **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
    - **Topology Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID [Subgraph Title]`.
 3. Active Recall & Examination Drills: 3 to 5 examination-grade analytical questions with explicit evaluation rubrics.

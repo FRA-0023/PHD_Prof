@@ -298,7 +298,20 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
             continue
 
-        # 3. Normalizzazione sicura dei nodi rettangolari [ ... ] e rombi { ... }
+        # 3. Normalizzazione stile subgraph: impedisce fill opachi o chiari (es. fill:#f8fafc) che in Notion Dark Mode
+        # causano contrasto inverso bianco-su-bianco ('white on white') per i titoli dei cluster.
+        # Imponiamo deterministico fill:none e stroke adattivo neutro (#64748b).
+        m_style_sg = re.match(r'^style\s+([A-Za-z0-9_]+)\s+(.+)$', line_clean, re.IGNORECASE)
+        if m_style_sg:
+            sg_id = m_style_sg.group(1)
+            style_props = m_style_sg.group(2)
+            if sg_id in subgraph_map:
+                style_props = re.sub(r'fill:[^,;]+', 'fill:none', style_props)
+                style_props = re.sub(r'stroke:(?:#94a3b8|#cbd5e1|#e2e8f0)', 'stroke:#64748b', style_props)
+                sanitized_lines.append(f"{indent_str}style {sg_id} {style_props}")
+                continue
+
+        # 4. Normalizzazione sicura dei nodi rettangolari [ ... ] e rombi { ... }
         # ARCHITETTURA: Un regex greedy su [ ... ] o { ... } ingloba frecce come '-->'
         # e nodi successivi sulla stessa riga (es. 'A[L1] --> B[L2]'), distruggendo la topologia
         # e generando un blocco non valido che manda in crash il layout ELK.
