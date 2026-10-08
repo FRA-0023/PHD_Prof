@@ -15,9 +15,10 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
-- **Verifica Notion**: riaprire la pagina Big Data Session 1 e confermare che entrambi i blocchi Mermaid renderino senza errori.
-- **Test end-to-end**: processare un nuovo file di slide e verificare che i grafi generati applichino correttamente i nuovi sanitizer.
-- **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
+- **Toggle Dark/Light Mode nella Web Cockpit**: Introdurre selettore di tema nella Topbar con commutazione istantanea delle variabili CSS industriali, memorizzazione su `localStorage` e salvaguardia di contrasto WCAG 2.2 AA.
+- **Verifica Componenti Esistenti**: Assicurare regressione zero su Coda Documenti, Output Mode Selector, Telemetria SSE e modali.
+- **Monitoring & Hardening**: Confermare rendering impeccabile su display chiari e scuri sia sul Web Cockpit che nelle pagine Notion.
+
 
 ## Log delle Sessioni
 ### 2026-10-08 (Fix Subgraph Titles White-on-White in Dark Mode & Multi-Theme Neutral Styling)
