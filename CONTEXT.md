@@ -287,3 +287,10 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Pulizia Cloudflare R2 & Staging**: Pruning di 28 asset duplicati/orfani legacy (UUID casuali) e mantenimento dei soli 14 asset deterministici SHA-256 (300 DPI) per il corso Big Data.
 - **Verifica Test Suite**: 99/99 test unitari superati con successo in locale.
 
+
+### 2026-10-08 (Cloudflare R2 Beginner Guide & UI Walkthrough)
+- **Guida Step-by-Step Cloudflare R2 per Principianti**: Espanso integralmente docs/CLOUD_STORAGE.md con un walkthrough visuale dettagliato per utenti senza esperienza di Cloudflare: creazione bucket (R2_BUCKET_NAME), estrazione Account ID ed endpoint S3 (R2_ENDPOINT_URL), generazione API Token con permessi *Object Read & Write* (R2_ACCESS_KEY, R2_SECRET_KEY) e attivazione accesso pubblico tramite sottodominio 
+2.dev (R2_PUBLIC_DOMAIN).
+- **Tabella Mappatura UI -> .env**: Aggiunto cheat-sheet comparativo e tabella diagnostica con le cause radice dei codici di errore S3/R2 (403 Forbidden, 404 NoSuchBucket, broken icons in Notion).
+- **Allineamento .env.example**: Tradotti i commenti e aggiornati i placeholder per puntare direttamente alla guida in docs/CLOUD_STORAGE.md.
+
