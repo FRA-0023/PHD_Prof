@@ -15,3 +15,16 @@ class IImageHostClient(ABC):
         :return: URL pubblico accessibile in sola lettura (HTTPS).
         """
         pass
+
+    def image_exists(self, object_name: str) -> bool:
+        """
+        # ARCHITETTURA: Verifica l'esistenza remota dell'asset per garantire idempotenza
+        # ed evitare upload ridondanti di figure già caricate in precedenza.
+        """
+        return False
+
+    def get_public_url(self, object_name: str) -> str:
+        """
+        # PERFORMANCE: Restituisce l'URL pubblico senza richiedere round-trip di rete per l'upload.
+        """
+        return ""

@@ -83,26 +83,38 @@ class ProcessDocumentUseCase:
                 except ValueError:
                     pass
             
-            # 1. Estrazione in locale
+            # ARCHITETTURA: Identificatore crittografico deterministico della figura.
+            # Rende il processo 100% idempotente legando l'asset al file_hash, numero slide e crop box.
+            crop_sig = f"{crop_box}" if crop_box else "full"
+            raw_sig = f"{document.file_hash}_{page_num}_{crop_sig}"
+            img_id = hashlib.sha256(raw_sig.encode("utf-8")).hexdigest()[:16]
+
+            # Sanitizzazione del nome corso per URL safe (rimozione spazi, lower)
+            course_slug = target.course_name.lower().replace(" ", "_").replace("/", "-")
+            remote_name = f"notion/universita/{course_slug}/{img_id}.png"
+
+            # PERFORMANCE: Controllo esistenza su Storage remoto (Cloudflare R2 / S3)
+            if hasattr(self.image_host_client, "image_exists") and self.image_host_client.image_exists(remote_name):
+                public_url = self.image_host_client.get_public_url(remote_name)
+                print(f"    [Cloudflare R2] Figura {img_id[:8]}... già presente su storage — skip upload.")
+                return f"![{alt_text}]({public_url})"
+
+            # Controllo cache su disco locale (staging/figures/)
             tmp_dir = Path("staging/figures")
             tmp_dir.mkdir(parents=True, exist_ok=True)
-            
-            img_id = uuid.uuid4().hex
             tmp_path = tmp_dir / f"{img_id}.png"
-            
-            print(f"    [Local] Estrazione visiva {img_id[:8]}... da slide {page_num}")
+
             try:
-                self.visual_extractor.extract_figure(document, page_num, crop_box, tmp_path)
-                
-                # 2. Upload su Storage con path gerarchico: notion/universita/{course_name}/
-                # Sanitizzazione del nome corso per URL safe (rimozione spazi, lower)
-                course_slug = target.course_name.lower().replace(" ", "_").replace("/", "-")
-                remote_name = f"notion/universita/{course_slug}/{img_id}.png"
-                
+                if tmp_path.exists() and tmp_path.stat().st_size > 0:
+                    print(f"    [Local] Figura {img_id[:8]}... già presente in staging — skip rendering.")
+                else:
+                    print(f"    [Local] Estrazione visiva {img_id[:8]}... da slide {page_num}")
+                    self.visual_extractor.extract_figure(document, page_num, crop_box, tmp_path)
+
+                # Upload su Storage con path gerarchico: notion/universita/{course_name}/
                 print(f"    [Cloudflare R2] Caricamento {remote_name}...")
                 public_url = self.image_host_client.upload_image(tmp_path, remote_name)
-                
-                # Sostituiamo con il tag markdown standard
+
                 return f"![{alt_text}]({public_url})"
             except Exception as e:
                 print(f"    [Errore] Fallita estrazione/caricamento figura slide {page_num}: {e}")

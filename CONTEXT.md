@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 93 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 95 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
@@ -30,7 +30,12 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
   - Mappatura conforme all'API di Notion nel blocco nativo `type: "table"` con `table_width` esatto e righe `type: "table_row"`, risolvendo l'anomalia delle tabelle renderizzate come sequenze di paragrafi di testo grezzo con righe vuote interposte.
   - Tolleranza antifragile per newline accidentali tra righe di tabella e normalizzazione delle celle.
   - Aggiunti 3 unit test dedicati in `tests/test_notion_block_builder.py`.
-- **Test Suite**: Estesa a 93 unit test passati con successo (100%, 0 regressioni).
+- **Deduplicazione Idempotente Asset Visivi & Skip Check (R2 & Staging)**:
+  - Eliminato l'identificatore casuale uuid.uuid4() per le immagini in _process_figures: introdotto hashing SHA-256 deterministico basato su document.file_hash, numero slide e crop box.
+  - Implementato image_exists (via HEAD request S3) in S3ImageAdapter e nell'interfaccia IImageHostClient.
+  - Aggiunto skip multilivello in ProcessDocumentUseCase: se l'immagine e gia presente su Cloudflare R2 salta estrazione e upload; se e presente solo in staging locale salta il rendering PyMuPDF ed esegue solo l'upload.
+  - Aggiunti 2 unit test in 	ests/test_process_document_usecase.py per validare lo skip remoto e locale.
+- **Test Suite**: Estesa a 95 unit test passati con successo (100%, 0 regressioni).
 
 ### 2026-10-06 (Hierarchical Cloudflare R2 Spatial Visual Extraction)
 - **Object Detection via Gemini**: Integrazione dell'estrazione visiva spaziale: il prompt di sistema di Gemini è stato esteso per forzare il ruolo di "Object Detector". Gemini restituisce coordinate `figure://slide_X?crop=...` per diagrammi architetturali e matrici di vitale importanza formativa all'interno delle slide.

@@ -40,7 +40,26 @@ class S3ImageAdapter(IImageHostClient):
                 object_name,
                 ExtraArgs={"ContentType": mime_type}
             )
-            return f"{self.public_domain}/{object_name}"
+            return self.get_public_url(object_name)
         except ClientError as e:
             print(f"    [Cloudflare R2] Errore di caricamento per {object_name}: {e}")
             raise RuntimeError(f"Impossibile caricare l'immagine {object_name} su R2.") from e
+
+    def image_exists(self, object_name: str) -> bool:
+        """
+        # PERFORMANCE: Verifica se l'immagine è già presente sul bucket remoto via HEAD request
+        # evitando ri-upload pesanti e duplicazione degli asset su Cloudflare R2.
+        """
+        try:
+            self.s3.head_object(Bucket=self.bucket_name, Key=object_name)
+            return True
+        except ClientError:
+            return False
+        except Exception:
+            return False
+
+    def get_public_url(self, object_name: str) -> str:
+        """
+        # ARCHITETTURA: Restituisce l'URL pubblico deterministico CDN/R2 per il blocco Notion.
+        """
+        return f"{self.public_domain}/{object_name}"

@@ -185,3 +185,72 @@ def test_process_document_pptx_paper_routing():
     assert res.page_id == "p_pptx_paper"
 
 
+def test_process_figures_skip_when_already_exists_on_remote():
+    visual_extractor = MagicMock()
+    image_host = MagicMock()
+    image_host.image_exists.return_value = True
+    image_host.get_public_url.return_value = "https://cdn.example.com/notion/universita/math/fig1.png"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(),
+        notion_client=MagicMock(),
+        state_repo=MagicMock(),
+        staging_storage=MagicMock(),
+        visual_extractor=visual_extractor,
+        image_host_client=image_host,
+    )
+
+    doc = Document(path=Path("doc.pdf"), file_hash="hash_123", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Math", database_title="Notes")
+
+    raw_markdown = "Text before\n![Diagram](figure://slide_10)\nText after"
+    processed = usecase._process_figures(raw_markdown, doc, target)
+
+    # Verifica che visual_extractor e upload_image siano stati saltati
+    visual_extractor.extract_figure.assert_not_called()
+    image_host.upload_image.assert_not_called()
+    assert "https://cdn.example.com/notion/universita/math/fig1.png" in processed
+
+
+def test_process_figures_skip_extraction_when_local_cached(tmp_path: Path, monkeypatch):
+    visual_extractor = MagicMock()
+    image_host = MagicMock()
+    image_host.image_exists.return_value = False
+    image_host.upload_image.return_value = "https://cdn.example.com/uploaded.png"
+
+    # Redirige staging/figures su tmp_path
+    figures_dir = tmp_path / "staging" / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_path)
+
+    import hashlib
+    doc = Document(path=Path("doc.pdf"), file_hash="hash_abc", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Math", database_title="Notes")
+
+    # Pre-creiamo il file locale deterministico
+    raw_sig = f"{doc.file_hash}_5_full"
+    img_id = hashlib.sha256(raw_sig.encode("utf-8")).hexdigest()[:16]
+    cached_file = figures_dir / f"{img_id}.png"
+    cached_file.write_bytes(b"dummy_png_bytes")
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(),
+        notion_client=MagicMock(),
+        state_repo=MagicMock(),
+        staging_storage=MagicMock(),
+        visual_extractor=visual_extractor,
+        image_host_client=image_host,
+    )
+
+    raw_markdown = "![Chart](figure://slide_5)"
+    processed = usecase._process_figures(raw_markdown, doc, target)
+
+    # Estrazione PyMuPDF saltata perché il file PNG locale esisteva già
+    visual_extractor.extract_figure.assert_not_called()
+    # Ma upload eseguito perché su R2 non esisteva ancora
+    image_host.upload_image.assert_called_once()
+    assert "https://cdn.example.com/uploaded.png" in processed
+
+
