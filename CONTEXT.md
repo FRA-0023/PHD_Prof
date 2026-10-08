@@ -15,10 +15,21 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
-- Monitorare l'esperienza d'uso reale del cockpit web durante sessioni di studio continuative.
-- Esplorare l'estensione della riconciliazione automatica per cartelle nested o esportazioni Moodle complesse (es. Big Data).
+- **Verifica Notion**: riaprire la pagina Big Data Session 1 e confermare che entrambi i blocchi Mermaid renderino senza errori.
+- **Test end-to-end**: processare un nuovo file di slide e verificare che i grafi generati applichino correttamente i nuovi sanitizer.
+- **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
 
 ## Log delle Sessioni
+### 2026-10-08 (Fix Mermaid ELK Crash, Subgraph Normalization & Notion Block Patch)
+- **Root cause pinpointed**: `Cannot read properties of null (reading 're')` in Notion originates from the ELK layout engine (function `vDd/N1` in mermaid.min.js) when `subgraph` declarations use multi-word titles without an explicit alphanumeric ID (e.g. `subgraph MapReduce Word Count` crashes ELK parent resolution in the AST).
+- **Additional sources**: corrupt `\ufffd` replacement characters in Mindmap Block 1 (CP1252/UTF-8 transcoding mismatch from previous terminal runs) + nested square brackets inside quoted node labels (e.g. `Bear:[1,1]` raises premature tokenizer closure).
+- **Browser test confirmed**: both blocks render correctly with Mermaid@10 CDN in Puppeteer; the issue was purely Notion's ELK renderer + incorrect syntax.
+- **Direct Notion PATCH executed**: Block 2 (flowchart) replaced with clean `subgraph MR_WC ["MapReduce Word Count Example"]` syntax; Block 1 (mindmap) Unicode replacement chars patched to ` - `.
+- **sanitize_mermaid_mindmap upgraded**: pre-strips `\ufffd` and NBSP, normalises `->` and em-dash to ASCII ` - `, preserves already-bracketed nodes.
+- **sanitize_mermaid_flowchart upgraded**: full deterministic subgraph normaliser (5 cases: quoted ID, unquoted ID+bracket, quoted-only, single-word, multi-word slug); `clean_node_label` strips nested square brackets to parens and cleans delimiter single-quotes.
+- **Prompt templates updated**: explicit CRITICAL rules for Mermaid flowcharts in LLM generation (always quote labels, no semicolons, alphanumeric subgraph IDs).
+- **116/116 tests passing**. Pushed commit `d072f9a` to `origin/main`.
+
 
 ### 2026-10-08 (Adaptive Two-Stage Study Schemas, Mermaid Sanitizer & Single-Block Notion Chunking)
 - **Pipeline Adattiva a Due Stadi (Single-Call vs Two-Stage)**: Implementato dispatcher volumetrico su caratteri effettivi (`SPLIT_THRESHOLD_CHARS=30000`) per preservare il budget di output (8.192 token di Gemini 2.5 Flash). Documenti standard processati con 1 chiamata, lezioni massive con 2 chiamate mirate a valle su markdown di staging senza re-ingestione binaria.
