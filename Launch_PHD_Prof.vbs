@@ -19,8 +19,9 @@ If Not fso.FileExists(pythonExe) Then
     pythonExe = "python.exe"
 End If
 
-command = """" & pythonExe & """ pdf_to_notion.py --mode web"
+command = """" & pythonExe & """ """ & scriptDir & "\pdf_to_notion.py"" --mode web"
 
 ' WindowStyle: 0 = Hidden window (zero CMD flashing or terminal blocking)
 ' bWaitOnReturn: False = Immediate asynchronous execution
 wshShell.Run command, 0, False
+

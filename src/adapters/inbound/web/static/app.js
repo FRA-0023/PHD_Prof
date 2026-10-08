@@ -53,6 +53,9 @@
     formFolder: document.getElementById("form-folder"),
     formDbId: document.getElementById("form-db-id"),
     formCourseName: document.getElementById("form-course-name"),
+    btnThemeToggle: document.getElementById("btn-theme-toggle"),
+    themeToggleIcon: document.getElementById("theme-toggle-icon"),
+    themeToggleLabel: document.getElementById("theme-toggle-label"),
   };
 
   // Utility helpers
@@ -564,6 +567,11 @@
     el.modalCancel.addEventListener("click", closeProfileModal);
     el.profileForm.addEventListener("submit", saveProfileForm);
 
+    // Theme Toggle Control
+    if (el.btnThemeToggle) {
+      el.btnThemeToggle.addEventListener("click", toggleTheme);
+    }
+
     // Keyboard Shortcuts
     document.addEventListener("keydown", (e) => {
       // If modal open, Esc closes it
@@ -578,6 +586,12 @@
         if (idx < state.profiles.length) {
           selectProfile(state.profiles[idx]);
         }
+      }
+
+      // Alt + T to toggle theme (Dark <-> Light)
+      if (e.altKey && (e.key === "t" || e.key === "T")) {
+        e.preventDefault();
+        toggleTheme();
       }
 
       // Ctrl + Enter to run batch
@@ -622,8 +636,105 @@
     });
   }
 
+  // --- 8. Theme Management (Dark / Light) ---
+  // # ARCHITETTURA: Gestione deterministica del tema con fallback a prefers-color-scheme
+  // e memorizzazione in localStorage per latenza zero e coerenza cross-session.
+  // # TRADE-OFF: Icone SVG inline interpolate via innerHTML per eliminare dipendenze da framework esterni.
+  const THEME_STORAGE_KEY = "phd_cockpit_theme";
+
+  const SUN_ICON_SVG = `
+    <circle cx="12" cy="12" r="5"></circle>
+    <line x1="12" y1="1" x2="12" y2="3"></line>
+    <line x1="12" y1="21" x2="12" y2="23"></line>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+    <line x1="1" y1="12" x2="3" y2="12"></line>
+    <line x1="21" y1="12" x2="23" y2="12"></line>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+  `;
+
+  const MOON_ICON_SVG = `
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+  `;
+
+  function getSystemPreferredTheme() {
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark";
+  }
+
+  function getActiveTheme() {
+    return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
+  }
+
+  function applyTheme(theme, save = true) {
+    if (theme === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+      if (el.btnThemeToggle) {
+        el.btnThemeToggle.title = "Passa a tema scuro (Alt+T)";
+        el.btnThemeToggle.setAttribute("aria-label", "Passa a tema scuro");
+      }
+      if (el.themeToggleIcon) {
+        el.themeToggleIcon.innerHTML = MOON_ICON_SVG;
+      }
+      if (el.themeToggleLabel) {
+        el.themeToggleLabel.textContent = "Scuro";
+      }
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+      if (el.btnThemeToggle) {
+        el.btnThemeToggle.title = "Passa a tema chiaro (Alt+T)";
+        el.btnThemeToggle.setAttribute("aria-label", "Passa a tema chiaro");
+      }
+      if (el.themeToggleIcon) {
+        el.themeToggleIcon.innerHTML = SUN_ICON_SVG;
+      }
+      if (el.themeToggleLabel) {
+        el.themeToggleLabel.textContent = "Chiaro";
+      }
+    }
+
+    if (save) {
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, theme);
+      } catch (err) {
+        // Fallback per ambienti con storage disabilitato
+      }
+    }
+  }
+
+  function toggleTheme() {
+    const current = getActiveTheme();
+    const nextTheme = current === "light" ? "dark" : "light";
+    applyTheme(nextTheme, true);
+  }
+
+  function initTheme() {
+    let savedTheme = null;
+    try {
+      savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    } catch (err) {}
+
+    const initialTheme = savedTheme || getSystemPreferredTheme();
+    applyTheme(initialTheme, false);
+
+    // Reattività ai cambiamenti dinamici del tema OS a runtime
+    if (window.matchMedia) {
+      window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
+        try {
+          if (!localStorage.getItem(THEME_STORAGE_KEY)) {
+            applyTheme(e.matches ? "light" : "dark", false);
+          }
+        } catch (err) {}
+      });
+    }
+  }
+
   // Initialization
   async function init() {
+    initTheme();
     setupListeners();
     initHeartbeat();
     initEventSource();

@@ -77,6 +77,8 @@ async def test_web_adapter_serves_index(mock_dependencies):
         response = await client.get("/")
         assert response.status_code == 200
         assert "PHD Prof Cockpit" in response.text
+        assert "btn-theme-toggle" in response.text
+        assert "select-generation-mode" in response.text
         assert "text/html" in response.headers["content-type"]
 
 @pytest.mark.anyio
@@ -240,5 +242,12 @@ async def test_web_adapter_start_batch_with_generation_mode(mock_dependencies):
         data = response.json()
         assert data["status"] == "started"
         assert data["mode"] == "graphs_only"
+
+
+def test_pdf_to_notion_syntax_valid():
+    """Verify that root entrypoint pdf_to_notion.py compiles without syntax errors."""
+    import py_compile
+    compiled_path = py_compile.compile("pdf_to_notion.py", doraise=True)
+    assert compiled_path is not None
 
 

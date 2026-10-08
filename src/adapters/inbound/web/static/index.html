@@ -4,10 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHD Prof — Cockpit Industriale ETL</title>
-  <link rel="stylesheet" href="/static/app.css?v=2.2">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <link rel="stylesheet" href="/static/app.css?v=2.3">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    /* Inibizione flash of unstyled theme (FOUT) all'avvio */
+    (function() {
+      try {
+        var saved = localStorage.getItem('phd_cockpit_theme');
+        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        if (saved === 'light' || (!saved && prefersLight)) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 
@@ -29,6 +44,21 @@
         <span>GEMINI QUOTA:</span>
         <span id="quota-display" class="quota-value" title="Richieste giornaliere rimanenti (Requests Per Day)">-- RPD</span>
       </div>
+
+      <button id="btn-theme-toggle" class="btn-theme-toggle" type="button" title="Passa a tema chiaro (Alt+T)" aria-label="Passa a tema chiaro">
+        <svg id="theme-toggle-icon" class="theme-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <span id="theme-toggle-label" class="theme-toggle-label">Chiaro</span>
+      </button>
     </div>
   </header>
 
@@ -206,6 +236,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=2.2"></script>
+  <script src="/static/app.js?v=2.3"></script>
 </body>
 </html>

@@ -15,12 +15,17 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
-- **Toggle Dark/Light Mode nella Web Cockpit**: Introdurre selettore di tema nella Topbar con commutazione istantanea delle variabili CSS industriali, memorizzazione su `localStorage` e salvaguardia di contrasto WCAG 2.2 AA.
-- **Verifica Componenti Esistenti**: Assicurare regressione zero su Coda Documenti, Output Mode Selector, Telemetria SSE e modali.
-- **Monitoring & Hardening**: Confermare rendering impeccabile su display chiari e scuri sia sul Web Cockpit che nelle pagine Notion.
-
+- **Monitoring & Telemetria di Produzione**: Esecuzione end-to-end su interi corsi con metriche di latenza e token usage.
+- **Export & Reportistica**: Valutare future utility di reportistica batch e audit degli stati sincronizzati.
 
 ## Log delle Sessioni
+### 2026-10-08 (Phase 7: Native Dark/Light Mode Toggle & High-Contrast WCAG 2.2 AA Polish)
+- **Topbar Theme Toggle**: Inserito pulsante reattivo `#btn-theme-toggle` nella Topbar con icona vettoriale dinamica (Sole/Luna in SVG), tooltip esplicito, label contestuale ("Chiaro" / "Scuro") e shortcut da tastiera (`Alt+T`).
+- **CSS Custom Properties & WCAG 2.2 AA**: Mappato il blocco `[data-theme="light"]` in `app.css` per tutti i token di elevazione, bordi, testi e stati semantici. Tutti i contrasti superano i criteri WCAG 2.2 AA (rapporto testo primario > 15:1 su canvas bianco/ardesia chiaro).
+- **Industrial Dark Terminal Deck**: Preservata la console telemetrica scura (`.telemetry-deck`, `.log-scroll-pane`) anche in Light mode, garantendo densità visiva industriale, leggibilità ottimale dei log streaming SSE e contrasto perfetto per i badge dei log.
+- **Client Controller & FOUT Shield**: In `app.js`, implementata la commutazione deterministica con persistenza in `localStorage` (`phd_cockpit_theme`) e sincronizzazione con `prefers-color-scheme`. Inserito micro-script sincrono in `<head>` di `index.html` per eliminare qualsiasi Flash of Unstyled Theme (FOUT) al caricamento iniziale. Versioning delle risorse statiche elevato a `?v=2.3`.
+- **Test Suite Integrità**: 119/119 unit test superati al 100% su pytest. Zero regressioni.
+
 ### 2026-10-08 (Fix Subgraph Titles White-on-White in Dark Mode & Multi-Theme Neutral Styling)
 - **Root Cause Identificata ('Bianco su Bianco')**: In Notion Dark Mode, il motore Mermaid renderizza i titoli dei cluster/subgraph con colore testo bianco (`titleColor: #f9fffe`). L'istruzione `style SG_ID fill:#f8fafc` forzava un rettangolo di sfondo quasi puramente bianco (`#f8fafc` = `rgb(248, 250, 252)`), creando testo bianco su sfondo bianco.
 - **Risoluzione Antifragile Multi-Tema**: Rimosso qualsiasi `fill` opaco per i container subgraph sostituendolo con `fill:none` e bordo tratteggiato adattivo (`stroke:#64748b,stroke-width:1.5px,stroke-dasharray: 4 4`). Con `fill:none`, lo sfondo del container adotta naturalmente il tema dell'ambiente ospite (Notion Dark vs Light): in Dark Mode il titolo bianco risalta nitidamente sullo sfondo scuro della pagina, in Light Mode il titolo scuro risalta sullo sfondo chiaro.

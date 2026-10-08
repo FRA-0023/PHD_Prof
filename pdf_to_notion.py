@@ -233,7 +233,10 @@ def main() -> None:
             ssl_certfile=str(server_crt) if use_ssl else None,
         )
         if not args.no_browser:
-            threading.Timer(0.8, lambda: webbrowser.open(target_url)).start()
+            import time
+            # ARCHITETTURA: Timestamp univoco per azzerare il caching aggressivo della pagina HTML in Chrome/Edge
+            browser_url = f"{target_url}/?t={int(time.time())}"
+            threading.Timer(0.8, lambda: webbrowser.open(browser_url)).start()
         print(f"\n  [Web] Cockpit started at {target_url} (listening on {web_host}:{web_port}, SSL={use_ssl})\n")
         web.start()
     else:
