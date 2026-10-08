@@ -399,21 +399,39 @@ body {
   gap: var(--space-2);
 }
 
+.mode-selector-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-surface-sub);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px 2px 8px;
+}
+
+.mode-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .select-mode {
   background-color: var(--bg-surface-elev);
   color: var(--text-primary);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-muted);
   border-radius: var(--radius-sm);
-  padding: 5px 10px;
+  padding: 4px 8px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   outline: none;
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
 }
 
 .select-mode:hover {
-  border-color: var(--border-color);
+  border-color: var(--border-focus);
 }
 
 .select-mode:focus {

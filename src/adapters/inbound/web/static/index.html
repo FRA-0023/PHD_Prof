@@ -85,11 +85,14 @@
           </div>
 
           <div class="deck-actions">
-            <select id="select-generation-mode" class="select-mode" title="Modalità di generazione artefatti">
-              <option value="both" selected>Entrambi (Note + Grafo)</option>
-              <option value="notes_only">Solo Note</option>
-              <option value="graphs_only">Solo Grafo</option>
-            </select>
+            <div class="mode-selector-group" title="Modalità di generazione artefatti per ciascun documento">
+              <span class="mode-label">Output:</span>
+              <select id="select-generation-mode" class="select-mode">
+                <option value="both" selected>🎯 Entrambi (Note + Grafo)</option>
+                <option value="notes_only">📝 Solo Note</option>
+                <option value="graphs_only">🧠 Solo Grafo</option>
+              </select>
+            </div>
             <button id="btn-select-all" class="btn-secondary" title="Inverti selezione">Tutti / Nessuno</button>
             <button id="btn-refresh-files" class="btn-secondary" title="Riscansiona disco">Aggiorna</button>
             <button id="btn-run-batch" class="btn-primary" disabled title="Esegui ETL (Ctrl+Invio)">

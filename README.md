@@ -498,6 +498,11 @@ Provides full visual observability and selective batch control:
   # --no-browser          (prevents opening browser automatically)
   ```
 
+- **Output Mode Selector**: In the toolbar above the document queue, choose what to generate for each lecture:
+  - `🎯 Entrambi (Note + Grafo)` (default): Complete analytical chapter + visual Mermaid architecture map & examination drills.
+  - `📝 Solo Note`: Only the deep textbook synthesis (excluding graphs and study drills).
+  - `🧠 Solo Grafo`: Only the conceptual architecture diagram, flowchart, active recall drills, and model boundary conditions.
+
 ---
 
 ### Option B: Interactive Terminal CLI
@@ -509,6 +514,11 @@ python pdf_to_notion.py --mode cli
 
 # Optional Italian localized interactive CLI
 python pdf_to_notion.py --mode cli --lang IT
+
+# Direct generation mode override
+python pdf_to_notion.py --mode cli --generation-mode both        # Notes + Graphs (default)
+python pdf_to_notion.py --mode cli --generation-mode notes_only   # Notes only
+python pdf_to_notion.py --mode cli --generation-mode graphs_only  # Conceptual maps only
 ```
 
 ---
