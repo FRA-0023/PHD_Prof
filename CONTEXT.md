@@ -302,3 +302,10 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Risoluzione Problemi DNS TTL & Cache dei Browser**: Dettagliate le cause del caching negativo NXDOMAIN e i passaggi esatti per il flush DNS a livello di sistema operativo (ipconfig /flushdns) e nei motori Chromium (chrome://net-internals/#dns / edge://net-internals/#dns).
 - **Matrice Conflitti Porte & Diagnostica**: Censiti i servizi comuni che occupano la porta 80 (IIS, Skype, Apache, Docker) o 443 (VMware) e spiegato il meccanismo di fallback automatico trasparente.
 
+
+### 2026-10-08 (Elevazione Value Proposition & ROI in README e GitHub)
+- **Tagline e Descrizione Repository GitHub**: Allineata la descrizione pubblica GitHub (gh repo edit) e il blocco quote iniziale del README per rendere immediatamente tangibile il ROI (trasformazione di oltre 100 slide in capitoli completi Notion in 30 secondi con zero token sprecati).
+- **Ristrutturazione Sezione Valore (README.md)**: Introdotto schema di flusso ASCII che contrappone il costo del metodo manuale (4-6 ore a lezione di fatica clericale) con la pipeline PHD Prof (30 secondi).
+- **Tabella Pilastri di Vantaggio & Metriche Quantitative**: Formalizzati i 6 pilastri di valore (10x Time Recovery, Zero Information Loss su speaker notes, Sintesi Notion di livello textbook, Figure vettoriali a 300 DPI, Idempotenza crittografica SHA-256 e architettura a costo zero).
+- **Matrice Comparativa di Vantaggio Asimmetrico**: Aggiunta tabella di confronto tra Studio Manuale, Chatbot AI Generici (ChatGPT/Claude) e Pipeline Industriale ETL PHD Prof su 7 dimensioni operative.
+
