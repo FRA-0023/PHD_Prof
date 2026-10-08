@@ -58,7 +58,7 @@ PHD Prof operates as a **Crash-Only, Idempotent Document ETL Pipeline**:
 
 ## 🖥️ The Web Cockpit (Industrial Local Dashboard)
 
-PHD Prof features a zero-build, local-first single-page cockpit accessible securely at `https://phdprof.test` (or `http://127.0.0.1`), running on standard HTTPS port `443` (with automatic fallback to port `8443` or `80/8000`). Built according to the *Operate* visitor mode and WCAG 2.2 AA accessibility standards:
+PHD Prof features a zero-build, local-first single-page cockpit accessible by default on standard HTTP port `80` at `http://127.0.0.1` (with automatic port conflict fallback to `8000`). Once configured via our 1-click local domain script, it automatically upgrades to zero-warning trusted HTTPS on port `443` at `https://phdprof.test` (see [Local Domain Setup](docs/LOCAL_DOMAIN_SETUP.md)). Built according to the *Operate* visitor mode and WCAG 2.2 AA accessibility standards:
 
 ```
 +---------------------------------------------------------------------------------------+
@@ -468,11 +468,13 @@ Provides full visual observability and selective batch control:
   ```
 - **Universal CLI Invocation**:
   ```bash
+  # Standard launch on http://127.0.0.1 (Port 80, fallback 8000)
   python pdf_to_notion.py --mode web
+
   # Optional arguments:
-  # --domain phdprof.test (customizes local domain name, default: phdprof.test)
-  # --ssl / --no-ssl      (enables/disables HTTPS; auto-enabled when certs/ exists)
-  # --port 443            (customizes port, default: 443 for HTTPS, 80 for HTTP)
+  # --port 80             (customizes port, default: 80 for HTTP, 443 for HTTPS)
+  # --ssl / --no-ssl      (forces HTTPS on/off; auto-detected when certs/ exists)
+  # --domain phdprof.test (customizes local domain name)
   # --no-browser          (prevents opening browser automatically)
   ```
 
@@ -526,76 +528,19 @@ The codebase includes comprehensive unit tests with full offline mocks covering 
 ```bash
 python -m pytest
 ```
-*All 84/84 unit tests execute in under 3 seconds with zero external network dependencies.*
+*All 99/99 unit tests execute in under 3 seconds with zero external network dependencies.*
 
 ---
 
-## 🛠️ Troubleshooting & Diagnostic Guide
+## 📚 Documentation & Reference Hub
 
-### 1. `Error on <file>: 404 Client Error: Not found for url: https://api.notion.com/v1/pages`
-- **Root Cause**: Notion REST API responds with `404 Not Found` (rather than `403 Forbidden`) whenever:
-  1. The Notion integration has **not been invited/connected** to the specific Course Page or target Database.
-  2. The `database_id` configured in your course profile is still set to the template placeholder (`your_notion_notes_database_id_here`), mistakenly uses the View ID (the string after `?v=`) instead of the Database ID (the string before `?v=`), or points to a regular Page instead of a Database.
-- **Resolution**:
-  1. In Notion, navigate to your Course Page or open the "Notes" database directly.
-  2. Click the three dots icon (**`...`**) in the top right corner $\rightarrow$ **Connections** (or **Connect to**) $\rightarrow$ select your integration (`PHD Prof`).
-  3. Verify in the Web Cockpit (or in `course_profiles.json`) that `database_id` is the real 32-character hexadecimal database UUID (the string before `?v=`), and not a View ID or plain Page ID.
+To maintain maximum signal and focus in this primary manual, detailed diagnostic procedures, advanced host networking, and optional infrastructure setups are organized into dedicated reference guides:
 
-### 2. `400 Client Error: validation_error` on Notion API
-- **Root Cause**: The target Notion database is missing a Title property, or an invalid property schema was provided.
-- **Resolution**:
-  - Open your Notion database in the browser and ensure it contains a Title column (default is `Name` or `Title`). PHD Prof automatically queries the database schema and maps to whichever column has `type: "title"`.
-
-### 3. Daily LLM Quota Exhausted / RPD Cap Reached (`429 RESOURCE_EXHAUSTED`)
-- **Diagnostic Log**: Emitted in telemetry as `Daily LLM quota exhausted` (or `Quota giornaliera LLM esaurita`).
-- **Root Cause**: Google Gemini API Free Tier enforces a daily request cap (typically 15–20 RPD on Flash models).
-- **Resolution**:
-  - The Web Cockpit topbar displays your live remaining RPD. PHD Prof halts the queue cleanly without burning tokens or creating duplicate records. Quota counters automatically reset every 24 hours (tracked via `gemini_usage.json`). You can link a billing card in Google AI Studio for pay-as-you-go high throughput.
-
-### 4. Empty Document Extraction / Zero Content (`ValueError: Empty document content`)
-- **Diagnostic Log**: Emitted when extracting zero selectable characters (`ValueError: Il contenuto estratto dal documento è vuoto`).
-- **Root Cause**:
-  1. *Scanned Image PDFs in `PAPER_OR_BOOK` mode*: The file consists of bitmap image scans without an embedded digital text layer. Local extractors (`PyMuPDF` / `MarkItDown`) detect zero selectable characters.
-  2. *Cloud-Only Placeholder Files (OneDrive / iCloud / Google Drive "Files On-Demand")*: The operating system has not downloaded the physical file content to local storage, presenting a 0-byte stub to Python.
-- **Resolution**:
-  - *For Scanned PDFs*: In your course profile settings, switch `doc_type` to **`slides`**. Slides mode uploads the PDF directly to Google Gemini's multimodal vision API, executing neural visual OCR over mathematical formulas, handwritten margins, and rasterized figures.
-  - *For Cloud Files*: Right-click the folder in Windows Explorer or macOS Finder and select **"Always keep on this device"** (or trigger a full local download) before running synchronization.
-
-### 5. `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process`
-- **Root Cause**: The PDF or PPTX document is currently opened in an external desktop application (e.g. Microsoft PowerPoint, Adobe Acrobat, Foxit PDF Reader) with an exclusive file lock on Windows.
-- **Resolution**: Close the file in your viewer or presentation editor before launching batch processing.
-
-### 6. Local Domain & Trusted HTTPS Setup (`https://phdprof.test`)
-- **Local Domain & Root SSL Setup**: To navigate directly to `https://phdprof.test` without security warnings or port numbers, double-click `Configura_Dominio_Locale.bat` (Windows) or execute `sudo ./scripts/setup_local_domain.sh` (macOS/Linux). This script performs two actions in one step:
-  1. Maps `127.0.0.1 phdprof.test` into your local `hosts` file and flushes DNS cache.
-  2. Generates local SSL certificates (if absent) and installs the Root CA into the Windows Trusted Root Certificate Store, enabling green-padlock HTTPS in all browsers.
-- **Port Conflict Handling**: PHD Prof binds by default to standard HTTPS port `443` (or `80` if HTTPS is disabled). If port 443 is occupied by another local service, the server automatically falls back to port `8443` (or `8000` for HTTP). You can also specify an explicit port:
-  ```bash
-  python pdf_to_notion.py --mode web --port 8443
-  ```
-
-### 7. Headless PPTX Vector Conversion Fallback (`[PPTX to PDF Warning] COM conversion failed`)
-- **Diagnostic Log**: Emitted in telemetry as `[PPTX to PDF Warning] Conversione COM fallita`.
-- **Root Cause**: Dual-payload slide extraction (converting slides to high-resolution vector PDF to preserve diagrams for Gemini Vision) relies on Microsoft PowerPoint COM automation on Windows (`win32com`). This interface is unavailable on macOS, Linux, or Windows machines lacking desktop PowerPoint.
-- **Behavior & Resolution**: PHD Prof automatically and gracefully falls back to extracting slide titles, body bullet points, and speaker notes via `python-pptx` / `MarkItDown`. While textual synthesis remains exhaustive, vision models will not inspect graphical layouts. To ensure full multimodal diagram fidelity on macOS or Linux, export your presentation to vector PDF directly from Keynote or PowerPoint before dropping it into the monitored course directory.
-
-### 8. Windows PowerShell `PSSecurityException` (`Activate.ps1 cannot be loaded`)
-- **Root Cause**: Default Windows security policies restrict running PowerShell scripts within the user scope.
-- **Resolution**: Open PowerShell and configure execution policy for the current user:
-  ```powershell
-  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-  ```
-
-### 9. Launcher Privileges on macOS / Linux (`Permission denied` on `.command` or `.sh`)
-- **Root Cause**: Cloning or extracting archives on Unix-like platforms can strip execution bits from shell scripts.
-- **Resolution**: Mark the launchers executable from Terminal:
-  ```bash
-  chmod +x Avvia_PHD_Prof.command Avvia_PHD_Prof.sh
-  ```
-
-### 10. Integration Not Listed in Notion Menu ("Connect to" Empty)
-- **Root Cause**: When the internal integration token was generated at [notion.so/profile/integrations](https://www.notion.so/profile/integrations), it was associated with Workspace A (e.g., Personal), while the academic database is located in Workspace B (e.g., University / Organization account).
-- **Resolution**: Check the **Associated workspace** dropdown in Notion Integrations. Internal integrations cannot traverse workspace boundaries; recreate the integration within the target workspace hosting your course hub.
+| Document | Focus & Coverage |
+| :--- | :--- |
+| **[`Troubleshooting & Diagnostic Guide`](docs/TROUBLESHOOTING.md)** | Full breakdown of Notion API 404/400 errors, cross-workspace token mismatches, Gemini RPD rate limiting, scanned PDF handling, Windows file locks (`WinError 32`), and script permissions. |
+| **[`Local Domain & Trusted HTTPS Setup`](docs/LOCAL_DOMAIN_SETUP.md)** | Step-by-step setup for `https://phdprof.test`, 1-click local Root CA generation, Windows/macOS/Linux trust store installation, and DNS TTL cache invalidation. |
+| **[`Cloudflare R2 & Image Storage Architecture`](docs/CLOUD_STORAGE.md)** | Architecture for high-DPI diagram extraction (Gemini Vision + PyMuPDF), S3/R2 bucket configuration, deterministic SHA-256 deduplication, and the prune utility. |
 
 ---
 

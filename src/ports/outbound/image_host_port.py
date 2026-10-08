@@ -28,3 +28,15 @@ class IImageHostClient(ABC):
         # PERFORMANCE: Restituisce l'URL pubblico senza richiedere round-trip di rete per l'upload.
         """
         return ""
+
+    def delete_image(self, object_name: str) -> bool:
+        """
+        # ARCHITETTURA: Rimozione atomica di un oggetto dal bucket remoto per pulizia duplicati o rollback.
+        """
+        return False
+
+    def list_images(self, prefix: str = "") -> list:
+        """
+        # PERFORMANCE: Elenco chiavi oggetti presenti nel bucket remoto con paginazione continua.
+        """
+        return []

@@ -34,3 +34,4 @@ scripts/*
 !scripts/generate_certificates.py
 !scripts/setup_local_domain.sh
 !scripts/setup_local_domain.ps1
+!scripts/prune_r2_duplicates.py

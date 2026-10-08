@@ -1,3 +1,4 @@
+from typing import List
 import boto3
 from botocore.exceptions import ClientError
 from pathlib import Path
@@ -63,3 +64,28 @@ class S3ImageAdapter(IImageHostClient):
         # ARCHITETTURA: Restituisce l'URL pubblico deterministico CDN/R2 per il blocco Notion.
         """
         return f"{self.public_domain}/{object_name}"
+
+    def delete_image(self, object_name: str) -> bool:
+        """
+        # ARCHITETTURA: Rimozione atomica di un oggetto dal bucket remoto per pulizia duplicati o rollback.
+        """
+        try:
+            self.s3.delete_object(Bucket=self.bucket_name, Key=object_name)
+            return True
+        except ClientError as e:
+            print(f"    [Cloudflare R2] Errore cancellazione per {object_name}: {e}")
+            return False
+
+    def list_images(self, prefix: str = "") -> List[str]:
+        """
+        # PERFORMANCE: Elenco chiavi oggetti presenti nel bucket remoto con paginazione continua.
+        """
+        keys: List[str] = []
+        paginator = self.s3.get_paginator('list_objects_v2')
+        try:
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    keys.append(obj['Key'])
+        except ClientError as e:
+            print(f"    [Cloudflare R2] Errore listing con prefisso '{prefix}': {e}")
+        return keys

@@ -21,6 +21,20 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 ## Log delle Sessioni
 
 ### 2026-10-08 (Fix Visual Extractor, Native Notion GFM Tables & Hierarchical Nested Lists)
+- **Eliminazione Duplicati Cloudflare R2 & Staging Locale**:
+  - Estesa l'interfaccia `IImageHostClient` e `S3ImageAdapter` con i metodi `delete_image(object_name)` e `list_images(prefix)`.
+  - Implementato `scripts/prune_r2_duplicates.py` con scansione per prefisso di corso e validazione contro i 14 hash deterministici SHA-256 (16 char).
+  - Eliminati con successo **28 oggetti duplicati/orfani** da Cloudflare R2 e 28 file residui da `staging/figures/`. Il bucket remoto e la cache locale ospitano ora esattamente i 14 asset attivi deterministici.
+- **Porta 80 Standard Out-of-the-Box & Architettura di Rete**:
+  - Chiarito nel `README.md` che per chi apre il progetto per la prima volta la porta standard è la **80** (`http://127.0.0.1`, con fallback automatico a 8000), poiché i certificati TLS e la mappatura hosts per `phdprof.test` non sono ancora presenti.
+  - L'upgrade a `https://phdprof.test` su porta 443 avviene tramite l'esecuzione una tantum di `Configura_Dominio_Locale.bat` (Root CA locale + hosts + svuotamento cache DNS/TTL).
+- **Riorganizzazione Modulare della Documentazione (`docs/`)**:
+  - Rimosso il blocco di troubleshooting da oltre 70 righe dal `README.md` principale per preservare la massima pulizia, leggibilità e focalizzazione sul flusso operativo centrale.
+  - Creati 3 file specialistici dedicati in lingua inglese:
+    - `docs/TROUBLESHOOTING.md`: Guida esaustiva a errori Notion (404/400/cross-workspace), quota Gemini, PDF scansionati, lock Windows (`WinError 32`), permessi script.
+    - `docs/LOCAL_DOMAIN_SETUP.md`: Guida dettagliata all'infrastruttura di Root CA, trust store, `phdprof.test`, TTL DNS e fallback porte 80/443.
+    - `docs/CLOUD_STORAGE.md`: Architettura di memorizzazione esterna R2, hashing deterministico, pre-upload HEAD check e utility di pruning.
+  - Creato `docs/` e integrata tabella di riferimento "Documentation & Reference Hub" nel `README.md`.
 - **Supporto Gerarchico per Liste Annidate e Bullet Points in Notion**:
   - Implementato stack di indentazione in `build_notion_blocks` (`src/adapters/outbound/notion_block_builder.py`) con preservazione dell'albero dei sotto-punti elenco e numerati tramite la proprietà nativa Notion `children`.
   - Eliminato l'appiattimento di elenchi gerarchici (es. MapReduce *Mapping* -> *Chunk 1, 2, 3*) allo stesso livello radice.
