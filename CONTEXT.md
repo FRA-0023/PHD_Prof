@@ -314,3 +314,9 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Fase 6 Iniziata (Study Schemas & Concept Maps)**: Aggiornato project.md per impostare l'obiettivo della nuova sessione: implementazione di un modulo per la generazione di schemi concettuali e mappe di studio (ispirato a Google NotebookLM e compatibile con EdrawMind/Mermaid/OPML) basato sulle note sintetizzate.
 - **Preparazione Handoff XML Structured**: Strutturato prompt di passaggio ad alta densità informativa secondo le regole di master-context-engineering e prompt-engineering per migrazione in nuova chat.
 
+
+### 2026-10-08 (Decostruzione Pedagogica GEMM & Standard Prompt Deconstructions)
+- **Aggiornamento Live Pagina Notion (Big Data)**: Rimosso il blocco GEMM sintetico (5 blocchi) e iniettati 36 blocchi Notion arricchiti con decostruzione fisica delle dimensioni (m, k, n), derivazione operativa della complessità O(N^3), proprietà di intensità aritmetica, parallelismo massivo dei Tensor Cores, trace numerico 2x2 e boundary condition del decoding autoregressivo (GEMV memory-bound).
+- **Hardening dei Prompt Template (prompt_templates.py)**: Esteso lo standard di decostruzione matematica in SLIDES_PROMPT_TEMPLATE e PAPER_OR_BOOK_PROMPT_TEMPLATE. Per ogni concetto astratto o complessità computazionale distaccata, il prompt impone ora la derivazione in 5 punti (mapping fisico, conteggio operazioni, ponte hardware/silicio, micro-esempio numerico e boundary conditions).
+- **Test Suite**: 107/107 unit test passati con successo.
+
