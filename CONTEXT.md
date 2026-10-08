@@ -294,3 +294,11 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Tabella Mappatura UI -> .env**: Aggiunto cheat-sheet comparativo e tabella diagnostica con le cause radice dei codici di errore S3/R2 (403 Forbidden, 404 NoSuchBucket, broken icons in Notion).
 - **Allineamento .env.example**: Tradotti i commenti e aggiornati i placeholder per puntare direttamente alla guida in docs/CLOUD_STORAGE.md.
 
+
+### 2026-10-08 (Guida Approfondita Dominio Locale, Porte & Certificati TLS)
+- **Espansione docs/LOCAL_DOMAIN_SETUP.md per Principianti**: Ristrutturato il documento con modelli mentali chiari su TLD riservati (.test per RFC 2606), porte standard HTTP (80) vs HTTPS (443) e porte di fallback (8000, 8443).
+- **Walkthrough 1-Click ed Elevazione UAC**: Istruzioni passo-passo per l'esecuzione di Configure_Local_Domain.bat su Windows con spiegazione del prompt di controllo account utente e procedura analoga per macOS e Linux (setup_local_domain.sh).
+- **Architettura Root CA Locale & Browser Trust**: Chiarito perché Let's Encrypt non è applicabile a domini privati locali e come la private Root CA consenta la connessione HTTPS nativa con lucchetto verde e zero avvisi di sicurezza.
+- **Risoluzione Problemi DNS TTL & Cache dei Browser**: Dettagliate le cause del caching negativo NXDOMAIN e i passaggi esatti per il flush DNS a livello di sistema operativo (ipconfig /flushdns) e nei motori Chromium (chrome://net-internals/#dns / edge://net-internals/#dns).
+- **Matrice Conflitti Porte & Diagnostica**: Censiti i servizi comuni che occupano la porta 80 (IIS, Skype, Apache, Docker) o 443 (VMware) e spiegato il meccanismo di fallback automatico trasparente.
+
