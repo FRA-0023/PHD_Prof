@@ -14,7 +14,7 @@ import pathlib
 import threading
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -129,6 +129,18 @@ class WebAdapter:
             allow_headers=["*"],
         )
 
+        @app.middleware("http")
+        async def add_no_cache_headers(request: Request, call_next):
+            # ARCHITETTURA: Disattiva la memorizzazione in cache del browser per il cockpit desktop locale.
+            # Questo garantisce che qualsiasi aggiornamento al cockpit (HTML, CSS, JS) venga
+            # renderizzato immediatamente nel browser senza richiedere svuotamenti manuali della cache.
+            response = await call_next(request)
+            if request.url.path == "/" or request.url.path.startswith("/static"):
+                response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                response.headers["Pragma"] = "no-cache"
+                response.headers["Expires"] = "0"
+            return response
+
         @app.on_event("startup")
         async def on_startup():
             self.streamer.set_loop(asyncio.get_running_loop())
@@ -139,7 +151,14 @@ class WebAdapter:
             index_path = self.static_dir / "index.html"
             if not index_path.exists():
                 return JSONResponse({"status": "error", "message": "static/index.html missing"}, status_code=404)
-            return FileResponse(index_path)
+            return FileResponse(
+                index_path,
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
 
         @app.get("/api/profiles")
         async def get_profiles():

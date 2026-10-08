@@ -20,6 +20,11 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
 
 ## Log delle Sessioni
+### 2026-10-08 (Web Cockpit Selector Cache Invalidation & Anti-Cache Middleware)
+- **Diagnosi Browser Cache**: Confermato tramite test headless (Puppeteer) e curl locale che il server FastAPI stava già servendo il DOM aggiornato con il selettore `#select-generation-mode`. Tuttavia, nei browser grafici desktop (Chrome/Edge), in assenza di header espliciti `Cache-Control`, le risorse statiche (`index.html`, `app.css`, `app.js`) venivano memorizzate nella cache locale, impedendo all'utente di visualizzare il nuovo controllo senza un Hard Refresh manuale.
+- **Middleware Anti-Cache per Cockpit Locale**: Implementato in `src/adapters/inbound/web/web_adapter.py` un middleware HTTP FastAPI che inietta sistematicamente `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`, `Pragma: no-cache` ed `Expires: 0` per `/` e per tutte le risorse `/static/*`.
+- **Cache-Busting & Resilienza CSS**: Aggiunti query parameter versionati (`?v=2.2`) alle inclusioni in `index.html`. In `app.css`, rinforzato il gruppo `.mode-selector-group` con `flex-shrink: 0`, contorno cromatico cyan ad alto contrasto (`#38BDF8`) e shadow dedicata, rendendolo immediatamente identificabile sulla toolbar della Coda Documenti a sinistra di "Tutti / Nessuno".
+- **Verifica Funzionale**: Validato il rendering in browser headless Puppeteer su `https://127.0.0.1` (`select-generation-mode` attivo e opzioni `both`, `notes_only`, `graphs_only` operative). 117/117 test superati.
 ### 2026-10-08 (Topic-Based Semantic Palette & Enlarged Headers)
 - **Font maggiorato per Root e Subgraph Titles**: integrato `<span style='font-size:18px;font-weight:800;'>` per il nodo radice di origine e `<span style='font-size:15px;font-weight:700;'>` per i titoli di tutti i box subgraph ('Big Data Fundamentals', 'Software Engineering Best Practices', ecc.). I box subgraph adottano ora sfondo neutro trasparente e bordo tratteggiato (`style SG_ID fill:#f8fafc,stroke:#94a3b8...`).
 - **Colori per Argomento (Semantic Type) e non per Raggruppamento**: i singoli nodi non sono più monocromatici per box, ma colorati in base alla natura intrinseca del concetto:

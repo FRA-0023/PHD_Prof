@@ -397,33 +397,39 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  flex-shrink: 0;
 }
 
 .mode-selector-group {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background-color: var(--bg-surface-sub);
-  border: 1px solid var(--border-subtle);
+  gap: 8px;
+  background-color: var(--bg-surface-elev);
+  border: 1px solid rgba(56, 189, 248, 0.4);
   border-radius: var(--radius-sm);
-  padding: 2px 6px 2px 8px;
+  padding: 3px 8px;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.1);
+  flex-shrink: 0;
 }
 
 .mode-label {
   font-size: 11px;
-  font-weight: 700;
-  color: var(--text-tertiary);
+  font-weight: 800;
+  color: #38BDF8;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .select-mode {
-  background-color: var(--bg-surface-elev);
+  background-color: var(--bg-surface);
   color: var(--text-primary);
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--border-focus);
   border-radius: var(--radius-sm);
-  padding: 4px 8px;
-  font-size: 11px;
+  padding: 4px 10px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   outline: none;
@@ -431,11 +437,13 @@ body {
 }
 
 .select-mode:hover {
-  border-color: var(--border-focus);
+  border-color: #38BDF8;
+  background-color: var(--bg-surface-elev);
 }
 
 .select-mode:focus {
-  border-color: var(--accent-primary);
+  border-color: #38BDF8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
 /* --- Table File Queue --- */
