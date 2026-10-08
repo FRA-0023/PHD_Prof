@@ -309,3 +309,8 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Tabella Pilastri di Vantaggio & Metriche Quantitative**: Formalizzati i 6 pilastri di valore (10x Time Recovery, Zero Information Loss su speaker notes, Sintesi Notion di livello textbook, Figure vettoriali a 300 DPI, Idempotenza crittografica SHA-256 e architettura a costo zero).
 - **Matrice Comparativa di Vantaggio Asimmetrico**: Aggiunta tabella di confronto tra Studio Manuale, Chatbot AI Generici (ChatGPT/Claude) e Pipeline Industriale ETL PHD Prof su 7 dimensioni operative.
 
+
+### 2026-10-08 (Handoff Nuova Sessione: Generazione Schemi di Studio & Mappe Concettuali)
+- **Fase 6 Iniziata (Study Schemas & Concept Maps)**: Aggiornato project.md per impostare l'obiettivo della nuova sessione: implementazione di un modulo per la generazione di schemi concettuali e mappe di studio (ispirato a Google NotebookLM e compatibile con EdrawMind/Mermaid/OPML) basato sulle note sintetizzate.
+- **Preparazione Handoff XML Structured**: Strutturato prompt di passaggio ad alta densità informativa secondo le regole di master-context-engineering e prompt-engineering per migrazione in nuova chat.
+
