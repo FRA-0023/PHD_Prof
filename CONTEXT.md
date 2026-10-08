@@ -20,6 +20,14 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
 
 ## Log delle Sessioni
+### 2026-10-08 (Mermaid Styling, Visual Hierarchy & Math Notation)
+- **Styling Semantico con `classDef`**: introdotti stili visivi distinti con palette pastello (soft blue per fundamentals/theory, soft green per distributed/empirical, soft amber per GPU/compute, soft purple per pipeline/reduce, dark slate per root/output). Riduce il carico cognitivo e migliora l'immediata leggibilità visiva.
+- **Gerarchia Visiva e Titoli**: formattazione nodi su doppio livello con `<b>Titolo Macro</b><br/>Dettaglio analitico/meccanismo`, conferendo risalto immediato ai concetti cardine.
+- **Notazione Matematica Formale**: implementata notazione matematica rigorosa tramite Unicode ad alta compatibilità SVG: complessità asintotica `O(m × n × k) ≈ O(N³)` invece di `O(N^3)`, pedici `(K₁, V₁)`, integrali, sommatorie `∑` e operatori `≈` / `->` senza rischi di parsing LaTeX.
+- **Aggiornamento Live su Notion**: Block 1 (Mappa Architetturale) e Block 2 (Pipeline MapReduce) su Notion aggiornati con il nuovo standard estetico e formule.
+- **Prompt Templates aggiornati**: `SLIDES_PROMPT_TEMPLATE`, `PAPER_OR_BOOK_PROMPT_TEMPLATE` e `TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT` arricchiti con le linee guida per imporre questa qualità visiva in ogni futura generazione.
+- **117/117 test superati**, commit `d438ce3` pushato su `origin/main`.
+
 ### 2026-10-08 (Fix ELK Subgraph Edges & Arrow-Safe Tokenizer)
 - **Root cause isolata e confermata (Mermaid Issue #6060)**: il crash ELK `Cannot read properties of null (reading 're')` avviene quando un arco Mermaid punta direttamente o proviene da un `subgraph` ID (`ROOT --> BDF` o `BDF --> DCA`) invece di un nodo concreto (`ROOT --> BDF1`). ELK tenta di eseguire lookup geometrico delle coordinate x/y (`vDd(b10, 'x')`) sulla struttura del compound tramite GWT Map, fallisce con `null` e invoca `.re()` sollevando l'errore.
 - **Bug nel tokenizer regex risolto**: scoperto che la regex di quoting nodi inglobava avidamente la freccia `-->` e il nodo successivo se presenti sulla stessa riga (`A[L1] --> B[L2]`), convertendo `-->` in `- -` e spezzando la topologia. Sostituito con tokenizer deterministico split-on-arrows.
