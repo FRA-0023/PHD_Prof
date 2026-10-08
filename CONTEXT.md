@@ -20,6 +20,17 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
 
 ## Log delle Sessioni
+### 2026-10-08 (Topic-Based Semantic Palette & Enlarged Headers)
+- **Font maggiorato per Root e Subgraph Titles**: integrato `<span style='font-size:18px;font-weight:800;'>` per il nodo radice di origine e `<span style='font-size:15px;font-weight:700;'>` per i titoli di tutti i box subgraph ('Big Data Fundamentals', 'Software Engineering Best Practices', ecc.). I box subgraph adottano ora sfondo neutro trasparente e bordo tratteggiato (`style SG_ID fill:#f8fafc,stroke:#94a3b8...`).
+- **Colori per Argomento (Semantic Type) e non per Raggruppamento**: i singoli nodi non sono più monocromatici per box, ma colorati in base alla natura intrinseca del concetto:
+    * `theoryNode` (Soft Blue): Definizioni, Teoremi, Assiomi (Gartner, CAP Theorem).
+    * `computeNode` (Soft Amber): Hardware, Motori di calcolo, Operazioni matriciali (GEMM, CPU vs GPU, HPC).
+    * `pipelineNode` (Soft Purple): Flussi dati, Trasformazioni, Paradigmi di esecuzione (Ingestion/ETL, Data Locality, Spark DAG).
+    * `devopsNode` (Soft Green): Ingegneria, Tooling, Economia dello storage (Git, uv/Poetry, Cloud vs On-Prem).
+    * `bottleneckNode` (Soft Coral/Rose): Colli di bottiglia critici, Limiti fisici, Failure modes (Memory Wall, Dependency Hell).
+- **Notion Live**: Entrambi i blocchi nella pagina Big Data Session 1 aggiornati direttamente via API con la nuova tipografia e mappatura cromatica.
+- **Prompt Templates & Test Suite**: Codificato il nuovo standard in `SLIDES_PROMPT_TEMPLATE`, `PAPER_OR_BOOK_PROMPT_TEMPLATE` e `TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT`. 117/117 test superati. Commit `df7a7d6` pushato su `origin/main`.
+
 ### 2026-10-08 (Web Cockpit Output Mode Clarification & Project Docs Sync)
 - **UI Web Cockpit potenziata**: inserito raggruppamento visivo esplicito `.mode-selector-group` con label 'Output:' e icone dedicate per ciascuna opzione (`🎯 Entrambi (Note + Grafo)`, `📝 Solo Note`, `🧠 Solo Grafo`), eliminando ogni ambiguità sulla posizione del selettore nella toolbar della Coda Documenti.
 - **Documentazione allineata**: aggiornati `README.md` (sezione Execution Modes con Web Cockpit e CLI `--generation-mode [both|notes_only|graphs_only]`) e `project.md` con il completamento di Phase 6.
