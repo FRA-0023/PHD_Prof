@@ -112,3 +112,15 @@ class CourseProfile:
             target=target,
         )
 
+# ARCHITETTURA: StudyArtifact incapsula gli artefatti di studio avanzati (Mermaid, OPML, Active Recall)
+# estrapolati a valle o in append. Disaccoppia la rappresentazione di dominio dalle specificità dei tool (Notion, EdrawMind).
+@dataclass
+class StudyArtifact:
+    document_hash: str
+    title: str
+    mindmap_mermaid: Optional[str] = None
+    flowchart_mermaid: Optional[str] = None
+    opml_content: Optional[str] = None
+    active_recall_markdown: Optional[str] = None
+    boundary_matrix_markdown: Optional[str] = None
+

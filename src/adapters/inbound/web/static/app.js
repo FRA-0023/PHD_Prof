@@ -217,6 +217,10 @@
           ${
             file.status === "SYNCED" && file.page_id
               ? `<div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                  <a href="/api/study-schema/${file.file_hash}/opml" download="${encodeURIComponent(file.name.replace(/\.[^/.]+$/, ""))}.opml" class="btn-secondary" title="Scarica Mappa Mentale OPML (EdrawMind / XMind)" style="padding: 2px 7px; font-size: 10px; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    OPML
+                  </a>
                   <a href="https://www.notion.so/${file.page_id.replace(/-/g, '')}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-notion-link" title="Apri nota su Notion" style="padding: 2px 8px; font-size: 11px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: var(--accent-primary);">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     Notion

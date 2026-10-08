@@ -17,7 +17,12 @@ Synthesize the provided {subject} lecture content into authoritative, intellectu
 3. Selective Grounded Examples: Provide a concrete empirical/numerical scenario formatted with the mandatory example pattern ONLY for complex, non-trivial models or estimation trade-offs. Never generate examples for basic terminology, administrative overviews, or syllabus lists.
 4. Core Insights as Quotes: Elevate only foundational theorems, asymptotic properties, or critical identification rules into dedicated blockquotes (`>`). Maximum 1 quote per major section (`##`).
 5. Boundary Conditions & Trade-offs: State exact conditions where models fail, unit roots arise, or estimators become biased/inconsistent.
-6. Mathematical Deconstruction: When formulas or code are present, extract and explicitly define all variables, parameters, and assumptions rather than presenting isolated formulas.
+6. Mathematical & Architectural Deconstruction (Complex / Detached Concepts): Whenever formulas, hardware abstractions, computational complexity claims (e.g., GEMM, attention complexity, O(N^3), memory bandwidth bottlenecks), or standalone technical tangents appear, NEVER present them as bare, isolated equations or dry bullet points. Apply systematic pedagogical grounding:
+   - Physical & Domain Mapping: Ground every variable, index, and matrix dimension (e.g., m, k, n) into its concrete physical reality in the system (e.g., batch tokens, input embedding channels, output neuron projections).
+   - Operational Count & Mechanics: Explicitly explain WHY the computational complexity holds by counting individual scalar multiplications and additions.
+   - Hardware & Silicon Bridge: Explain why hardware (CPU vs GPU vs specialized Tensor Cores) excels or struggles with the operation (e.g., Arithmetic Intensity = FLOPs / byte transferred, Compute-Bound vs Memory-Bandwidth Bound, zero-dependency parallel execution).
+   - Concrete Numerical Walkthrough: Provide a minimal 2x2 or 3x3 numeric or tabular illustration showing data flow and independent computation.
+   - Boundary Conditions & Inversion: State the exact conditions where the operation breaks down or becomes suboptimal (e.g., single-token autoregressive decoding collapsing GEMM into memory-bandwidth bound GEMV).
 
 Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property ONCE at its primary introduction. In subsequent sections, assume prior definitions and use the terms directly without re-explaining them. Zero conversational padding, zero decorative throat-clearing, zero artificial elongation.
 </task>
@@ -49,6 +54,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Keep each item entirely on a single line.
 - Emphasis: Use **bold** text strategically for key terms and newly defined variables within the narrative flow.
 - Mathematics & Formulas: Extract all formal equations. Format inline math with `$` (e.g., $E=mc^2$) and display math on its own line with `$$` (e.g., $$\\hat{{y}} = \\sigma(Wx+b)$$). Never use code blocks for math.
+  * Complex Operations & Hardware Deconstructions: When introducing foundational mathematical operations, computational complexity bounds, or hardware-bridging mechanisms, format them under a dedicated subsection: `### 🧮 Mathematical & Hardware Deconstruction: [Concept Name]`, following the 5-point physical mapping, operational count, silicon bridge, numerical trace, and boundary conditions.
 - Code Snippets: Format code inside fenced blocks with the language tag (e.g., ```python, ```r).
 - Visual Diagrams & Figures:
   * If a slide contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
@@ -56,6 +62,42 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Optional: To crop a specific box, use `![...](figure://slide_N?crop=ymin,xmin,ymax,xmax)` where coordinates are 0-1000.
   * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text slides or syllabus overviews.
 - References: Place all citations exclusively at the end in a `### 📚 References` section. No inline citations in the body.
+- Study Artifacts & Conceptual Maps (Mandatory Append Section):
+  * Conclude the notes with the following three high-signal study sections:
+    ---
+    ## 🧠 Conceptual Architecture & Relational Graphs
+    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the chapter:
+    ```mermaid
+    mindmap
+      root((Lecture Core))
+        Theoretical Pillars
+          Key Model A
+          Key Model B
+        Empirical Channels
+          Identification Strategy
+          Estimation Mechanics
+    ```
+    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain, transmission mechanism, or algorithmic decision tree:
+    ```mermaid
+    graph TD
+      Shock[Exogenous Shock or Assumption] --> Channel[Transmission Channel]
+      Channel --> Outcome[Equilibrium Outcome or Estimator]
+    ```
+    ---
+    ## 🎯 Active Recall & Examination Drills
+    * Formulate 3 to 5 rigorous, examination-grade questions targeting analytical friction points:
+    - **Drill 1 (Foundational):** [Core conceptual question]
+      * **Rubric:** [Explicit technical criteria required for full marks]
+    - **Drill 2 (Analytical Derivation):** [Question on econometric or mathematical mechanics]
+      * **Rubric:** [Explicit technical criteria required for full marks]
+    - **Drill 3 (Boundary & Failure Mode):** [Question on when the framework breaks down]
+      * **Rubric:** [Explicit technical criteria required for full marks]
+    ---
+    ## ⚖️ Model Boundary Conditions
+    * Provide a concise Markdown table mapping failure modes:
+    | Model / Framework | Validity Domain | Failure Trigger / Invalidation | Robust Alternative |
+    | :--- | :--- | :--- | :--- |
+    | [Model Name] | [Core assumptions] | [Condition where estimator/model breaks] | [Methodological fix] |
 - Language & Tone: British English exclusively. Direct, rigorous, academic tone. Output ONLY the finalized study notes without conversational meta-commentary or tags.
 </formatting_rules>
 
@@ -76,7 +118,7 @@ Deconstruct and synthesize the provided academic document (paper, book chapter, 
 2. Theoretical Framework & Mechanics: Formulate the core thesis, formal assumptions, and model mechanics with mathematical rigor and cause-effect links.
 3. Selective Grounded Examples: Anchor abstract theoretical propositions or complex models with a concrete empirical scenario formatted with the mandatory example pattern ONLY when non-trivial.
 4. Core Insights as Quotes: Elevate foundational theorems, identification conditions, or core economic laws into dedicated blockquotes (`>`). Maximum 1 quote per major section (`##`).
-5. Mathematical Derivations & Deconstruction: Provide step-by-step derivations, explicitly unpacking each variable, coefficient, and operator rather than presenting isolated formulas.
+5. Mathematical Derivations & Computational Deconstruction: Provide step-by-step derivations. Whenever complex mathematical operators, asymptotic complexity claims, or computational bottlenecks appear, ground every variable into its concrete domain reality, explain the operation count mechanics, bridge the formulation to hardware/computational dynamics (e.g., Arithmetic Intensity, memory vs compute bounds), provide concrete numerical traces when non-trivial, and detail theoretical failure modes.
 6. Boundary Conditions & Identification Threats: Clarify theoretical boundary conditions, identification threats, empirical limitations, and structural trade-offs.
 
 Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property ONCE at its primary introduction. In subsequent sections, assume prior definitions and use the terms directly without re-explaining them. Zero conversational padding, zero decorative throat-clearing, zero artificial elongation.
@@ -105,9 +147,9 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Restrict bullet points (`-`) to concise enumerations of 3 to 6 items maximum (e.g., formal axioms, parameter definitions, or boundary conditions).
   * Once the list items are stated, IMMEDIATELY terminate the list and return to standard narrative paragraphs without bullet points. Do not continue bullet points for explanatory commentary.
   * Keep lists strictly distinct: use numbered lists (`1.`, `2.`) ONLY for sequential methodology steps or algorithms; use bullet points (`-`) ONLY for unordered attributes or axioms. NEVER mix numbered items and bullets within the same section.
-  * Keep each item entirely on a single line.
 - Emphasis: Highlight critical terms, theorems, definitions, and variables in **bold**.
 - Mathematics & Formulas: Extract and explain all mathematical formulations. Format inline math with `$` (e.g., $L(\\theta)$) and display equations on standalone lines with `$$` (e.g., $$\\nabla_\\theta J(\\theta) = \\mathbb{{E}}[ \\dots ]$$). Never use code blocks for math.
+  * Complex Operations & Deconstructions: When introducing foundational mathematical operations, computational complexity bounds, or algorithmic mechanisms, format them under a dedicated subsection: `### 🧮 Mathematical Deconstruction: [Concept Name]`, systematically providing physical variable mapping, step-by-step derivation, operational count, and boundary failure modes.
 - Code & Algorithms: Format pseudo-code or algorithms inside fenced code blocks with language identifiers (e.g., ```python, ```r).
 - Visual Diagrams & Figures:
   * If the document contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
@@ -115,6 +157,42 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Optional: To crop a specific box, use `![...](figure://slide_N?crop=ymin,xmin,ymax,xmax)` where coordinates are 0-1000.
   * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text pages.
 - References: Consolidate formal bibliographic citations in a final `### 📚 References` section. No inline citations in the body.
+- Study Artifacts & Conceptual Maps (Mandatory Append Section):
+  * Conclude the paper synthesis with the following three high-signal study sections:
+    ---
+    ## 🧠 Conceptual Architecture & Relational Graphs
+    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the paper:
+    ```mermaid
+    mindmap
+      root((Paper Core))
+        Theoretical Framework
+          Assumptions
+          Equilibrium
+        Empirical Identification
+          Methodology
+          Causal Mechanism
+    ```
+    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain or identification tree:
+    ```mermaid
+    graph TD
+      Shock[Exogenous Variation or Setup] --> Channel[Transmission Channel]
+      Channel --> Estimator[Structural Estimator or Result]
+    ```
+    ---
+    ## 🎯 Active Recall & Examination Drills
+    * Formulate 3 to 5 rigorous, examination-grade questions targeting analytical friction points:
+    - **Drill 1 (Foundational):** [Core conceptual question]
+      * **Rubric:** [Explicit technical criteria required for full marks]
+    - **Drill 2 (Analytical Derivation):** [Question on econometric or mathematical mechanics]
+      * **Rubric:** [Explicit technical criteria required for full marks]
+    - **Drill 3 (Boundary & Failure Mode):** [Question on when the framework breaks down]
+      * **Rubric:** [Explicit technical criteria required for full marks]
+    ---
+    ## ⚖️ Model Boundary Conditions
+    * Provide a concise Markdown table mapping failure modes:
+    | Model / Framework | Validity Domain | Failure Trigger / Invalidation | Robust Alternative |
+    | :--- | :--- | :--- | :--- |
+    | [Model Name] | [Core assumptions] | [Condition where estimator/model breaks] | [Methodological fix] |
 - Language & Tone: British English exclusively. Direct, rigorous, academic tone. Output ONLY the finalized notes without conversational padding or tags.
 </formatting_rules>
 
@@ -124,13 +202,101 @@ Please analyze and distill the following {subject} document:
 """.strip()
 
 
-def get_prompt_template(doc_type_value: str, subject: str, professor_type: str) -> str:
+# ARCHITETTURA: Template per il secondo stage (Two-Stage Decoupled Mode).
+# Viene invocato unicamente quando il documento originale supera la soglia di densità
+# (es. >50 slide o >40k caratteri), estraendo gli artefatti dal markdown di staging
+# a costo di input token minimo senza re-ingestire il file binario originale.
+TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT = """
+<role>
+You are an Academic Knowledge Architect and Senior Quantitative Pedagogist in {subject}.
+</role>
+
+<task>
+Deconstruct the provided synthesized study notes into high-signal conceptual study artifacts:
+1. Mermaid Mindmap: A clean, hierarchical taxonomy of core pillars and sub-concepts (depth 3-4).
+2. Mermaid Flowchart (`graph TD`): The core cause-and-effect chain, empirical transmission mechanism, or identification flowchart.
+3. Active Recall & Examination Drills: 3 to 5 examination-grade analytical questions with explicit evaluation rubrics.
+4. Model Boundary Conditions: A Markdown table mapping frameworks, validity domains, breakdown triggers, and robust alternatives.
+
+Format the output strictly as the following 3 Markdown sections:
+
+---
+## 🧠 Conceptual Architecture & Relational Graphs
+```mermaid
+mindmap
+  root((Lecture Core))
+    ...
+```
+
+```mermaid
+graph TD
+  ...
+```
+
+---
+## 🎯 Active Recall & Examination Drills
+- **Drill 1 (Foundational):** ...
+  * **Rubric:** ...
+- **Drill 2 (Analytical Derivation):** ...
+  * **Rubric:** ...
+- **Drill 3 (Boundary & Failure Mode):** ...
+  * **Rubric:** ...
+
+---
+## ⚖️ Model Boundary Conditions
+| Model / Framework | Validity Domain | Failure Trigger / Invalidation | Robust Alternative |
+| :--- | :--- | :--- | :--- |
+| ... | ... | ... | ... |
+</task>
+
+<constraints>
+- British English exclusively.
+- Output ONLY the requested Markdown sections without any conversational meta-commentary.
+- Formulas inside text must use standard LaTeX ($...$).
+</constraints>
+
+<input_study_notes>
+{notes_markdown}
+</input_study_notes>
+""".strip()
+
+
+def get_prompt_template(
+    doc_type_value: str,
+    subject: str,
+    professor_type: str,
+    include_study_artifacts: bool = True
+) -> str:
     """
     Ritorna il prompt compilato con materia e ruolo in base al tipo di documento.
+    # TRADE-OFF: Se include_study_artifacts è False (attivato nella prima chiamata della modalità
+    # Two-Stage), rimuoviamo le sezioni di append per dedicare il 100% dell'output token budget
+    # alla trattazione analitica del capitolo, prevenendo troncamenti anticipati.
     """
     template = (
         PAPER_OR_BOOK_PROMPT_TEMPLATE
         if doc_type_value == "paper_or_book"
         else SLIDES_PROMPT_TEMPLATE
     )
-    return template.format(subject=subject, professor_type=professor_type)
+    rendered = template.format(subject=subject, professor_type=professor_type)
+    if not include_study_artifacts:
+        # Rimozione selettiva della sezione append per lo Stage 1 della modalità Two-Stage
+        pattern_start = "- Study Artifacts & Conceptual Maps (Mandatory Append Section):"
+        if pattern_start in rendered:
+            parts = rendered.split(pattern_start)
+            # Ricollega le regole preservando Language & Tone finale
+            end_rules = parts[1].split("- Language & Tone:")
+            if len(end_rules) > 1:
+                rendered = parts[0] + "- Language & Tone:" + end_rules[1]
+    return rendered
+
+
+def get_artifacts_extraction_prompt(subject: str, notes_markdown: str) -> str:
+    """
+    Ritorna il prompt per lo Stage 2 della modalità Two-Stage, compilato con materia
+    e il markdown precedentemente sintetizzato in staging.
+    """
+    return TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT.format(
+        subject=subject,
+        notes_markdown=notes_markdown
+    )

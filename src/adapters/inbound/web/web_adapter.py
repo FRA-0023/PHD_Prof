@@ -15,7 +15,7 @@ import threading
 from typing import List, Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -294,6 +294,62 @@ class WebAdapter:
                 return resolved
             except Exception as exc:
                 raise HTTPException(status_code=500, detail=str(exc))
+
+        # ── Study Schema & EdrawMind Export Endpoints ─────────────────────────
+        @app.get("/api/study-schema/{file_hash}")
+        async def get_study_schema(file_hash: str):
+            """
+            Recupera gli schemi concettuali e artefatti di studio estratti per il documento.
+            Se il file OPML o lo schema non è ancora stato calcolato, lo estrae on-the-fly dal markdown di staging.
+            """
+            staging_file = pathlib.Path("staging") / f"{file_hash}.md"
+            if not staging_file.exists():
+                raise HTTPException(status_code=404, detail="File non trovato nella cache di staging")
+
+            md_text = staging_file.read_text(encoding="utf-8")
+            from src.adapters.outbound.study_schema_exporter_adapter import StudySchemaExporterAdapter
+            exporter = StudySchemaExporterAdapter()
+            artifact = exporter.extract_artifacts(md_text, file_hash, file_hash)
+
+            opml_file = pathlib.Path("staging/schemas") / f"{file_hash}.opml"
+            has_opml = opml_file.exists() or bool(artifact.opml_content)
+
+            return {
+                "file_hash": file_hash,
+                "mindmap_mermaid": artifact.mindmap_mermaid,
+                "flowchart_mermaid": artifact.flowchart_mermaid,
+                "active_recall_markdown": artifact.active_recall_markdown,
+                "boundary_matrix_markdown": artifact.boundary_matrix_markdown,
+                "has_opml": has_opml,
+            }
+
+        @app.get("/api/study-schema/{file_hash}/opml")
+        async def download_opml(file_hash: str):
+            """
+            Restituisce il file .opml per l'importazione nativa e istantanea in EdrawMind, XMind o MindNode.
+            """
+            opml_file = pathlib.Path("staging/schemas") / f"{file_hash}.opml"
+            if opml_file.exists():
+                content = opml_file.read_text(encoding="utf-8")
+            else:
+                staging_file = pathlib.Path("staging") / f"{file_hash}.md"
+                if not staging_file.exists():
+                    raise HTTPException(status_code=404, detail="File non trovato nella cache di staging")
+                md_text = staging_file.read_text(encoding="utf-8")
+                from src.adapters.outbound.study_schema_exporter_adapter import StudySchemaExporterAdapter
+                exporter = StudySchemaExporterAdapter()
+                artifact = exporter.extract_artifacts(md_text, file_hash, file_hash)
+                content = artifact.opml_content or exporter.to_opml(artifact, fallback_markdown=md_text)
+                opml_file.parent.mkdir(parents=True, exist_ok=True)
+                opml_file.write_text(content, encoding="utf-8")
+
+            return Response(
+                content=content,
+                media_type="application/xml",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{file_hash}.opml"',
+                },
+            )
 
         @app.get("/api/events")
         async def sse_events():

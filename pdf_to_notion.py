@@ -134,6 +134,10 @@ def main() -> None:
     from src.adapters.outbound.pymupdf_visual_extractor import PyMuPdfVisualExtractor
     visual_extractor = PyMuPdfVisualExtractor()
 
+    # Study Schema Exporter (EdrawMind OPML, Mermaid, Active Recall)
+    from src.adapters.outbound.study_schema_exporter_adapter import StudySchemaExporterAdapter
+    schema_exporter = StudySchemaExporterAdapter()
+
     usecase = ProcessDocumentUseCase(
         readers=readers,
         llm_client=llm_client,
@@ -142,6 +146,7 @@ def main() -> None:
         staging_storage=staging_storage,
         visual_extractor=visual_extractor,
         image_host_client=image_host_client,
+        schema_exporter=schema_exporter,
     )
 
     if args.mode == "web":

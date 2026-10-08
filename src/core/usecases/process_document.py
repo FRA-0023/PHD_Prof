@@ -15,6 +15,8 @@ from src.ports.outbound.llm_client_port import ILlmClient
 from src.ports.outbound.notion_client_port import INotionClient
 from src.ports.outbound.state_repository_port import IStateRepository
 from src.ports.outbound.staging_storage_port import IStagingStorage
+from src.ports.outbound.study_schema_exporter_port import IStudySchemaExporter
+from src.core.domain.prompt_templates import get_artifacts_extraction_prompt
 from src.adapters.outbound.notion_block_builder import build_notion_blocks
 
 def compute_file_hash(file_path: Path) -> str:
@@ -43,6 +45,9 @@ class ProcessDocumentUseCase:
         staging_storage: IStagingStorage,
         visual_extractor: Optional[Any] = None,
         image_host_client: Optional[Any] = None,
+        schema_exporter: Optional[IStudySchemaExporter] = None,
+        split_threshold_chars: int = 40000,
+        split_threshold_slides: int = 50,
     ):
         self.readers = readers
         self.llm_client = llm_client
@@ -51,6 +56,9 @@ class ProcessDocumentUseCase:
         self.staging_storage = staging_storage
         self.visual_extractor = visual_extractor
         self.image_host_client = image_host_client
+        self.schema_exporter = schema_exporter
+        self.split_threshold_chars = split_threshold_chars
+        self.split_threshold_slides = split_threshold_slides
 
     def _process_figures(self, markdown_text: str, document: Document, target: NotionTarget) -> str:
         """
@@ -146,12 +154,48 @@ class ProcessDocumentUseCase:
             reader = self.readers.get(document.doc_type) or self.readers[DocumentType.SLIDES]
             payload = reader.read(document)
             try:
-                print("    [LLM] Generazione note...")
-                markdown_text = self.llm_client.generate_notes(prompt, payload)
+                # ARCHITETTURA: Adaptive Dispatcher (Single-Call vs Two-Stage)
+                # Trade-off: Garantisce 1 sola chiamata per documenti standard (<50 slide o <40k caratteri),
+                # attivando 2 chiamate solo per documenti massivi per prevenire la saturazione del limite
+                # di output tokens (8k) di Gemini ed evitare la diluizione della qualità analitica.
+                is_heavy = False
+                if isinstance(payload, list) and len(payload) >= self.split_threshold_slides:
+                    is_heavy = True
+                elif isinstance(payload, str) and len(payload) >= self.split_threshold_chars:
+                    is_heavy = True
+
+                if is_heavy:
+                    print(f"    [Adaptive LLM] Rilevato volume elevato. Attivazione Two-Stage antifragile...")
+                    print("    [LLM Stage 1/2] Sintesi capitolo ad alta risoluzione...")
+                    markdown_text = self.llm_client.generate_notes(prompt, payload)
+
+                    print("    [LLM Stage 2/2] Estrazione schemi concettuali e drills da staging markdown...")
+                    artifacts_prompt = get_artifacts_extraction_prompt(target.course_name, markdown_text)
+                    artifacts_text = self.llm_client.generate_notes(artifacts_prompt, markdown_text)
+
+                    # Unione deterministica dei blocchi
+                    markdown_text = f"{markdown_text.rstrip()}\n\n{artifacts_text.lstrip()}"
+                else:
+                    print("    [LLM Single-Call] Generazione note unificate con schemi concettuali (1 sola chiamata)...")
+                    markdown_text = self.llm_client.generate_notes(prompt, payload)
+
                 print(f"    [LLM] Ricevuti {len(markdown_text)} caratteri. Salvataggio in staging...")
                 self.staging_storage.save(file_hash, markdown_text)
             finally:
                 reader.cleanup(payload)
+
+        # 3.1 Esportazione Schemi Concettuali & Mappe Mentali (EdrawMind / OPML)
+        # PERFORMANCE: Esecuzione deterministica a costo zero token su CPU locale
+        if self.schema_exporter:
+            try:
+                artifact = self.schema_exporter.extract_artifacts(markdown_text, file_hash, document.stem)
+                schema_dir = Path("staging/schemas")
+                schema_dir.mkdir(parents=True, exist_ok=True)
+                opml_file = schema_dir / f"{file_hash}.opml"
+                opml_file.write_text(artifact.opml_content or "", encoding="utf-8")
+                print(f"    [EdrawMind] Mappa OPML esportata in {opml_file}")
+            except Exception as e:
+                print(f"    [EdrawMind] Warning: esportazione OPML non riuscita: {e}")
 
         # Nuova Fase Intermedia: Sostituzione dinamica figure (con path gerarchico)
         markdown_text = self._process_figures(markdown_text, document, target)
@@ -172,3 +216,4 @@ class ProcessDocumentUseCase:
         print(f"    [Notion] OK — {len(blocks)} blocchi archiviati.\n")
 
         return ProcessingResult(document=document, success=True, page_id=page_id, skipped=False)
+
