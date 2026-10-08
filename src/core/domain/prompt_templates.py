@@ -66,7 +66,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Conclude the notes with the following three high-signal study sections:
     ---
     ## 🧠 Conceptual Architecture & Relational Graphs
-    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the chapter:
+    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the chapter (CRITICAL: wrap node labels containing parentheses, formulas, colons, or arrows in double quotes, e.g. `["Consistency (C)"]`, `["Scale (KB to YB)"]`, never leave unquoted parentheses inside node text):
     ```mermaid
     mindmap
       root((Lecture Core))
@@ -161,7 +161,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Conclude the paper synthesis with the following three high-signal study sections:
     ---
     ## 🧠 Conceptual Architecture & Relational Graphs
-    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the paper:
+    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the paper (CRITICAL: wrap node labels containing parentheses, formulas, colons, or arrows in double quotes, e.g. `["Consistency (C)"]`, `["Scale (KB to YB)"]`, never leave unquoted parentheses inside node text):
     ```mermaid
     mindmap
       root((Paper Core))
@@ -253,6 +253,7 @@ graph TD
 - British English exclusively.
 - Output ONLY the requested Markdown sections without any conversational meta-commentary.
 - Formulas inside text must use standard LaTeX ($...$).
+- In Mermaid mindmaps, all node labels containing parentheses, colons, commas, formulas, or arrows MUST be wrapped in double quotes (e.g., `["Scale (KB to YB)"]`, `["Consistency (C)"]`). Never output unquoted parentheses in node text.
 </constraints>
 
 <input_study_notes>

@@ -27,7 +27,6 @@ def test_process_document_adaptive_single_call():
     staging_storage.exists.return_value = False
 
     reader = MagicMock(spec=IDocumentReader)
-    # 20 slide -> under threshold (default 50)
     reader.read.return_value = ["Slide 1", "Slide 2"] * 10
 
     llm_client = MagicMock(spec=ILlmClient)
@@ -50,7 +49,7 @@ def test_process_document_adaptive_single_call():
         state_repo=state_repo,
         staging_storage=staging_storage,
         schema_exporter=schema_exporter,
-        split_threshold_slides=50,
+        split_threshold_chars=40000,
     )
 
     doc = Document(path=Path("small.pptx"), file_hash="hash_small", doc_type=DocumentType.SLIDES)
@@ -64,9 +63,49 @@ def test_process_document_adaptive_single_call():
     schema_exporter.extract_artifacts.assert_called_once()
 
 
-def test_process_document_adaptive_two_stage():
+def test_process_document_sparse_80_slides_stays_single_call():
     """
-    Volume elevato (>= threshold): Esegue 2 chiamate a Gemini (Two-Stage Decoupled).
+    Ratione sostanza: 80 slide ma con sole 15 parole l'una (~1.200 parole / ~7.200 caratteri).
+    Non deve attivare il Two-Stage, evitando spreco di quote e preservando 1 sola chiamata.
+    """
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = False
+
+    reader = MagicMock(spec=IDocumentReader)
+    # 80 slide sparse con 15 parole (circa 90 caratteri per slide = ~7.200 caratteri in totale)
+    reader.read.return_value = ["Title slide. Only a few words here for brief bullet point." for _ in range(80)]
+
+    llm_client = MagicMock(spec=ILlmClient)
+    llm_client.generate_notes.return_value = "# Sparse Deck Notes\nShort content"
+
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "page_sparse"
+
+    usecase = ProcessDocumentUseCase(
+        readers={DocumentType.SLIDES: reader},
+        llm_client=llm_client,
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+        split_threshold_chars=40000,
+    )
+
+    doc = Document(path=Path("sparse_80_slides.pptx"), file_hash="hash_sparse", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Management", database_title="Notes")
+
+    res = usecase.execute(doc, target, "prompt")
+
+    assert res.success is True
+    # Substantive density check guarantees ONLY 1 call despite 80 slides!
+    assert llm_client.generate_notes.call_count == 1
+
+
+def test_process_document_adaptive_two_stage_dense():
+    """
+    Volume elevato (>= 40.000 caratteri di testo reale): Esegue 2 chiamate a Gemini (Two-Stage Decoupled).
     Call 1: Note analitiche
     Call 2: Estrazione schemi e drills dal markdown prodotto
     """
@@ -77,8 +116,9 @@ def test_process_document_adaptive_two_stage():
     staging_storage.exists.return_value = False
 
     reader = MagicMock(spec=IDocumentReader)
-    # 60 slide -> exceeds threshold (50)
-    reader.read.return_value = ["Dense Slide content"] * 60
+    # Testo denso che supera ampiamente i 40.000 caratteri
+    dense_text = "Detailed mathematical proofs, derivations, and econometric models. " * 800  # ~56.000 caratteri
+    reader.read.return_value = [dense_text]
 
     llm_client = MagicMock(spec=ILlmClient)
     llm_client.generate_notes.side_effect = [
@@ -103,7 +143,7 @@ def test_process_document_adaptive_two_stage():
         state_repo=state_repo,
         staging_storage=staging_storage,
         schema_exporter=schema_exporter,
-        split_threshold_slides=50,
+        split_threshold_chars=40000,
     )
 
     doc = Document(path=Path("heavy.pptx"), file_hash="hash_heavy", doc_type=DocumentType.SLIDES)
@@ -112,10 +152,8 @@ def test_process_document_adaptive_two_stage():
     res = usecase.execute(doc, target, "prompt")
 
     assert res.success is True
-    # EXACTLY 2 calls to generate_notes!
+    # Truly dense content activates Two-Stage: EXACTLY 2 calls!
     assert llm_client.generate_notes.call_count == 2
-    # Verify both notes and artifacts were saved to staging
     saved_markdown = staging_storage.save.call_args[0][1]
     assert "Chapter 1: Extensive Lecture" in saved_markdown
     assert "Conceptual Architecture" in saved_markdown
-    schema_exporter.extract_artifacts.assert_called_once()

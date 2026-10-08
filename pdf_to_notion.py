@@ -138,6 +138,13 @@ def main() -> None:
     from src.adapters.outbound.study_schema_exporter_adapter import StudySchemaExporterAdapter
     schema_exporter = StudySchemaExporterAdapter()
 
+    # Adaptive Dispatcher threshold (default: 30.000 chars, calibrated to prevent 8k output token saturation)
+    raw_split_threshold = os.getenv("SPLIT_THRESHOLD_CHARS")
+    try:
+        split_threshold = int(raw_split_threshold) if raw_split_threshold else 30000
+    except ValueError:
+        split_threshold = 30000
+
     usecase = ProcessDocumentUseCase(
         readers=readers,
         llm_client=llm_client,
@@ -147,6 +154,7 @@ def main() -> None:
         visual_extractor=visual_extractor,
         image_host_client=image_host_client,
         schema_exporter=schema_exporter,
+        split_threshold_chars=split_threshold,
     )
 
     if args.mode == "web":

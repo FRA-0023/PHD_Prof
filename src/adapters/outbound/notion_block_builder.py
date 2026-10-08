@@ -148,6 +148,65 @@ def is_table_separator(line: str) -> bool:
     )
 
 
+def sanitize_mermaid_mindmap(content: str) -> str:
+    """
+    Sanitizza il codice Mermaid mindmap per evitare errori di parsing in Notion e client web.
+    # ARCHITETTURA: La grammatica Mermaid mindmap interpreta le parentesi (), quadre [],
+    # apici e operatori (->, :) come token di forma o transizione. Se presenti nel testo dei nodi
+    # senza racchiuderli in ["..."], il tokenizer di Mermaid solleva eccezioni sintattiche
+    # e Notion disabilita il rendering grafico visualizzando un blocco d'errore o testo grezzo.
+    """
+    lines = content.splitlines()
+    sanitized_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            sanitized_lines.append(line)
+            continue
+
+        if stripped.lower() == "mindmap":
+            sanitized_lines.append(line)
+            continue
+
+        indent = len(line) - len(line.lstrip(" "))
+        indent_str = " " * indent
+
+        # Nodo radice: root((...))
+        if stripped.startswith("root((") and stripped.endswith("))"):
+            root_text = stripped[6:-2].replace('"', "'")
+            sanitized_lines.append(f'{indent_str}root(("{root_text}"))')
+            continue
+
+        # Già formattato con delimitatori espliciti sicuri racchiusi da apici
+        is_bracketed = (
+            (stripped.startswith('["') and stripped.endswith('"]')) or
+            (stripped.startswith('("') and stripped.endswith('")')) or
+            (stripped.startswith('(("') and stripped.endswith('"))'))
+        )
+        if is_bracketed:
+            sanitized_lines.append(line)
+            continue
+
+        # Forme composte con testo prefisso: es. Moore's Law((N_T(t) ...))
+        m_shape = re.match(r"^(.*?)\(\((.*?)\)\)$", stripped)
+        if m_shape:
+            prefix, inner = m_shape.group(1).strip(), m_shape.group(2).strip()
+            clean_text = f"{prefix}: {inner}" if prefix else inner
+            clean_text = clean_text.replace('"', "'")
+            sanitized_lines.append(f'{indent_str}["{clean_text}"]')
+            continue
+
+        # Se il nodo contiene parentesi, operatori o punteggiatura, racchiudi in ["..."]
+        if any(c in stripped for c in "()[]:\"->,;"):
+            clean_text = stripped.replace('"', "'")
+            sanitized_lines.append(f'{indent_str}["{clean_text}"]')
+        else:
+            sanitized_lines.append(line)
+
+    return "\n".join(sanitized_lines)
+
+
 def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
     """
     Parses full Markdown text into a list of Notion-compliant block dictionaries.
@@ -256,18 +315,39 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             if in_code_block:
                 # Close code block
                 full_code = "\n".join(code_block_buf)
-                # If code is larger than Notion block limit, chunk safely
+                if code_block_lang == "mermaid" and "mindmap" in full_code:
+                    full_code = sanitize_mermaid_mindmap(full_code)
+
+                # ARCHITETTURA: Notion API supporta fino a 100 elementi rich_text (ciascuno max 2000 chars)
+                # all'interno dello STESSO blocco code (capienza complessiva fino a 200.000 caratteri).
+                # Chunkare su blocchi multipli spezza irrimediabilmente la continuità di script e diagrammi Mermaid.
+                # Raggruppiamo i chunk nella lista rich_text di un singolo blocco code.
+                rich_text_chunks: List[Dict[str, Any]] = []
                 while full_code:
                     chunk = full_code[:NOTION_MAX_BLOCK_CHARS]
                     full_code = full_code[NOTION_MAX_BLOCK_CHARS:]
+                    rich_text_chunks.append({"type": "text", "text": {"content": chunk}})
+                    if len(rich_text_chunks) == 100:
+                        blocks.append({
+                            "object": "block",
+                            "type": "code",
+                            "code": {
+                                "language": code_block_lang,
+                                "rich_text": rich_text_chunks,
+                            },
+                        })
+                        rich_text_chunks = []
+
+                if rich_text_chunks:
                     blocks.append({
                         "object": "block",
                         "type": "code",
                         "code": {
                             "language": code_block_lang,
-                            "rich_text": [{"type": "text", "text": {"content": chunk}}],
+                            "rich_text": rich_text_chunks,
                         },
                     })
+
                 code_block_buf = []
                 in_code_block = False
                 continue

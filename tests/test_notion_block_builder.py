@@ -4,6 +4,7 @@ from src.adapters.outbound.notion_block_builder import (
     build_notion_blocks,
     NOTION_MAX_BLOCK_CHARS,
     normalize_sentence_spacing,
+    sanitize_mermaid_mindmap,
 )
 
 def test_parse_rich_text_plain():
@@ -318,6 +319,52 @@ def test_build_notion_blocks_max_depth_safety():
     assert len(lvl1["children"]) == 2  # Level 2 and Level 3 both placed under Level 1 as siblings
     lvl2 = lvl1["children"][0]["bulleted_list_item"]
     assert "children" not in lvl2  # Not deeply nested beyond level 2
+
+
+def test_sanitize_mermaid_mindmap_escapes_parentheses_and_operators():
+    raw_mermaid = (
+        "mindmap\n"
+        "  root((Big Data Systems))\n"
+        "    Architecture\n"
+        "      Scale (KB to YB)\n"
+        "      Moore's Law((N_T(t) proportional to 2^(t/tau)))\n"
+        "      Consistency (C)\n"
+        "      LLM Wall (m=1) -> Bandwidth Bound\n"
+        "      Clean Leaf Node\n"
+        '      ["Already Quoted Node"]\n'
+    )
+    sanitized = sanitize_mermaid_mindmap(raw_mermaid)
+    lines = sanitized.splitlines()
+
+    assert lines[0] == "mindmap"
+    assert lines[1] == '  root(("Big Data Systems"))'
+    assert lines[2] == "    Architecture"
+    assert lines[3] == '      ["Scale (KB to YB)"]'
+    assert lines[4] == '      ["Moore\'s Law: N_T(t) proportional to 2^(t/tau)"]'
+    assert lines[5] == '      ["Consistency (C)"]'
+    assert lines[6] == '      ["LLM Wall (m=1) -> Bandwidth Bound"]'
+    assert lines[7] == "      Clean Leaf Node"
+    assert lines[8] == '      ["Already Quoted Node"]'
+
+
+def test_build_notion_blocks_large_code_block_preserves_single_block_integrity():
+    # Code block larger than NOTION_MAX_BLOCK_CHARS (e.g. 4500 chars)
+    # Must NOT be sliced into multiple code blocks, but kept in 1 block with multiple rich_text chunks
+    long_code = "print('hello world')\n" * 250  # ~5250 chars
+    md = f"```python\n{long_code}```"
+
+    blocks = build_notion_blocks(md)
+    code_blocks = [b for b in blocks if b["type"] == "code"]
+
+    # Critical invariant: 1 block only!
+    assert len(code_blocks) == 1
+    assert code_blocks[0]["code"]["language"] == "python"
+
+    rich_text = code_blocks[0]["code"]["rich_text"]
+    assert len(rich_text) > 1  # multiple chunks
+    total_reconstructed = "".join(chunk["text"]["content"] for chunk in rich_text)
+    assert total_reconstructed == long_code.strip()
+
 
 
 

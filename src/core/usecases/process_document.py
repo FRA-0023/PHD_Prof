@@ -46,7 +46,7 @@ class ProcessDocumentUseCase:
         visual_extractor: Optional[Any] = None,
         image_host_client: Optional[Any] = None,
         schema_exporter: Optional[IStudySchemaExporter] = None,
-        split_threshold_chars: int = 40000,
+        split_threshold_chars: int = 30000,
         split_threshold_slides: int = 50,
     ):
         self.readers = readers
@@ -130,6 +130,33 @@ class ProcessDocumentUseCase:
                 
         return pattern.sub(replacer, markdown_text)
 
+    def _calculate_payload_density(self, document: Document, payload: Any) -> int:
+        """
+        # ARCHITETTURA: Calcolo deterministico della densità testuale effettiva (Substance-Driven).
+        # STATISTICA: Il numero grezzo di slide è un proxy fallace (es. 80 slide da 15 parole = 1.200 parole totali,
+        # un volume leggero che non giustifica una seconda chiamata API né rischia saturazione output).
+        # Calcoliamo i caratteri testuali reali estratti per misurare la reale complessità cognitiva.
+        """
+        if isinstance(payload, str):
+            return len(payload.strip())
+
+        if isinstance(payload, list):
+            # Somma il testo da liste di stringhe o dal dual-payload PPTX [notes_markdown, uploaded_pdf]
+            total_chars = sum(len(x.strip()) for x in payload if isinstance(x, str))
+            if total_chars > 0:
+                return total_chars
+
+        # Per PDF caricati via File API (dove payload è genai_types.File), ispezioniamo il PDF locale con PyMuPDF (<20ms)
+        if document.path.exists() and document.path.suffix.lower() == ".pdf":
+            try:
+                import fitz
+                with fitz.open(document.path) as doc:
+                    return sum(len(page.get_text().strip()) for page in doc)
+            except Exception:
+                pass
+
+        return 0
+
     def execute(self, document: Document, target: NotionTarget, prompt: str) -> ProcessingResult:
         file_hash = document.file_hash
         entry = self.state_repo.get_entry(file_hash)
@@ -155,17 +182,14 @@ class ProcessDocumentUseCase:
             payload = reader.read(document)
             try:
                 # ARCHITETTURA: Adaptive Dispatcher (Single-Call vs Two-Stage)
-                # Trade-off: Garantisce 1 sola chiamata per documenti standard (<50 slide o <40k caratteri),
+                # Trade-off: Garantisce 1 sola chiamata per documenti standard (<40k caratteri di sostanza reale),
                 # attivando 2 chiamate solo per documenti massivi per prevenire la saturazione del limite
                 # di output tokens (8k) di Gemini ed evitare la diluizione della qualità analitica.
-                is_heavy = False
-                if isinstance(payload, list) and len(payload) >= self.split_threshold_slides:
-                    is_heavy = True
-                elif isinstance(payload, str) and len(payload) >= self.split_threshold_chars:
-                    is_heavy = True
+                density_chars = self._calculate_payload_density(document, payload)
+                is_heavy = density_chars >= self.split_threshold_chars
 
                 if is_heavy:
-                    print(f"    [Adaptive LLM] Rilevato volume elevato. Attivazione Two-Stage antifragile...")
+                    print(f"    [Adaptive LLM] Rilevato volume elevato ({density_chars} caratteri >= soglia {self.split_threshold_chars}). Attivazione Two-Stage antifragile...")
                     print("    [LLM Stage 1/2] Sintesi capitolo ad alta risoluzione...")
                     markdown_text = self.llm_client.generate_notes(prompt, payload)
 
@@ -176,7 +200,7 @@ class ProcessDocumentUseCase:
                     # Unione deterministica dei blocchi
                     markdown_text = f"{markdown_text.rstrip()}\n\n{artifacts_text.lstrip()}"
                 else:
-                    print("    [LLM Single-Call] Generazione note unificate con schemi concettuali (1 sola chiamata)...")
+                    print(f"    [LLM Single-Call] Volume moderato ({density_chars} caratteri < soglia {self.split_threshold_chars}). Generazione note unificate (1 sola chiamata)...")
                     markdown_text = self.llm_client.generate_notes(prompt, payload)
 
                 print(f"    [LLM] Ricevuti {len(markdown_text)} caratteri. Salvataggio in staging...")
