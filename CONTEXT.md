@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 99 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 110 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
@@ -19,6 +19,16 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - Esplorare l'estensione della riconciliazione automatica per cartelle nested o esportazioni Moodle complesse (es. Big Data).
 
 ## Log delle Sessioni
+
+### 2026-10-08 (Adaptive Two-Stage Study Schemas, Mermaid Sanitizer & Single-Block Notion Chunking)
+- **Pipeline Adattiva a Due Stadi (Single-Call vs Two-Stage)**: Implementato dispatcher volumetrico su caratteri effettivi (`SPLIT_THRESHOLD_CHARS=30000`) per preservare il budget di output (8.192 token di Gemini 2.5 Flash). Documenti standard processati con 1 chiamata, lezioni massive con 2 chiamate mirate a valle su markdown di staging senza re-ingestione binaria.
+- **Porta & Adapter Study Schema Exporter (OPML 2.0)**: Creata porta esagonale `IStudySchemaExporter` e adapter `StudySchemaExporterAdapter` che converte deterministicamente mindmap Mermaid in gerarchie XML standard OPML 2.0 per EdrawMind, XMind e MindNode a costo 0 token.
+- **Inbound Web Cockpit Export**: Esposti endpoint `GET /api/study-schema/{file_hash}` e `GET /api/study-schema/{file_hash}/opml` con pulsante 1-click di download OPML verde integrato nella tabella del Web Cockpit.
+- **Fix Strutturale Chunking Blocchi Code Notion**: Risolto il bug di `notion_block_builder.py` che affettava diagrammi >1.900 caratteri in blocchi Notion multipli rotti. Implementato raggruppamento dei chunk dentro l'array `rich_text` di un unico blocco code (fino a 200.000 caratteri per blocco, conformità piena Notion API).
+- **Sanitizzazione Deterministica Sintassi Mermaid Mindmap**: Creata la funzione `sanitize_mermaid_mindmap()` per quotare automaticamente in `["..."]` nodi contenenti parentesi, formule o operatori (es. Moore's Law, GEMM, CAP Theorem), eliminando i fallimenti del tokenizer Notion/Mermaid.
+- **Riconciliazione Live Big Data Session 1 (Notion)**: Eliminati i 14 vecchi blocchi orfani e re-iniettata la mindmap unificata (5.259 caratteri) e il flowchart MapReduce sulla pagina `3f3b63e8-59c8-819c-bdd2-dca55c14560c`.
+- **Verifica Test Suite**: 110/110 test unitari offline superati (inclusi 2 nuovi test di regressione su chunking e sanitizzazione).
+
 
 ### 2026-10-08 (Fix Visual Extractor, Native Notion GFM Tables & Hierarchical Nested Lists)
 - **Eliminazione Duplicati Cloudflare R2 & Staging Locale**:
