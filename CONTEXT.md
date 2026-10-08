@@ -279,3 +279,11 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Testing Strategy**: Suite di 15 unit test (	ests/) con mock offline per tutte le porte, 100% superata in 0.23s.
 - **Anti-Overengineering Gate**: Aggiornata la skill master-hexagonal-architecture con soglia minima esplicita e stop conditions per prevenire complessità prematura.
 
+
+### 2026-10-08 (Standardizzazione Lingua Inglese, Launchers & Docs Hub)
+- **Standardizzazione 100% Lingua Inglese**: Rimosso ogni riferimento o file in lingua italiana (Configura_Dominio_Locale.bat e Avvia_PHD_Prof.*) a favore dei launcher universali in inglese (Configure_Local_Domain.bat, Launch_PHD_Prof.bat, Launch_PHD_Prof.vbs, Launch_PHD_Prof.command, Launch_PHD_Prof.sh).
+- **Traduzione Script di Manutenzione & Utility**: Tradotti integralmente in inglese docstring, argomenti CLI e output a terminale di scripts/prune_r2_duplicates.py, scripts/setup_local_domain.ps1, scripts/generate_certificates.py e notifiche CLI in pdf_to_notion.py.
+- **Modularizzazione Documentale in docs/**: Snellite 70+ righe di troubleshooting e dettagli infra da README.md, creando guide dedicate in docs/ (TROUBLESHOOTING.md, LOCAL_DOMAIN_SETUP.md, CLOUD_STORAGE.md) collegate tramite un hub centrale.
+- **Pulizia Cloudflare R2 & Staging**: Pruning di 28 asset duplicati/orfani legacy (UUID casuali) e mantenimento dei soli 14 asset deterministici SHA-256 (300 DPI) per il corso Big Data.
+- **Verifica Test Suite**: 99/99 test unitari superati con successo in locale.
+
