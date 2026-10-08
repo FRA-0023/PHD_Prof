@@ -229,6 +229,30 @@ def sanitize_mermaid_flowchart(content: str) -> str:
     """
     content = content.replace("\ufffd", " - ").replace("\u00a0", " ")
     lines = content.splitlines()
+
+    # ARCHITETTURA: Identificazione preventiva di tutti i subgraph e del rispettivo primo nodo membro.
+    # Se un arco punta direttamente all'ID di un subgraph (es. 'ROOT --> BDF' o 'BDF --> NEXT'),
+    # l'engine ELK fallisce la risoluzione del vertice sollevando 'Cannot read properties of null (reading re)'.
+    # Ridirigiamo deterministicamente tali archi al primo nodo effettivo del cluster.
+    subgraph_map: Dict[str, Optional[str]] = {}
+    current_sg: Optional[str] = None
+
+    for line in lines:
+        stripped = line.strip()
+        m_sub = re.match(r'^subgraph\s+([A-Za-z0-9_]+)', stripped, re.IGNORECASE)
+        if m_sub:
+            current_sg = m_sub.group(1)
+            if current_sg not in subgraph_map:
+                subgraph_map[current_sg] = None
+            continue
+        if stripped.lower() == 'end':
+            current_sg = None
+            continue
+        if current_sg and subgraph_map[current_sg] is None:
+            m_node = re.match(r'^([A-Za-z0-9_]+)\s*[\(\[\{]', stripped)
+            if m_node:
+                subgraph_map[current_sg] = m_node.group(1)
+
     sanitized_lines = []
 
     for line in lines:
@@ -240,7 +264,7 @@ def sanitize_mermaid_flowchart(content: str) -> str:
         indent = len(line) - len(line.lstrip(" "))
         indent_str = " " * indent
 
-        # 1. Rimuove punto e virgola finale ridondante a fine riga (spesso ereditato da script C-style)
+        # 1. Rimuove punto e virgola finale ridondante a fine riga
         line_clean = re.sub(r';\s*$', '', stripped)
 
         # 2. Normalizzazione Subgraph (risoluzione root cause 'reading re' in ELK)
@@ -274,36 +298,56 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
             continue
 
-        # 3. Normalizzazione nodi rettangolari [ ... ] e rombi { ... }
-        def clean_node_label(inner_text: str) -> str:
-            # Rimuove virgolette esterne se presenti
-            if (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
-                inner_text = inner_text[1:-1].strip()
-            # Elimina virgolette doppie interne e apici singoli delimitatori (preservando contrazioni es. Moore's)
-            inner_text = inner_text.replace('"', "")
-            inner_text = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", inner_text)
-            # Converte quadre annidate interne a parentesi tonde (es. Bear:[1,1] -> Bear:(1,1))
-            inner_text = re.sub(r'\[([^\]]*)\]', r'(\1)', inner_text)
-            # Converte eventuali frecce -> interne a trattino
-            inner_text = re.sub(r'\s*->\s*', ' - ', inner_text)
-            return inner_text
+        # 3. Normalizzazione sicura dei nodi rettangolari [ ... ] e rombi { ... }
+        # ARCHITETTURA: Un regex greedy su [ ... ] o { ... } ingloba frecce come '-->'
+        # e nodi successivi sulla stessa riga (es. 'A[L1] --> B[L2]'), distruggendo la topologia
+        # e generando un blocco non valido che manda in crash il layout ELK.
+        # Splittiamo deterministicamente sui token freccia per processare ciascun nodo isolatamente.
+        arrow_pattern = r'(\s*(?:-->|---|-.->|-.-|==>|==)(?:\|[^|\n]+\|)?\s*)'
+        parts = re.split(arrow_pattern, line_clean)
+        cleaned_parts = []
 
-        def quote_node(match):
-            node_id = match.group(1)
-            clean_inner = clean_node_label(match.group(2).strip())
-            return f'{node_id}["{clean_inner}"]'
+        for part in parts:
+            if re.match(r'^\s*(?:-->|---|-.->|-.-|==>|==)', part):
+                cleaned_parts.append(part)
+                continue
 
-        def quote_rhombus(match):
-            node_id = match.group(1)
-            clean_inner = clean_node_label(match.group(2).strip())
-            return f'{node_id}{{"{clean_inner}"}}'
+            semicolon = ";" if part.rstrip().endswith(";") else ""
+            clean_part = part.rstrip().rstrip(";").strip()
 
-        # Match di nodi con parentesi, due punti o quadre annidate
-        line_clean = re.sub(r'([A-Za-z0-9_]+)\[([^"\n\]]*[\[\]\(\)\:][^\n]*?)\](?=[;\s\-]|$)', quote_node, line_clean)
-        line_clean = re.sub(r'([A-Za-z0-9_]+)\{([^"\n\}]*[\[\]\(\)\:][^\n]*?)\}(?=[;\s\-]|$)', quote_rhombus, line_clean)
-        # Match per nodi già tra virgolette che contengono quadre annidate o apici interni
-        line_clean = re.sub(r'([A-Za-z0-9_]+)\["([^"\n]*)"\]', quote_node, line_clean)
-        line_clean = re.sub(r'([A-Za-z0-9_]+)\{"([^"\n]*)"\}', quote_rhombus, line_clean)
+            m_bracket = re.match(r'^([A-Za-z0-9_]+)\[(.*)\]$', clean_part)
+            m_rhombus = re.match(r'^([A-Za-z0-9_]+)\{(.*)\}$', clean_part)
+
+            if m_bracket:
+                nid = m_bracket.group(1)
+                content = m_bracket.group(2).strip()
+                if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
+                    content = content[1:-1].strip()
+                content = content.replace('"', "")
+                content = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", content)
+                content = re.sub(r'\[([^\]]*)\]', r'(\1)', content)
+                content = re.sub(r'\s*->\s*', ' - ', content)
+                part = f'{nid}["{content}"]{semicolon}'
+            elif m_rhombus:
+                nid = m_rhombus.group(1)
+                content = m_rhombus.group(2).strip()
+                if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
+                    content = content[1:-1].strip()
+                content = content.replace('"', "")
+                content = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", content)
+                content = re.sub(r'\[([^\]]*)\]', r'(\1)', content)
+                content = re.sub(r'\s*->\s*', ' - ', content)
+                part = f'{nid}{{"{content}"}}{semicolon}'
+
+            cleaned_parts.append(part)
+
+        line_clean = "".join(cleaned_parts)
+
+        # 4. Re-indirizzamento archi che puntano a subgraph ID invece che a nodi
+        for sg_id, first_node in subgraph_map.items():
+            if first_node:
+                line_clean = re.sub(rf'\b{sg_id}\s*(-->|---|-.->|==>)\s*', f'{first_node} \\1 ', line_clean)
+                line_clean = re.sub(rf'\s*(-->|---|-.->|==>)\s*{sg_id}\b', f' \\1 {first_node}', line_clean)
 
         sanitized_lines.append(f"{indent_str}{line_clean}")
 

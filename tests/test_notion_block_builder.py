@@ -369,6 +369,20 @@ def test_sanitize_mermaid_flowchart_escapes_nested_brackets_and_colons():
     assert 'L["Reduce: Bear:2, Car:3"]' in sanitized
 
 
+def test_sanitize_mermaid_flowchart_redirects_edges_to_subgraph_members():
+    raw_flowchart = (
+        "graph LR\n"
+        "  ROOT[System Root] --> CLUSTER;\n"
+        "  subgraph CLUSTER [Compute Engine]\n"
+        "    NODE1[Executor 1] --> NODE2[Executor 2];\n"
+        "  end\n"
+        "  CLUSTER --> SINK[Storage Sink];\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert 'ROOT["System Root"] --> NODE1' in sanitized
+    assert 'NODE1 --> SINK["Storage Sink"]' in sanitized
+
+
 def test_build_notion_blocks_sanitizes_flowchart_in_code_block():
     md = (
         "```mermaid\n"
