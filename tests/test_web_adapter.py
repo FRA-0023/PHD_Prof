@@ -226,3 +226,19 @@ def test_web_adapter_ssl_configuration(mock_dependencies):
     assert ssl_adapter.ssl_certfile == "certs/server.crt"
 
 
+@pytest.mark.anyio
+async def test_web_adapter_start_batch_with_generation_mode(mock_dependencies):
+    adapter = mock_dependencies["adapter"]
+    payload = {
+        "profile_key": "enterprise_architecture",
+        "file_names": ["lecture_01.pdf"],
+        "mode": "graphs_only",
+    }
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+        response = await client.post("/api/batch/start", json=payload)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "started"
+        assert data["mode"] == "graphs_only"
+
+

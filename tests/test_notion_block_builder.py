@@ -5,6 +5,7 @@ from src.adapters.outbound.notion_block_builder import (
     NOTION_MAX_BLOCK_CHARS,
     normalize_sentence_spacing,
     sanitize_mermaid_mindmap,
+    sanitize_mermaid_flowchart,
 )
 
 def test_parse_rich_text_plain():
@@ -342,9 +343,42 @@ def test_sanitize_mermaid_mindmap_escapes_parentheses_and_operators():
     assert lines[3] == '      ["Scale (KB to YB)"]'
     assert lines[4] == '      ["Moore\'s Law: N_T(t) proportional to 2^(t/tau)"]'
     assert lines[5] == '      ["Consistency (C)"]'
-    assert lines[6] == '      ["LLM Wall (m=1) -> Bandwidth Bound"]'
+    assert lines[6] == '      ["LLM Wall (m=1) — Bandwidth Bound"]'
     assert lines[7] == "      Clean Leaf Node"
     assert lines[8] == '      ["Already Quoted Node"]'
+
+
+def test_sanitize_mermaid_flowchart_escapes_nested_brackets_and_colons():
+    raw_flowchart = (
+        "graph TD\n"
+        "  A[Input Data (K1, V1)] --> B{Data Partitioning: Step 1};\n"
+        "  B --> C[Map Function (per chunk)];\n"
+        "  subgraph MapReduce Word Count\n"
+        "    J[Map: (Deer,1), (Bear,1)];\n"
+        "    K[Shuffle & Sort: Bear:[1,1], Car:[1,1,1]];\n"
+        "    L[Reduce: Bear:2, Car:3];\n"
+        "  end"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert 'A["Input Data (K1, V1)"]' in sanitized
+    assert 'B{"Data Partitioning: Step 1"}' in sanitized
+    assert 'C["Map Function (per chunk)"]' in sanitized
+    assert 'K["Shuffle & Sort: Bear:[1,1], Car:[1,1,1]"]' in sanitized
+    assert 'L["Reduce: Bear:2, Car:3"]' in sanitized
+
+
+def test_build_notion_blocks_sanitizes_flowchart_in_code_block():
+    md = (
+        "```mermaid\n"
+        "graph TD\n"
+        "  K[Shuffle & Sort: Bear:[1,1], Car:[1,1,1]];\n"
+        "```"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "code"
+    content = blocks[0]["code"]["rich_text"][0]["text"]["content"]
+    assert 'K["Shuffle & Sort: Bear:[1,1], Car:[1,1,1]"]' in content
 
 
 def test_build_notion_blocks_large_code_block_preserves_single_block_integrity():

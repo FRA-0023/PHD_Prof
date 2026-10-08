@@ -20,7 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.core.domain.models import Document, DocumentType, NotionTarget, CourseProfile, SyncStatus
+from src.core.domain.models import Document, DocumentType, NotionTarget, CourseProfile, SyncStatus, GenerationMode
 from src.core.domain.prompt_templates import get_prompt_template
 from src.core.usecases.process_document import ProcessDocumentUseCase, compute_file_hash
 from src.ports.outbound.notion_client_port import INotionClient
@@ -65,6 +65,7 @@ class CourseProfileSchema(BaseModel):
 class BatchStartRequest(BaseModel):
     profile_key: str
     file_names: Optional[List[str]] = None
+    mode: str = "both"
 
 class WebAdapter:
     """
@@ -256,12 +257,17 @@ class WebAdapter:
                 if not profile:
                     raise HTTPException(status_code=404, detail=f"Profilo '{req.profile_key}' non trovato")
 
+                try:
+                    mode_enum = GenerationMode(req.mode.lower())
+                except ValueError:
+                    mode_enum = GenerationMode.BOTH
+
                 self.is_batch_running = True
                 self.stop_requested = False
                 self.active_profile_key = profile.key
 
-            background_tasks.add_task(self._run_batch_worker, profile, req.file_names)
-            return {"status": "started", "profile": profile.subject}
+            background_tasks.add_task(self._run_batch_worker, profile, req.file_names, mode_enum)
+            return {"status": "started", "profile": profile.subject, "mode": mode_enum.value}
 
         @app.post("/api/batch/stop")
         async def stop_batch():
@@ -394,7 +400,12 @@ class WebAdapter:
                 return p
         return None
 
-    def _run_batch_worker(self, profile: CourseProfile, selected_file_names: Optional[List[str]] = None) -> None:
+    def _run_batch_worker(
+        self,
+        profile: CourseProfile,
+        selected_file_names: Optional[List[str]] = None,
+        generation_mode: GenerationMode = GenerationMode.BOTH,
+    ) -> None:
         """
         Background worker thread executing the batch pipeline.
         Emits real-time telemetric events and respects graceful stop requests.
@@ -416,8 +427,9 @@ class WebAdapter:
                 "profile": profile.subject,
                 "total": total,
                 "success": 0,
+                "mode": generation_mode.value,
             })
-            self.streamer.log(f"Inizio elaborazione batch: {profile.subject} ({total} file)")
+            self.streamer.log(f"Inizio elaborazione batch: {profile.subject} ({total} file) [Modalità: {generation_mode.value.upper()}]")
 
             prompt = get_prompt_template(profile.doc_type.value, profile.subject, profile.professor_type)
 
@@ -440,7 +452,7 @@ class WebAdapter:
                     doc = Document(path=doc_path, file_hash=file_hash, doc_type=profile.doc_type)
 
                     with self.streamer.capture_stdout(source="etl"):
-                        result = self.usecase.execute(doc, profile.target, prompt)
+                        result = self.usecase.execute(doc, profile.target, prompt, generation_mode=generation_mode)
 
                     if result.success:
                         success += 1

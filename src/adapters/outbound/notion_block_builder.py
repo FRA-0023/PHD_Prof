@@ -172,10 +172,10 @@ def sanitize_mermaid_mindmap(content: str) -> str:
         indent = len(line) - len(line.lstrip(" "))
         indent_str = " " * indent
 
-        # Nodo radice: root((...))
+        # Nodo radice: root((...)) senza apici annidati
         if stripped.startswith("root((") and stripped.endswith("))"):
-            root_text = stripped[6:-2].replace('"', "'")
-            sanitized_lines.append(f'{indent_str}root(("{root_text}"))')
+            raw_inner = stripped[6:-2].strip().strip("\"'").replace('"', "").replace("'", "")
+            sanitized_lines.append(f'{indent_str}root(("{raw_inner}"))')
             continue
 
         # Già formattato con delimitatori espliciti sicuri racchiusi da apici
@@ -185,7 +185,9 @@ def sanitize_mermaid_mindmap(content: str) -> str:
             (stripped.startswith('(("') and stripped.endswith('"))'))
         )
         if is_bracketed:
-            sanitized_lines.append(line)
+            # Sostituisce eventuali frecce -> illegali nel corpo dei nodi mindmap
+            clean_line = re.sub(r'\s*->\s*', ' — ', line)
+            sanitized_lines.append(clean_line)
             continue
 
         # Forme composte con testo prefisso: es. Moore's Law((N_T(t) ...))
@@ -194,15 +196,53 @@ def sanitize_mermaid_mindmap(content: str) -> str:
             prefix, inner = m_shape.group(1).strip(), m_shape.group(2).strip()
             clean_text = f"{prefix}: {inner}" if prefix else inner
             clean_text = clean_text.replace('"', "'")
+            clean_text = re.sub(r'\s*->\s*', ' — ', clean_text)
             sanitized_lines.append(f'{indent_str}["{clean_text}"]')
             continue
 
         # Se il nodo contiene parentesi, operatori o punteggiatura, racchiudi in ["..."]
         if any(c in stripped for c in "()[]:\"->,;"):
-            clean_text = stripped.replace('"', "'")
+            clean_text = stripped.strip("\"'").replace('"', "'")
+            clean_text = re.sub(r'\s*->\s*', ' — ', clean_text)
             sanitized_lines.append(f'{indent_str}["{clean_text}"]')
         else:
             sanitized_lines.append(line)
+
+    return "\n".join(sanitized_lines)
+
+
+def sanitize_mermaid_flowchart(content: str) -> str:
+    """
+    Sanitizza diagrammi di flusso Mermaid (graph TD / flowchart TD) per Notion e renderer web.
+    # ARCHITETTURA: Nei flowchart Mermaid, se il testo all'interno di un nodo rettangolare [ ... ]
+    # contiene parentesi quadre annidate (es. [1,1]), parentesi tonde o due punti senza essere racchiuso da doppi apici ["..."],
+    # il parser di Mermaid chiude prematuramente il nodo o si confonde, generando un nodo orfano o nullo nell'AST.
+    # Il layout engine (ELK/dagre) solleva quindi 'TypeError: Cannot read properties of null (reading 're')'.
+    """
+    lines = content.splitlines()
+    sanitized_lines = []
+
+    for line in lines:
+        def quote_node(match):
+            node_id = match.group(1)
+            inner = match.group(2).strip()
+            if inner.startswith('"') and inner.endswith('"'):
+                return f'{node_id}[{inner}]'
+            clean_inner = inner.replace('"', "'")
+            return f'{node_id}["{clean_inner}"]'
+
+        def quote_rhombus(match):
+            node_id = match.group(1)
+            inner = match.group(2).strip()
+            if inner.startswith('"') and inner.endswith('"'):
+                return f'{node_id}{{{inner}}}'
+            clean_inner = inner.replace('"', "'")
+            return f'{node_id}{{"{clean_inner}"}}'
+
+        # Sostituisce nodeId[...] dove all'interno vi sono parentesi, due punti o quadre annidate non quotate
+        line_clean = re.sub(r'([A-Za-z0-9_]+)\[([^"\n\]]*[\[\]\(\)\:][^\n]*?)\](?=[;\s\-]|$)', quote_node, line)
+        line_clean = re.sub(r'([A-Za-z0-9_]+)\{([^"\n\}]*[\[\]\(\)\:][^\n]*?)\}(?=[;\s\-]|$)', quote_rhombus, line_clean)
+        sanitized_lines.append(line_clean)
 
     return "\n".join(sanitized_lines)
 
@@ -315,8 +355,11 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
             if in_code_block:
                 # Close code block
                 full_code = "\n".join(code_block_buf)
-                if code_block_lang == "mermaid" and "mindmap" in full_code:
-                    full_code = sanitize_mermaid_mindmap(full_code)
+                if code_block_lang == "mermaid":
+                    if "mindmap" in full_code:
+                        full_code = sanitize_mermaid_mindmap(full_code)
+                    elif "graph" in full_code or "flowchart" in full_code:
+                        full_code = sanitize_mermaid_flowchart(full_code)
 
                 # ARCHITETTURA: Notion API supporta fino a 100 elementi rich_text (ciascuno max 2000 chars)
                 # all'interno dello STESSO blocco code (capienza complessiva fino a 200.000 caratteri).

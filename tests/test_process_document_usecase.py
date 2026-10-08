@@ -6,6 +6,7 @@ from src.core.domain.models import (
     SyncStatus,
     SyncEntry,
     NotionTarget,
+    GenerationMode,
 )
 from src.core.usecases.process_document import ProcessDocumentUseCase
 from src.ports.outbound.document_reader_port import IDocumentReader
@@ -252,5 +253,128 @@ def test_process_figures_skip_extraction_when_local_cached(tmp_path: Path, monke
     # Ma upload eseguito perché su R2 non esisteva ancora
     image_host.upload_image.assert_called_once()
     assert "https://cdn.example.com/uploaded.png" in processed
+
+
+def test_process_document_notes_only_mode():
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = True
+    full_markdown = (
+        "# Big Data Notes\n\n"
+        "Content paragraph about distributed systems.\n\n"
+        "---\n\n"
+        "## 🧠 Conceptual Architecture & Relational Graphs\n\n"
+        "```mermaid\nmindmap\n  root((Architecture))\n```\n"
+    )
+    staging_storage.read.return_value = full_markdown
+
+    schema_exporter = MagicMock()
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "notes_page_id"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(spec=ILlmClient),
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+        schema_exporter=schema_exporter,
+    )
+
+    doc = Document(path=Path("big_data.pdf"), file_hash="hash_bd", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Big Data", database_title="Notes")
+
+    res = usecase.execute(doc, target, "prompt", generation_mode=GenerationMode.NOTES_ONLY)
+
+    assert res.success is True
+    # In NOTES_ONLY, schema_exporter should NOT be called
+    schema_exporter.extract_artifacts.assert_not_called()
+    # In NOTES_ONLY, appended blocks should only contain notes, not the mermaid mindmap
+    appended_blocks = notion_client.append_blocks.call_args[0][1]
+    has_mermaid = any(b.get("type") == "code" and b.get("code", {}).get("language") == "mermaid" for b in appended_blocks)
+    assert has_mermaid is False
+
+
+def test_process_document_graphs_only_mode(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = True
+    full_markdown = (
+        "# Big Data Notes\n\n"
+        "Content paragraph.\n\n"
+        "---\n\n"
+        "## 🧠 Conceptual Architecture & Relational Graphs\n\n"
+        "```mermaid\nmindmap\n  root((Architecture))\n```\n"
+    )
+    staging_storage.read.return_value = full_markdown
+
+    schema_exporter = MagicMock()
+    mock_artifact = MagicMock()
+    mock_artifact.opml_content = "<opml></opml>"
+    schema_exporter.extract_artifacts.return_value = mock_artifact
+
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "graphs_page_id"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(spec=ILlmClient),
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+        schema_exporter=schema_exporter,
+    )
+
+    doc = Document(path=Path("big_data.pdf"), file_hash="hash_bd2", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Big Data", database_title="Notes")
+
+    res = usecase.execute(doc, target, "prompt", generation_mode=GenerationMode.GRAPHS_ONLY)
+
+    assert res.success is True
+    # In GRAPHS_ONLY, schema_exporter SHOULD be called
+    schema_exporter.extract_artifacts.assert_called_once()
+    # In GRAPHS_ONLY, appended blocks should contain the mermaid code block
+    appended_blocks = notion_client.append_blocks.call_args[0][1]
+    has_mermaid = any(b.get("type") == "code" and b.get("code", {}).get("language") == "mermaid" for b in appended_blocks)
+    assert has_mermaid is True
+
+
+def test_process_document_force_resync():
+    state_repo = MagicMock(spec=IStateRepository)
+    # File is already marked as SYNCED
+    state_repo.get_entry.return_value = SyncEntry(file_hash="hash_force", status=SyncStatus.SYNCED, page_id="old_page")
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = True
+    staging_storage.read.return_value = "# Updated Notes\nBody text"
+
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "new_page_id"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(spec=ILlmClient),
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+    )
+
+    doc = Document(path=Path("lecture.pdf"), file_hash="hash_force", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Math", database_title="Notes")
+
+    # With force=True, it should NOT skip, but archive old page and create new one
+    res = usecase.execute(doc, target, "prompt", force=True)
+
+    assert res.success is True
+    assert res.skipped is False
+    assert res.page_id == "new_page_id"
+    notion_client.archive_page.assert_called_once_with("old_page")
+    notion_client.create_page.assert_called_once_with("db1", "lecture")
+
 
 

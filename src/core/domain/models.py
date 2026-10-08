@@ -18,6 +18,17 @@ class SyncStatus(str, Enum):
     SYNCED = "SYNCED"
     FAILED = "FAILED"
 
+class GenerationMode(str, Enum):
+    """
+    Specifies which artifacts to generate and upload:
+    - BOTH: Standard full pipeline (chapter notes + conceptual mindmaps & study artifacts).
+    - NOTES_ONLY: Only academic textbook chapter notes without graphs/study schemas.
+    - GRAPHS_ONLY: Only conceptual graphs and study artifacts (OPML / Mermaid / active recall).
+    """
+    BOTH = "both"
+    NOTES_ONLY = "notes_only"
+    GRAPHS_ONLY = "graphs_only"
+
 @dataclass
 class Document:
     path: Path

@@ -3,7 +3,7 @@ import time
 import pathlib
 from typing import List, Dict, Any, Tuple, Optional
 
-from src.core.domain.models import Document, DocumentType, NotionTarget, CourseProfile
+from src.core.domain.models import Document, DocumentType, NotionTarget, CourseProfile, GenerationMode
 from src.core.domain.prompt_templates import get_prompt_template
 from src.core.usecases.process_document import ProcessDocumentUseCase, compute_file_hash
 from src.ports.outbound.notion_client_port import INotionClient
@@ -43,12 +43,14 @@ class CLIAdapter:
         root_page_id: str,
         course_profile_repo: Optional[ICourseProfileRepository] = None,
         i18n: Optional[I18n] = None,
+        default_generation_mode: GenerationMode = GenerationMode.BOTH,
     ):
         self.notion_client = notion_client
         self.llm_client = llm_client
         self.usecase = usecase
         self.root_page_id = root_page_id
         self.course_profile_repo = course_profile_repo
+        self.default_generation_mode = default_generation_mode
         # Presentation layer localization: keeps UI text cleanly decoupled from core business domain
         self.i18n = i18n if i18n is not None else I18n("EN")
 
@@ -308,12 +310,31 @@ class CLIAdapter:
         # Manual / New Course setup
         return self._manual_setup()
 
+    def _prompt_generation_mode(self) -> GenerationMode:
+        default_str = "1"
+        if self.default_generation_mode == GenerationMode.NOTES_ONLY:
+            default_str = "2"
+        elif self.default_generation_mode == GenerationMode.GRAPHS_ONLY:
+            default_str = "3"
+
+        print("\n  Modalità di generazione artefatti:")
+        print(f"    [1] Entrambi (Note libro di testo + Grafi concettuali) {'[Default]' if default_str == '1' else ''}")
+        print(f"    [2] Solo Note (Sintesi e modelli senza schemi grafici) {'[Default]' if default_str == '2' else ''}")
+        print(f"    [3] Solo Grafo (Mappa mentale, flowchart, active recall, OPML) {'[Default]' if default_str == '3' else ''}")
+        choice = input(f"  Seleziona modalità [{default_str}]: ").strip() or default_str
+        if choice == "2":
+            return GenerationMode.NOTES_ONLY
+        elif choice == "3":
+            return GenerationMode.GRAPHS_ONLY
+        return GenerationMode.BOTH
+
     def run_batch(
         self,
         folder: pathlib.Path,
         doc_type: DocumentType,
         target: NotionTarget,
         prompt: str,
+        generation_mode: GenerationMode = GenerationMode.BOTH,
     ) -> Tuple[int, int]:
         doc_files = scan_documents(folder)
         total = len(doc_files)
@@ -321,6 +342,7 @@ class CLIAdapter:
 
         print(f"\n{'=' * 58}")
         print(f"  {self.i18n.t('batch_header', total=total, course=target.course_name, db=target.database_title)}")
+        print(f"  Modalità: {generation_mode.value.upper()}")
         print(f"{'=' * 58}\n")
 
         for index, doc_path in enumerate(doc_files, start=1):
@@ -330,7 +352,7 @@ class CLIAdapter:
                 file_hash = compute_file_hash(doc_path)
                 doc = Document(path=doc_path, file_hash=file_hash, doc_type=doc_type)
 
-                result = self.usecase.execute(doc, target, prompt)
+                result = self.usecase.execute(doc, target, prompt, generation_mode=generation_mode)
                 if result.success:
                     success += 1
 
@@ -373,12 +395,14 @@ class CLIAdapter:
                 print(f"\n  {self.i18n.t('setup_cancelled', err=exc)}")
                 break
 
+            gen_mode = self._prompt_generation_mode()
+
             doc_count = len(scan_documents(folder))
             remaining = self.llm_client.get_remaining_calls()
             if doc_count > remaining:
                 print(f"\n  {self.i18n.t('quota_warning', count=doc_count, remaining=remaining)}")
 
-            s, t = self.run_batch(folder, doc_type, target, prompt)
+            s, t = self.run_batch(folder, doc_type, target, prompt, generation_mode=gen_mode)
             session_success += s
             session_total += t
 

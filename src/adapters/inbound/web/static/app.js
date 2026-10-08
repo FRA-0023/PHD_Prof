@@ -33,6 +33,7 @@
     btnRunBatch: document.getElementById("btn-run-batch"),
     btnStopBatch: document.getElementById("btn-stop-batch"),
     batchSelectedCount: document.getElementById("batch-selected-count"),
+    selectGenerationMode: document.getElementById("select-generation-mode"),
     logPane: document.getElementById("log-pane"),
     autoscrollToggle: document.getElementById("autoscroll-toggle"),
     btnCopyLog: document.getElementById("btn-copy-log"),
@@ -286,12 +287,14 @@
     }
 
     try {
+      const mode = el.selectGenerationMode ? el.selectGenerationMode.value : "both";
       const res = await fetch("/api/batch/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           profile_key: state.activeProfile.key,
           file_names: filesToRun,
+          mode: mode,
         }),
       });
 

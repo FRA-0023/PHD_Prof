@@ -9,7 +9,7 @@ import sys
 import pathlib
 from dotenv import load_dotenv
 
-from src.core.domain.models import DocumentType
+from src.core.domain.models import DocumentType, GenerationMode
 from src.core.usecases.process_document import ProcessDocumentUseCase
 from src.adapters.outbound.json_state_repository import JsonStateRepository
 from src.adapters.outbound.filesystem_staging import FileSystemStaging
@@ -43,6 +43,12 @@ def main() -> None:
     # Interaction mode & language resolution: CLI args take precedence over defaults
     parser = argparse.ArgumentParser(description="PHD Prof: Academic Document ETL Pipeline")
     parser.add_argument("--mode", choices=["web", "cli"], default="web", help="Interface mode (web vs cli)")
+    parser.add_argument(
+        "--generation-mode", "--gen-mode",
+        choices=["both", "notes_only", "graphs_only"],
+        default="both",
+        help="Artifact generation mode: both (notes + graphs), notes_only, or graphs_only",
+    )
     parser.add_argument("--port", type=int, default=None, help="Web server port (default: 80, or from WEB_PORT)")
     parser.add_argument("--host", type=str, default=None, help="Web server host (default: 127.0.0.1, or from WEB_HOST)")
     parser.add_argument("--domain", type=str, default=None, help="Local domain name (default: phdprof.test, or from WEB_DOMAIN)")
@@ -231,6 +237,11 @@ def main() -> None:
         print(f"\n  [Web] Cockpit started at {target_url} (listening on {web_host}:{web_port}, SSL={use_ssl})\n")
         web.start()
     else:
+        try:
+            gen_mode = GenerationMode(args.generation_mode.lower())
+        except ValueError:
+            gen_mode = GenerationMode.BOTH
+
         cli = CLIAdapter(
             notion_client=notion_client,
             llm_client=llm_client,
@@ -238,6 +249,7 @@ def main() -> None:
             root_page_id=notion_root_page_id,
             course_profile_repo=course_profile_repo,
             i18n=i18n,
+            default_generation_mode=gen_mode,
         )
         cli.start()
 

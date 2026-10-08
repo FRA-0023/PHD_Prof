@@ -1,6 +1,6 @@
 import hashlib
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 from src.core.domain.models import (
     Document,
@@ -9,6 +9,7 @@ from src.core.domain.models import (
     SyncEntry,
     ProcessingResult,
     NotionTarget,
+    GenerationMode,
 )
 from src.ports.outbound.document_reader_port import IDocumentReader
 from src.ports.outbound.llm_client_port import ILlmClient
@@ -157,12 +158,36 @@ class ProcessDocumentUseCase:
 
         return 0
 
-    def execute(self, document: Document, target: NotionTarget, prompt: str) -> ProcessingResult:
+    @staticmethod
+    def _split_notes_and_artifacts(markdown_text: str) -> Tuple[str, str]:
+        """
+        # ARCHITETTURA: Scomposizione deterministica tra corpo del testo accademico
+        # e schemi concettuali relazionali (Mermaid mindmap/flowchart, active recall, boundary matrix).
+        """
+        import re
+        pattern = r"(?:\n|^)(?:---\s*\n)?(##\s*[^\n]*(?:Conceptual Architecture|Relational Graphs|Active Recall|Model Boundary)[\s\S]*)"
+        m = re.search(pattern, markdown_text, re.IGNORECASE)
+        if m:
+            idx = m.start(1)
+            notes = markdown_text[:idx].rstrip()
+            notes = re.sub(r"\n---\s*$", "", notes).rstrip()
+            artifacts = markdown_text[idx:].lstrip()
+            return notes, artifacts
+        return markdown_text.strip(), ""
+
+    def execute(
+        self,
+        document: Document,
+        target: NotionTarget,
+        prompt: str,
+        generation_mode: GenerationMode = GenerationMode.BOTH,
+        force: bool = False,
+    ) -> ProcessingResult:
         file_hash = document.file_hash
         entry = self.state_repo.get_entry(file_hash)
 
         # 1. Idempotency Check
-        if entry and entry.status == SyncStatus.SYNCED:
+        if entry and entry.status == SyncStatus.SYNCED and not force:
             print("    [Local] File già sincronizzato (Hash invariato) — skip.\n")
             return ProcessingResult(document=document, success=True, page_id=entry.page_id, skipped=True)
 
@@ -173,10 +198,26 @@ class ProcessDocumentUseCase:
                 self.notion_client.archive_page(entry.page_id)
             self.state_repo.remove_entry(file_hash)
 
+        if force and entry and entry.page_id:
+            try:
+                print(f"    [Force] Archiviazione pagina precedente ({entry.page_id})...")
+                self.notion_client.archive_page(entry.page_id)
+            except Exception:
+                pass
+            self.state_repo.remove_entry(file_hash)
+
         # 3. Extraction & Inference (Staging Cache)
         if self.staging_storage.exists(file_hash):
             print("    [Local] Markdown già presente in staging. Salto inference LLM.")
             markdown_text = self.staging_storage.read(file_hash) or ""
+            # Se siamo in GRAPHS_ONLY o BOTH e lo staging non contiene ancora gli artefatti concettuali, li estraiamo on-demand
+            notes, artifacts = self._split_notes_and_artifacts(markdown_text)
+            if generation_mode in (GenerationMode.GRAPHS_ONLY, GenerationMode.BOTH) and not artifacts:
+                print("    [LLM] Staging privo di artefatti concettuali. Estrazione schemi da staging markdown...")
+                artifacts_prompt = get_artifacts_extraction_prompt(target.course_name, markdown_text)
+                artifacts_text = self.llm_client.generate_notes(artifacts_prompt, markdown_text)
+                markdown_text = f"{markdown_text.rstrip()}\n\n{artifacts_text.lstrip()}"
+                self.staging_storage.save(file_hash, markdown_text)
         else:
             reader = self.readers.get(document.doc_type) or self.readers[DocumentType.SLIDES]
             payload = reader.read(document)
@@ -193,14 +234,14 @@ class ProcessDocumentUseCase:
                     print("    [LLM Stage 1/2] Sintesi capitolo ad alta risoluzione...")
                     markdown_text = self.llm_client.generate_notes(prompt, payload)
 
-                    print("    [LLM Stage 2/2] Estrazione schemi concettuali e drills da staging markdown...")
-                    artifacts_prompt = get_artifacts_extraction_prompt(target.course_name, markdown_text)
-                    artifacts_text = self.llm_client.generate_notes(artifacts_prompt, markdown_text)
-
-                    # Unione deterministica dei blocchi
-                    markdown_text = f"{markdown_text.rstrip()}\n\n{artifacts_text.lstrip()}"
+                    # In NOTES_ONLY evitiamo Stage 2 per risparmiare token e latenza
+                    if generation_mode != GenerationMode.NOTES_ONLY:
+                        print("    [LLM Stage 2/2] Estrazione schemi concettuali e drills da staging markdown...")
+                        artifacts_prompt = get_artifacts_extraction_prompt(target.course_name, markdown_text)
+                        artifacts_text = self.llm_client.generate_notes(artifacts_prompt, markdown_text)
+                        markdown_text = f"{markdown_text.rstrip()}\n\n{artifacts_text.lstrip()}"
                 else:
-                    print(f"    [LLM Single-Call] Volume moderato ({density_chars} caratteri < soglia {self.split_threshold_chars}). Generazione note unificate (1 sola chiamata)...")
+                    print(f"    [LLM Single-Call] Volume moderato ({density_chars} caratteri < soglia {self.split_threshold_chars}). Generazione note...")
                     markdown_text = self.llm_client.generate_notes(prompt, payload)
 
                 print(f"    [LLM] Ricevuti {len(markdown_text)} caratteri. Salvataggio in staging...")
@@ -208,11 +249,14 @@ class ProcessDocumentUseCase:
             finally:
                 reader.cleanup(payload)
 
+        notes, artifacts = self._split_notes_and_artifacts(markdown_text)
+
         # 3.1 Esportazione Schemi Concettuali & Mappe Mentali (EdrawMind / OPML)
-        # PERFORMANCE: Esecuzione deterministica a costo zero token su CPU locale
-        if self.schema_exporter:
+        # In NOTES_ONLY l'esportazione OPML è disattivata (richieste solo note)
+        if self.schema_exporter and generation_mode != GenerationMode.NOTES_ONLY:
             try:
-                artifact = self.schema_exporter.extract_artifacts(markdown_text, file_hash, document.stem)
+                schema_source = markdown_text if artifacts else markdown_text
+                artifact = self.schema_exporter.extract_artifacts(schema_source, file_hash, document.stem)
                 schema_dir = Path("staging/schemas")
                 schema_dir.mkdir(parents=True, exist_ok=True)
                 opml_file = schema_dir / f"{file_hash}.opml"
@@ -221,23 +265,37 @@ class ProcessDocumentUseCase:
             except Exception as e:
                 print(f"    [EdrawMind] Warning: esportazione OPML non riuscita: {e}")
 
+        # Risoluzione payload markdown in base alla modalità scelta
+        if generation_mode == GenerationMode.NOTES_ONLY:
+            target_markdown = notes
+        elif generation_mode == GenerationMode.GRAPHS_ONLY:
+            if artifacts:
+                if not artifacts.startswith("#"):
+                    target_markdown = f"# {document.stem}\n\n{artifacts}"
+                else:
+                    target_markdown = artifacts
+            else:
+                target_markdown = markdown_text
+        else:
+            target_markdown = markdown_text
+
         # Nuova Fase Intermedia: Sostituzione dinamica figure (con path gerarchico)
-        markdown_text = self._process_figures(markdown_text, document, target)
+        target_markdown = self._process_figures(target_markdown, document, target)
 
         # 4. Notion Loading
-        print("    [Notion] Creazione pagina...")
+        print(f"    [Notion] Creazione pagina ({generation_mode.value})...")
         page_id = self.notion_client.create_page(target.database_id, document.stem)
 
         # Mark as SYNCING
         self.state_repo.set_entry(SyncEntry(file_hash=file_hash, status=SyncStatus.SYNCING, page_id=page_id))
 
         # Build and append blocks
-        blocks = build_notion_blocks(markdown_text)
+        blocks = build_notion_blocks(target_markdown)
         self.notion_client.append_blocks(page_id, blocks)
 
         # Mark as SYNCED
         self.state_repo.set_entry(SyncEntry(file_hash=file_hash, status=SyncStatus.SYNCED, page_id=page_id))
-        print(f"    [Notion] OK — {len(blocks)} blocchi archiviati.\n")
+        print(f"    [Notion] OK — {len(blocks)} blocchi archiviati ({generation_mode.value}).\n")
 
         return ProcessingResult(document=document, success=True, page_id=page_id, skipped=False)
 
