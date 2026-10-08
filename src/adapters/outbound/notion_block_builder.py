@@ -155,7 +155,11 @@ def sanitize_mermaid_mindmap(content: str) -> str:
     # apici e operatori (->, :) come token di forma o transizione. Se presenti nel testo dei nodi
     # senza racchiuderli in ["..."], il tokenizer di Mermaid solleva eccezioni sintattiche
     # e Notion disabilita il rendering grafico visualizzando un blocco d'errore o testo grezzo.
+    # PERFORMANCE: Normalizziamo caratteri speciali e sequenze non-ASCII (es. \\ufffd o em-dash)
+    # a trattini ASCII canonici (' - ') per evitare mismatch di codifica UTF-8/CP1252 tra OS.
     """
+    # TRADE-OFF: Sostituzione preventiva di caratteri di rimpiazzo e spazi non separabili
+    content = content.replace("\ufffd", " - ").replace("\u00a0", " ")
     lines = content.splitlines()
     sanitized_lines = []
 
@@ -185,8 +189,8 @@ def sanitize_mermaid_mindmap(content: str) -> str:
             (stripped.startswith('(("') and stripped.endswith('"))'))
         )
         if is_bracketed:
-            # Sostituisce eventuali frecce -> illegali nel corpo dei nodi mindmap
-            clean_line = re.sub(r'\s*->\s*', ' — ', line)
+            # Sostituisce eventuali frecce -> o em-dash con trattino standard
+            clean_line = re.sub(r'\s*(?:->|—)\s*', ' - ', line)
             sanitized_lines.append(clean_line)
             continue
 
@@ -196,14 +200,14 @@ def sanitize_mermaid_mindmap(content: str) -> str:
             prefix, inner = m_shape.group(1).strip(), m_shape.group(2).strip()
             clean_text = f"{prefix}: {inner}" if prefix else inner
             clean_text = clean_text.replace('"', "'")
-            clean_text = re.sub(r'\s*->\s*', ' — ', clean_text)
+            clean_text = re.sub(r'\s*(?:->|—)\s*', ' - ', clean_text)
             sanitized_lines.append(f'{indent_str}["{clean_text}"]')
             continue
 
         # Se il nodo contiene parentesi, operatori o punteggiatura, racchiudi in ["..."]
         if any(c in stripped for c in "()[]:\"->,;"):
             clean_text = stripped.strip("\"'").replace('"', "'")
-            clean_text = re.sub(r'\s*->\s*', ' — ', clean_text)
+            clean_text = re.sub(r'\s*(?:->|—)\s*', ' - ', clean_text)
             sanitized_lines.append(f'{indent_str}["{clean_text}"]')
         else:
             sanitized_lines.append(line)
@@ -214,35 +218,94 @@ def sanitize_mermaid_mindmap(content: str) -> str:
 def sanitize_mermaid_flowchart(content: str) -> str:
     """
     Sanitizza diagrammi di flusso Mermaid (graph TD / flowchart TD) per Notion e renderer web.
-    # ARCHITETTURA: Nei flowchart Mermaid, se il testo all'interno di un nodo rettangolare [ ... ]
-    # contiene parentesi quadre annidate (es. [1,1]), parentesi tonde o due punti senza essere racchiuso da doppi apici ["..."],
-    # il parser di Mermaid chiude prematuramente il nodo o si confonde, generando un nodo orfano o nullo nell'AST.
-    # Il layout engine (ELK/dagre) solleva quindi 'TypeError: Cannot read properties of null (reading 're')'.
+    # ARCHITETTURA: Nei flowchart Mermaid elaborati con motore ELK (Eclipse Layout Kernel,
+    # usato internamente da Notion e dai moderni renderer per layout gerarchici), si verificano due
+    # crash critici 'TypeError: Cannot read properties of null (reading \'re\')':
+    # 1. Dichiarazione di subgraph senza ID alfanumerico esplicito (es. 'subgraph MapReduce Word Count'):
+    #    il parser ELK perde la risoluzione del genitore nell'AST e fallisce il lookup shape;
+    # 2. Parentesi quadre annidate o apici spaiati dentro label quotate (es. 'Bear:[1,1]' o '\"\'Deer\'\"'):
+    #    la regex del tokenizer Mermaid si interrompe prematuramente lasciando nodi orfani.
+    # Normalizziamo deterministicamente subgraphs e nodi a sintassi pienamente conforme.
     """
+    content = content.replace("\ufffd", " - ").replace("\u00a0", " ")
     lines = content.splitlines()
     sanitized_lines = []
 
     for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            sanitized_lines.append(line)
+            continue
+
+        indent = len(line) - len(line.lstrip(" "))
+        indent_str = " " * indent
+
+        # 1. Rimuove punto e virgola finale ridondante a fine riga (spesso ereditato da script C-style)
+        line_clean = re.sub(r';\s*$', '', stripped)
+
+        # 2. Normalizzazione Subgraph (risoluzione root cause 'reading re' in ELK)
+        m_sub = re.match(r'^subgraph\s+(.+)$', line_clean, re.IGNORECASE)
+        if m_sub:
+            sub_body = m_sub.group(1).strip()
+            # Caso a: già valido con ID e titolo quotato (es. 'subgraph MR ["Word Count"]')
+            if re.match(r'^[A-Za-z0-9_]+\s*\["[^"]+"\]$', sub_body):
+                sanitized_lines.append(f"{indent_str}subgraph {sub_body}")
+                continue
+            # Caso b: ID con titolo in quadre ma non quotato (es. 'subgraph MR [Word Count]')
+            m_id_bracket = re.match(r'^([A-Za-z0-9_]+)\s*\[([^"\]]+)\]$', sub_body)
+            if m_id_bracket:
+                sid, stitle = m_id_bracket.group(1), m_id_bracket.group(2).strip()
+                sanitized_lines.append(f'{indent_str}subgraph {sid} ["{stitle}"]')
+                continue
+            # Caso c: solo titolo tra virgolette senza ID (es. 'subgraph "Word Count"')
+            m_quoted_only = re.match(r'^"([^"]+)"$', sub_body)
+            if m_quoted_only:
+                stitle = m_quoted_only.group(1).strip()
+                slug = "sg_" + re.sub(r'[^A-Za-z0-9_]+', '_', stitle).strip('_')
+                sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
+                continue
+            # Caso d: singolo identificatore alfanumerico (es. 'subgraph MR')
+            if re.match(r'^[A-Za-z0-9_]+$', sub_body):
+                sanitized_lines.append(f"{indent_str}subgraph {sub_body}")
+                continue
+            # Caso e: titolo con parole multiple non quotato (es. 'subgraph MapReduce Word Count Example')
+            stitle = sub_body.strip("\"'")
+            slug = "sg_" + re.sub(r'[^A-Za-z0-9_]+', '_', stitle).strip('_')
+            sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
+            continue
+
+        # 3. Normalizzazione nodi rettangolari [ ... ] e rombi { ... }
+        def clean_node_label(inner_text: str) -> str:
+            # Rimuove virgolette esterne se presenti
+            if (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
+                inner_text = inner_text[1:-1].strip()
+            # Elimina virgolette doppie interne e apici singoli delimitatori (preservando contrazioni es. Moore's)
+            inner_text = inner_text.replace('"', "")
+            inner_text = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", inner_text)
+            # Converte quadre annidate interne a parentesi tonde (es. Bear:[1,1] -> Bear:(1,1))
+            inner_text = re.sub(r'\[([^\]]*)\]', r'(\1)', inner_text)
+            # Converte eventuali frecce -> interne a trattino
+            inner_text = re.sub(r'\s*->\s*', ' - ', inner_text)
+            return inner_text
+
         def quote_node(match):
             node_id = match.group(1)
-            inner = match.group(2).strip()
-            if inner.startswith('"') and inner.endswith('"'):
-                return f'{node_id}[{inner}]'
-            clean_inner = inner.replace('"', "'")
+            clean_inner = clean_node_label(match.group(2).strip())
             return f'{node_id}["{clean_inner}"]'
 
         def quote_rhombus(match):
             node_id = match.group(1)
-            inner = match.group(2).strip()
-            if inner.startswith('"') and inner.endswith('"'):
-                return f'{node_id}{{{inner}}}'
-            clean_inner = inner.replace('"', "'")
+            clean_inner = clean_node_label(match.group(2).strip())
             return f'{node_id}{{"{clean_inner}"}}'
 
-        # Sostituisce nodeId[...] dove all'interno vi sono parentesi, due punti o quadre annidate non quotate
-        line_clean = re.sub(r'([A-Za-z0-9_]+)\[([^"\n\]]*[\[\]\(\)\:][^\n]*?)\](?=[;\s\-]|$)', quote_node, line)
+        # Match di nodi con parentesi, due punti o quadre annidate
+        line_clean = re.sub(r'([A-Za-z0-9_]+)\[([^"\n\]]*[\[\]\(\)\:][^\n]*?)\](?=[;\s\-]|$)', quote_node, line_clean)
         line_clean = re.sub(r'([A-Za-z0-9_]+)\{([^"\n\}]*[\[\]\(\)\:][^\n]*?)\}(?=[;\s\-]|$)', quote_rhombus, line_clean)
-        sanitized_lines.append(line_clean)
+        # Match per nodi già tra virgolette che contengono quadre annidate o apici interni
+        line_clean = re.sub(r'([A-Za-z0-9_]+)\["([^"\n]*)"\]', quote_node, line_clean)
+        line_clean = re.sub(r'([A-Za-z0-9_]+)\{"([^"\n]*)"\}', quote_rhombus, line_clean)
+
+        sanitized_lines.append(f"{indent_str}{line_clean}")
 
     return "\n".join(sanitized_lines)
 

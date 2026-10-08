@@ -77,11 +77,11 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
           Identification Strategy
           Estimation Mechanics
     ```
-    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain, transmission mechanism, or algorithmic decision tree:
+    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain, transmission mechanism, or algorithmic decision tree (CRITICAL rules: wrap all node labels in double quotes `NodeID["Label"]`, never use semicolons `;` at line endings, use round parens `(...)` inside label text rather than square brackets, and if using subgraphs ALWAYS declare an alphanumeric ID e.g. `subgraph SG_ID ["Subgraph Title"]`, never multi-word unquoted titles):
     ```mermaid
     graph TD
-      Shock[Exogenous Shock or Assumption] --> Channel[Transmission Channel]
-      Channel --> Outcome[Equilibrium Outcome or Estimator]
+      Shock["Exogenous Shock or Assumption"] --> Channel["Transmission Channel"]
+      Channel --> Outcome["Equilibrium Outcome or Estimator"]
     ```
     ---
     ## 🎯 Active Recall & Examination Drills
@@ -172,11 +172,11 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
           Methodology
           Causal Mechanism
     ```
-    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain or identification tree:
+    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain or identification tree (CRITICAL rules: wrap all node labels in double quotes `NodeID["Label"]`, never use semicolons `;` at line endings, use round parens `(...)` inside label text rather than square brackets, and if using subgraphs ALWAYS declare an alphanumeric ID e.g. `subgraph SG_ID ["Subgraph Title"]`, never multi-word unquoted titles):
     ```mermaid
     graph TD
-      Shock[Exogenous Variation or Setup] --> Channel[Transmission Channel]
-      Channel --> Estimator[Structural Estimator or Result]
+      Shock["Exogenous Variation or Setup"] --> Channel["Transmission Channel"]
+      Channel --> Estimator["Structural Estimator or Result"]
     ```
     ---
     ## 🎯 Active Recall & Examination Drills
