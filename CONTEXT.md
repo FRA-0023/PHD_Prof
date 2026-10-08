@@ -20,6 +20,11 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
 
 ## Log delle Sessioni
+### 2026-10-08 (Web Cockpit Output Mode Clarification & Project Docs Sync)
+- **UI Web Cockpit potenziata**: inserito raggruppamento visivo esplicito `.mode-selector-group` con label 'Output:' e icone dedicate per ciascuna opzione (`🎯 Entrambi (Note + Grafo)`, `📝 Solo Note`, `🧠 Solo Grafo`), eliminando ogni ambiguità sulla posizione del selettore nella toolbar della Coda Documenti.
+- **Documentazione allineata**: aggiornati `README.md` (sezione Execution Modes con Web Cockpit e CLI `--generation-mode [both|notes_only|graphs_only]`) e `project.md` con il completamento di Phase 6.
+- **117/117 test superati**, commit `5441ff6` pushato su `origin/main`.
+
 ### 2026-10-08 (Mermaid Styling, Visual Hierarchy & Math Notation)
 - **Styling Semantico con `classDef`**: introdotti stili visivi distinti con palette pastello (soft blue per fundamentals/theory, soft green per distributed/empirical, soft amber per GPU/compute, soft purple per pipeline/reduce, dark slate per root/output). Riduce il carico cognitivo e migliora l'immediata leggibilità visiva.
 - **Gerarchia Visiva e Titoli**: formattazione nodi su doppio livello con `<b>Titolo Macro</b><br/>Dettaglio analitico/meccanismo`, conferendo risalto immediato ai concetti cardine.
