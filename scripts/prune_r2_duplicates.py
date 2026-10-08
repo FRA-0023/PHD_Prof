@@ -1,6 +1,11 @@
 """
-Script per verificare e rimuovere asset duplicati/orfani su Cloudflare R2 e staging locale.
-Mantiene rigorosamente intatti gli asset validi con hash deterministico SHA-256.
+scripts/prune_r2_duplicates.py
+------------------------------
+Utility script to audit, verify, and prune orphaned or duplicate diagram assets
+stored in Cloudflare R2 and the local staging cache.
+
+Strictly preserves active assets identified by their deterministic 16-character
+SHA-256 fingerprint generated during extraction.
 """
 
 import os
@@ -9,7 +14,7 @@ import argparse
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Assicuriamo che la radice del progetto sia nel PYTHONPATH
+# Ensure the project root is in PYTHONPATH
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -18,9 +23,19 @@ load_dotenv(PROJECT_ROOT / ".env")
 from src.adapters.outbound.s3_image_adapter import S3ImageAdapter
 
 def main():
-    parser = argparse.ArgumentParser(description="Pruning asset duplicati/orfani su Cloudflare R2 e staging.")
-    parser.add_argument("--course", default="Big Data", help="Nome del corso da verificare (default: 'Big Data')")
-    parser.add_argument("--delete", action="store_true", help="Esegue l'effettiva rimozione (senza questo flag opera in dry-run)")
+    parser = argparse.ArgumentParser(
+        description="Audit and prune orphaned or duplicate image assets in Cloudflare R2 and local staging."
+    )
+    parser.add_argument(
+        "--course",
+        default="Big Data",
+        help="Target course name to verify (default: 'Big Data')",
+    )
+    parser.add_argument(
+        "--delete",
+        action="store_true",
+        help="Execute actual deletion on remote storage and disk (operates in dry-run mode without this flag)",
+    )
     args = parser.parse_args()
 
     r2_endpoint = os.getenv("R2_ENDPOINT_URL")
@@ -30,27 +45,28 @@ def main():
     r2_domain = os.getenv("R2_PUBLIC_DOMAIN")
 
     if not all([r2_endpoint, r2_access, r2_secret, r2_bucket, r2_domain]):
-        print("[ERRORE] Variabili R2 mancanti in .env. Impossibile contattare lo storage cloud.")
+        print("[ERROR] Missing Cloudflare R2 credentials in .env. Cannot communicate with remote bucket.")
         sys.exit(1)
 
     adapter = S3ImageAdapter(r2_endpoint, r2_access, r2_secret, r2_bucket, r2_domain)
 
-    # 1. Recupera gli hash validi attesi deterministici dal staging locale
+    # 1. Retrieve expected deterministic hashes for active slide decks
     course_slug = args.course.lower().replace(" ", "_").replace("/", "-")
     prefix = f"notion/universita/{course_slug}/"
-    print(f"Scansione oggetti remoti su Cloudflare R2 con prefisso: '{prefix}'...")
+    print(f"Scanning remote objects on Cloudflare R2 with prefix: '{prefix}'...")
     remote_keys = adapter.list_images(prefix=prefix)
     if not remote_keys:
         # Fallback broad scan
-        print(f"Nessun oggetto con '{prefix}', scansione generica con prefisso 'notion/'...")
+        print(f"No objects found under '{prefix}', falling back to generic 'notion/' scan...")
         all_notion = adapter.list_images(prefix="notion/")
-        print(f"Trovati {len(all_notion)} oggetti totali sotto 'notion/':")
+        print(f"Found {len(all_notion)} total objects under 'notion/':")
         for k in all_notion:
             print(f"  - {k}")
         remote_keys = [k for k in all_notion if course_slug in k.lower() or args.course.lower() in k.lower()]
-    print(f"Trovati {len(remote_keys)} oggetti remoti correlati a '{args.course}'.")
+    print(f"Found {len(remote_keys)} remote objects matching course '{args.course}'.")
 
-    # Mappa dei 14 hash deterministici validi per Big Data Session 1 (SHA-256[:16])
+    # TRADE-OFF: Hardcoded set of known deterministic hashes for Big Data Session 1 (SHA-256[:16])
+    # Protects existing assets from inadvertent deletion during audit cycles.
     valid_hashes = {
         "05dd426f1bd4fbce",
         "3da0c28b188e5d6c",
@@ -79,24 +95,24 @@ def main():
         else:
             orphaned_remote.append(k)
 
-    print(f"  -> Asset validi e attivi: {len(active_remote)}")
-    print(f"  -> Asset orfani/duplicati (UUID casuali precedenti): {len(orphaned_remote)}")
+    print(f"  -> Valid active assets: {len(active_remote)}")
+    print(f"  -> Orphaned/duplicate assets (legacy random UUIDs): {len(orphaned_remote)}")
     for o in orphaned_remote:
-        print(f"     [ORFANO] {o}")
+        print(f"     [ORPHAN] {o}")
 
-    # Pulizia remota se richiesta
+    # Remote cleanup execution
     if orphaned_remote:
         if args.delete:
-            print("\nEsecuzione rimozione remota su Cloudflare R2...")
+            print("\nExecuting remote deletion on Cloudflare R2...")
             deleted_count = 0
             for o in orphaned_remote:
                 if adapter.delete_image(o):
                     deleted_count += 1
-            print(f"Completato: {deleted_count}/{len(orphaned_remote)} oggetti eliminati da Cloudflare R2.")
+            print(f"Completed: {deleted_count}/{len(orphaned_remote)} objects deleted from Cloudflare R2.")
         else:
-            print("\n[DRY RUN] Nessun oggetto eliminato. Usa flag '--delete' per procedere alla rimozione.")
+            print("\n[DRY RUN] No remote objects deleted. Pass '--delete' to execute permanent deletion.")
 
-    # 2. Verifica staging locale
+    # 2. Local staging verification
     staging_figures = PROJECT_ROOT / "staging" / "figures"
     if staging_figures.exists():
         local_pngs = list(staging_figures.glob("*.png"))
@@ -104,17 +120,17 @@ def main():
             f for f in local_pngs
             if f.stem not in valid_hashes
         ]
-        print(f"\nScansione staging locale '{staging_figures}':")
-        print(f"  -> File totali: {len(local_pngs)}")
-        print(f"  -> File orfani (UUID vecchi): {len(orphaned_local)}")
+        print(f"\nScanning local staging cache '{staging_figures}':")
+        print(f"  -> Total files: {len(local_pngs)}")
+        print(f"  -> Orphaned files (legacy UUIDs): {len(orphaned_local)}")
         for ol in orphaned_local:
-            print(f"     [LOCALE ORFANO] {ol.name}")
+            print(f"     [LOCAL ORPHAN] {ol.name}")
 
         if orphaned_local and args.delete:
-            print("Rimozione file orfani da staging locale...")
+            print("Purging orphaned files from local staging cache...")
             for ol in orphaned_local:
                 ol.unlink()
-            print(f"Completato: {len(orphaned_local)} file rimossi da staging/figures.")
+            print(f"Completed: {len(orphaned_local)} files removed from staging/figures.")
 
 if __name__ == "__main__":
     main()

@@ -20,7 +20,7 @@ To enjoy a clean browser experience with the custom local domain `https://phdpro
 ### Automated 1-Click Setup (Recommended)
 
 #### On Windows:
-1. Locate `Configura_Dominio_Locale.bat` in the repository root.
+1. Locate `Configure_Local_Domain.bat` in the repository root.
 2. Double-click it. It will request Administrator elevation (UAC prompt) and automatically:
    - Generate a custom local Root Certificate Authority (CA) and server TLS certificates in `certs/`.
    - Install the Root CA into the **Windows Trusted Root Certification Authorities** store.

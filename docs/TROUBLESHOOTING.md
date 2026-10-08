@@ -135,7 +135,7 @@ Visiting `http://phdprof.test` or `https://phdprof.test` in the browser returns 
 2. **DNS TTL Cache**: The operating system or browser cached a negative DNS lookup before the host mapping was written.
 
 ### Resolution
-1. On Windows, right-click `Configura_Dominio_Locale.bat` and run as Administrator.
+1. On Windows, right-click `Configure_Local_Domain.bat` and run as Administrator.
 2. On macOS/Linux, run:
    ```bash
    sudo ./scripts/setup_local_domain.sh
@@ -202,7 +202,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ### Symptom
 ```
-zsh: permission denied: ./Avvia_PHD_Prof.sh
+zsh: permission denied: ./Launch_PHD_Prof.sh
 ```
 
 ### Root Cause
@@ -210,7 +210,7 @@ Git or archive extraction may not preserve POSIX execution bits (`+x`).
 
 ### Resolution
 ```bash
-chmod +x Avvia_PHD_Prof.sh Avvia_PHD_Prof.command scripts/setup_local_domain.sh
+chmod +x Launch_PHD_Prof.sh Launch_PHD_Prof.command scripts/setup_local_domain.sh
 ```
 
 ---

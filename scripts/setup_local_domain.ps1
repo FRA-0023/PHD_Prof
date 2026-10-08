@@ -3,19 +3,19 @@
 $hostsPath = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
 
 if (-not (Test-Path $hostsPath)) {
-    Write-Error "File hosts non trovato in $hostsPath"
+    Write-Error "Hosts file not found at $hostsPath"
     exit 1
 }
 
 $content = Get-Content -Path $hostsPath -Raw
 if ($content -match "(?m)^\s*127\.0\.0\.1\s+phdprof\.test\b") {
-    Write-Host "[OK] phdprof.test e' gia' configurato nel file hosts." -ForegroundColor Green
+    Write-Host "[OK] phdprof.test is already configured in the hosts file." -ForegroundColor Green
 } else {
-    Write-Host "[*] Aggiunta di phdprof.test a $hostsPath..." -ForegroundColor Cyan
+    Write-Host "[*] Adding phdprof.test to $hostsPath..." -ForegroundColor Cyan
     Add-Content -Path $hostsPath -Value "`r`n127.0.0.1       phdprof.test" -Encoding UTF8
-    Write-Host "[OK] phdprof.test aggiunto con successo." -ForegroundColor Green
+    Write-Host "[OK] phdprof.test successfully registered." -ForegroundColor Green
 }
 
 # Flush DNS resolver cache
 ipconfig /flushdns | Out-Null
-Write-Host "[OK] Cache DNS svuotata." -ForegroundColor Green
+Write-Host "[OK] DNS resolver cache successfully flushed." -ForegroundColor Green

@@ -418,11 +418,11 @@ CLI_LANGUAGE=EN
 | `course_profiles.json` | Stores registered academic courses (subject, persona prompt, local path, Notion target). Auto-seeded on first run. | **No** (in `.gitignore`) |
 | `sync_state.json` | **Cryptographic State Ledger**: stores content SHA-256 hashes, timestamps, token counts, and Notion page IDs. Enforces idempotence across restarts. | **No** (in `.gitignore`) |
 | `gemini_usage.json` | Rolling 24-hour sliding window log of Gemini API calls for quota tracking. | **No** (in `.gitignore`) |
-| `staging/` | Ephemeral scratch directory for PPTX-to-PDF vector renderings and temporary chunk slices. Cleaned automatically. | **No** (in `.gitignore`) |
-| [`Avvia_PHD_Prof.bat`](file:///Avvia_PHD_Prof.bat) | Windows shortcut launcher triggering the hidden VBS process. | **Yes** |
-| [`Avvia_PHD_Prof.vbs`](file:///Avvia_PHD_Prof.vbs) | Windowless Windows launcher (`WindowStyle = 0`) launching FastAPI and opening default browser without CMD popups. | **Yes** |
-| [`Avvia_PHD_Prof.command`](file:///Avvia_PHD_Prof.command) | One-click double-clickable launcher for macOS Finder with environment autodetection. | **Yes** |
-| [`Avvia_PHD_Prof.sh`](file:///Avvia_PHD_Prof.sh) | POSIX-compliant shell entrypoint for Linux and Unix workstations. | **Yes** |
+| [`Launch_PHD_Prof.bat`](file:///Launch_PHD_Prof.bat) | Windows shortcut launcher triggering the hidden VBS process. | **Yes** |
+| [`Launch_PHD_Prof.vbs`](file:///Launch_PHD_Prof.vbs) | Windowless Windows launcher (`WindowStyle = 0`) launching FastAPI and opening default browser without CMD popups. | **Yes** |
+| [`Launch_PHD_Prof.command`](file:///Launch_PHD_Prof.command) | One-click double-clickable launcher for macOS Finder with environment autodetection. | **Yes** |
+| [`Launch_PHD_Prof.sh`](file:///Launch_PHD_Prof.sh) | POSIX-compliant shell entrypoint for Linux and Unix workstations. | **Yes** |
+| [`Configure_Local_Domain.bat`](file:///Configure_Local_Domain.bat) | One-click elevated script configuring local domain `phdprof.test`, trusted Root CA, and port 443 HTTPS. | **Yes** |
 | [`requirements.txt`](file:///requirements.txt) | Explicit runtime and testing Python dependencies. | **Yes** |
 | [`pdf_to_notion.py`](file:///pdf_to_notion.py) | Application entrypoint wiring ports and adapters (`--mode web` / `--mode cli`). | **Yes** |
 
@@ -460,11 +460,11 @@ CLI_LANGUAGE=EN
 ### Option A: Web Cockpit (Recommended)
 Provides full visual observability and selective batch control:
 
-- **Windows**: Double-click [`Avvia_PHD_Prof.bat`](file:///Avvia_PHD_Prof.bat) (or run via PowerShell: `wscript Avvia_PHD_Prof.vbs`).
-- **macOS**: Double-click [`Avvia_PHD_Prof.command`](file:///Avvia_PHD_Prof.command) in Finder.
+- **Windows**: Double-click [`Launch_PHD_Prof.bat`](file:///Launch_PHD_Prof.bat) (or run via PowerShell: `wscript Launch_PHD_Prof.vbs`).
+- **macOS**: Double-click [`Launch_PHD_Prof.command`](file:///Launch_PHD_Prof.command) in Finder.
 - **Linux**: Execute from terminal:
   ```bash
-  ./Avvia_PHD_Prof.sh
+  ./Launch_PHD_Prof.sh
   ```
 - **Universal CLI Invocation**:
   ```bash

@@ -26,16 +26,18 @@ def generate_certificates(cert_dir: pathlib.Path, domain: str = "phdprof.test", 
     server_crt_path = cert_dir / "server.crt"
 
     if not force and all(p.exists() for p in (ca_key_path, ca_crt_path, server_key_path, server_crt_path)):
-        print(f"[OK] I certificati SSL per '{domain}' esistono gia' in: {cert_dir}")
+        print(f"[OK] SSL certificates for '{domain}' already exist in: {cert_dir}")
         return
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
     # 1. Generate Local Root CA
-    print("[*] Generazione della Root CA locale 'PHD Prof Local CA'...")
+    # ARCHITETTURA: A standalone private Root CA allows registering a single trust anchor
+    # into the operating system certificate store, enabling green lock HTTPS on *.test domains.
+    print("[*] Generating local Root CA 'PHD Prof Local CA'...")
     ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     ca_name = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "IT"),
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "PHD Prof"),
         x509.NameAttribute(NameOID.COMMON_NAME, "PHD Prof Local Root CA"),
     ])
@@ -68,10 +70,10 @@ def generate_certificates(cert_dir: pathlib.Path, domain: str = "phdprof.test", 
     )
 
     # 2. Generate Server Certificate
-    print(f"[*] Generazione del certificato SSL per '{domain}', 'localhost' e '127.0.0.1'...")
+    print(f"[*] Generating SSL certificate for '{domain}', 'localhost', and '127.0.0.1'...")
     server_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     server_name = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, "IT"),
+        x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "PHD Prof"),
         x509.NameAttribute(NameOID.COMMON_NAME, domain),
     ])
@@ -142,7 +144,7 @@ def generate_certificates(cert_dir: pathlib.Path, domain: str = "phdprof.test", 
         ca_cert.public_bytes(serialization.Encoding.PEM)
     )
 
-    print(f"[OK] Certificati generati con successo in:\n     {cert_dir.resolve()}")
+    print(f"[OK] Certificates successfully generated in:\n     {cert_dir.resolve()}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate local TLS/SSL certificates for PHD Prof")

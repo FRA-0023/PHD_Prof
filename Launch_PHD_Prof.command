@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Avvia_PHD_Prof.command
+# Launch_PHD_Prof.command
 # One-click desktop launcher for macOS (Finder) and Linux.
 #
-# Equivalent behavior to Avvia_PHD_Prof.vbs on Windows:
+# Equivalent behavior to Launch_PHD_Prof.vbs on Windows:
 # 1. Resolves canonical project directory.
 # 2. Discovers Python 3 interpreter (local venv, Homebrew Apple Silicon/Intel, PATH).
 # 3. Launches FastAPI server in background detached from terminal.
@@ -65,7 +65,7 @@ if [ "$(uname)" = "Darwin" ]; then
     osascript -e '
     tell application "Terminal"
         repeat with w in (every window)
-            if name of w contains "Avvia_PHD_Prof" then
+            if name of w contains "Launch_PHD_Prof" then
                 close w saving no
             end if
         end repeat

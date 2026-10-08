@@ -1,4 +1,4 @@
-' Avvia_PHD_Prof.vbs
+' Launch_PHD_Prof.vbs
 ' Silent windowless launcher for PHD Prof Web Cockpit on Windows.
 ' Launches the local FastAPI backend in the background and opens the default browser.
 ' When the browser tab is closed, the automatic heartbeat watchdog terminates the background process.

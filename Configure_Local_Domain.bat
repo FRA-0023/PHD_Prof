@@ -1,66 +1,65 @@
 @echo off
 setlocal EnableDelayedExpansion
-title Configurazione Dominio Locale phdprof.test
+title Configure Local Domain phdprof.test
 
 set "HOSTS_FILE=%SystemRoot%\System32\drivers\etc\hosts"
 
-:: Verifica privilegi di amministratore
+:: Verify administrator privileges
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [i] Richiesta privilegi di amministratore per modificare il file hosts...
+    echo [i] Requesting administrator privileges to edit hosts file...
     powershell -NoProfile -Command "Start-Process '%~f0' -Verb RunAs"
     exit /b
 )
 
-:: Ambiente con privilegi elevati
+:: Elevated execution environment
 cd /d "%~dp0"
 echo ==============================================================================
-echo   Configurazione Dominio Locale: phdprof.test -^> 127.0.0.1
+echo   Configure Local Domain: phdprof.test -^> 127.0.0.1
 echo ==============================================================================
 echo.
 
 findstr /I /C:"phdprof.test" "%HOSTS_FILE%" >nul 2>&1
 if %errorlevel% equ 0 (
-    echo [OK] phdprof.test e' gia' presente nel file hosts:
+    echo [OK] phdprof.test is already present in hosts file:
     findstr /I /C:"phdprof.test" "%HOSTS_FILE%"
 ) else (
-    echo [*] Aggiunta di '127.0.0.1   phdprof.test' a %HOSTS_FILE%...
+    echo [*] Adding '127.0.0.1   phdprof.test' to %HOSTS_FILE%...
     echo.>>"%HOSTS_FILE%"
     echo 127.0.0.1       phdprof.test>>"%HOSTS_FILE%"
     if %errorlevel% equ 0 (
-        echo [OK] Dominio phdprof.test registrato con successo!
+        echo [OK] Domain phdprof.test successfully registered!
     ) else (
-        echo [ERRORE] Impossibile scrivere su %HOSTS_FILE%.
+        echo [ERROR] Failed to write to %HOSTS_FILE%.
     )
 )
 
 echo.
-echo [*] Verifica / Generazione certificati SSL locali...
+echo [*] Checking / Generating local SSL certificates...
 if not exist "%~dp0certs\server.crt" (
     python "%~dp0scripts\generate_certificates.py"
 )
 
 if exist "%~dp0certs\ca.crt" (
-    echo [*] Installazione Root CA locale nel Trusted Root Certificate Store di Windows...
+    echo [*] Installing local Root CA into Windows Trusted Root Certificate Store...
     certutil -addstore -f Root "%~dp0certs\ca.crt"
     if !errorlevel! equ 0 (
-        echo [OK] Certificato Root CA registrato con successo.
+        echo [OK] Root CA certificate successfully registered.
     ) else (
-        echo [!] Tentativo di importazione tramite PowerShell...
+        echo [!] Fallback: Importing via PowerShell...
         powershell -NoProfile -Command "Import-Certificate -FilePath '%~dp0certs\ca.crt' -CertStoreLocation Cert:\LocalMachine\Root"
     )
 )
 
 echo.
-echo [*] Svuotamento della cache DNS (ipconfig /flushdns)...
+echo [*] Flushing DNS resolver cache (ipconfig /flushdns)...
 ipconfig /flushdns >nul
-echo [OK] Cache DNS aggiornata.
+echo [OK] DNS cache successfully refreshed.
 echo.
 echo ==============================================================================
-echo   Completato con successo!
-echo   IMPORTANTE: Chiudi e riapri il browser (oppure apri una nuova finestra)
-echo   per fargli recepire la nuova autorita' radice attendibile.
-echo   Poi naviga su: https://phdprof.test/
+echo   Setup completed successfully!
+echo   IMPORTANT: Restart your browser or open a new window to load the new root CA.
+echo   Then navigate to: https://phdprof.test/
 echo ==============================================================================
 echo.
 pause

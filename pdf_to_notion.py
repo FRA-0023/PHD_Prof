@@ -118,7 +118,7 @@ def main() -> None:
         DocumentType.PAPER_OR_BOOK: TextPdfReader(),
     }
 
-    # Configurazione Opzionale: Cloudflare R2 / S3 Image Hosting
+    # Optional Configuration: Cloudflare R2 / S3 Image Hosting
     r2_endpoint = os.getenv("R2_ENDPOINT_URL")
     r2_access = os.getenv("R2_ACCESS_KEY")
     r2_secret = os.getenv("R2_SECRET_KEY")
@@ -130,7 +130,7 @@ def main() -> None:
         from src.adapters.outbound.s3_image_adapter import S3ImageAdapter
         image_host_client = S3ImageAdapter(r2_endpoint, r2_access, r2_secret, r2_bucket, r2_domain)
 
-    # Configurazione Extractor Visivo
+    # High-DPI Visual Diagram Extractor Configuration
     from src.adapters.outbound.pymupdf_visual_extractor import PyMuPdfVisualExtractor
     visual_extractor = PyMuPdfVisualExtractor()
 
@@ -174,10 +174,10 @@ def main() -> None:
                 return False
 
         if use_ssl and web_port == 443 and not _check_port(web_host, web_port):
-            print("\n  [Web] Avviso: porta 443 non accessibile o occupata. Fallback su porta 8443...")
+            print("\n  [Web] Notice: Port 443 unavailable or in use. Falling back to port 8443...")
             web_port = 8443
         elif not use_ssl and web_port == 80 and not _check_port(web_host, web_port):
-            print("\n  [Web] Avviso: porta 80 non accessibile o occupata. Fallback su porta 8000...")
+            print("\n  [Web] Notice: Port 80 unavailable or in use. Falling back to port 8000...")
             web_port = 8000
 
         # Check local domain resolution
@@ -197,9 +197,9 @@ def main() -> None:
         else:
             target_url = f"{protocol}://127.0.0.1{port_suffix}"
             if web_domain not in ("127.0.0.1", "localhost"):
-                print(f"\n  [!] Nota: '{web_domain}' non risulta ancora configurato nel file hosts.")
-                print(f"      Esegui 'Configura_Dominio_Locale.bat' come Amministratore per attivarlo.")
-                print(f"      Accesso temporaneo fallback: {target_url}\n")
+                print(f"\n  [!] Notice: '{web_domain}' is not yet configured in your hosts file.")
+                print(f"      Run 'Configure_Local_Domain.bat' as Administrator to enable it.")
+                print(f"      Temporary fallback access: {target_url}\n")
 
         web = WebAdapter(
             notion_client=notion_client,
@@ -215,7 +215,7 @@ def main() -> None:
         )
         if not args.no_browser:
             threading.Timer(0.8, lambda: webbrowser.open(target_url)).start()
-        print(f"\n  [Web] Cockpit avviato su {target_url} (in ascolto su {web_host}:{web_port}, SSL={use_ssl})\n")
+        print(f"\n  [Web] Cockpit started at {target_url} (listening on {web_host}:{web_port}, SSL={use_ssl})\n")
         web.start()
     else:
         cli = CLIAdapter(
