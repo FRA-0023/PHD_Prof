@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 110 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 116 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi
@@ -328,5 +328,17 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 ### 2026-10-08 (Decostruzione Pedagogica GEMM & Standard Prompt Deconstructions)
 - **Aggiornamento Live Pagina Notion (Big Data)**: Rimosso il blocco GEMM sintetico (5 blocchi) e iniettati 36 blocchi Notion arricchiti con decostruzione fisica delle dimensioni (m, k, n), derivazione operativa della complessità O(N^3), proprietà di intensità aritmetica, parallelismo massivo dei Tensor Cores, trace numerico 2x2 e boundary condition del decoding autoregressivo (GEMV memory-bound).
 - **Hardening dei Prompt Template (prompt_templates.py)**: Esteso lo standard di decostruzione matematica in SLIDES_PROMPT_TEMPLATE e PAPER_OR_BOOK_PROMPT_TEMPLATE. Per ogni concetto astratto o complessità computazionale distaccata, il prompt impone ora la derivazione in 5 punti (mapping fisico, conteggio operazioni, ponte hardware/silicio, micro-esempio numerico e boundary conditions).
-- **Test Suite**: 107/107 unit test passati con successo.
+- **Test Suite**: 116/116 unit test passati con successo.
 
+
+### 2026-10-08 (Fix Mermaid AST Layout Error & Modalità di Generazione Multi-Artefatto)
+- **Diagnosi & Risoluzione Bug Mermaid ELK (`Cannot read properties of null (reading 're')`)**:
+  * Identificato errore di layout engine (ELK/dagre) dovuto a nodi Mermaid AST nulli causati da label non quotate con parentesi/quadre annidate (es. MapReduce `K[Shuffle & Sort: Bear:[1,1], Car:[1,1,1]]`).
+  * Implementato e integrato `sanitize_mermaid_flowchart()` in `notion_block_builder.py` per racchiudere automaticamente in `["..."]` o `{"..."}` i nodi con parentesi e due punti.
+  * Aggiornati via PATCH Notion API i blocchi Mindmap e Flowchart sulla pagina Notion `3f3b63e8-59c8-819c-bdd2-dca55c14560c` (Big Data Session 1), ripristinando il rendering grafico immediato a zero errori.
+- **Supporto Modalità di Generazione (`GenerationMode`: both, notes_only, graphs_only)**:
+  * Domain Model: Introdotto enum `GenerationMode` (`BOTH = "both"`, `NOTES_ONLY = "notes_only"`, `GRAPHS_ONLY = "graphs_only"`).
+  * Use Case (`ProcessDocumentUseCase`): Aggiunto `_split_notes_and_artifacts()` per isolare deterministicamente sintesi e grafi concettuali. In `NOTES_ONLY`, lo Stage 2 LLM e l'export OPML vengono disattivati (risparmio token); in `GRAPHS_ONLY`, si riutilizza lo staging a costo 0 token e si caricano solo gli schemi. Aggiunto supporto a `force=True` per ri-sincronizzazione pulita con archiviazione vecchie pagine.
+  * Inbound CLI (`CLIAdapter` & `pdf_to_notion.py`): Aggiunto argomento `--generation-mode` (`--gen-mode`) e prompt interattivo con selezione rapida [1], [2], [3].
+  * Inbound Web (`WebAdapter`, `index.html`, `app.js`, `app.css`): Aggiunto campo `mode` in `BatchStartRequest`, selettore visuale dropdown (`.select-mode`) nel toolbar della coda documenti e logging telemetrico della modalità attiva.
+- **Verifica Test Suite**: Eseguiti 116 unit test offline con mock completi (116/116 passati con successo).
