@@ -20,6 +20,13 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Monitoring**: monitorare se l'errore ricompare su altre pagine Notion con Mermaid flowchart contenenti subgraphs.
 
 ## Log delle Sessioni
+### 2026-10-08 (Fix ELK Subgraph Edges & Arrow-Safe Tokenizer)
+- **Root cause isolata e confermata (Mermaid Issue #6060)**: il crash ELK `Cannot read properties of null (reading 're')` avviene quando un arco Mermaid punta direttamente o proviene da un `subgraph` ID (`ROOT --> BDF` o `BDF --> DCA`) invece di un nodo concreto (`ROOT --> BDF1`). ELK tenta di eseguire lookup geometrico delle coordinate x/y (`vDd(b10, 'x')`) sulla struttura del compound tramite GWT Map, fallisce con `null` e invoca `.re()` sollevando l'errore.
+- **Bug nel tokenizer regex risolto**: scoperto che la regex di quoting nodi inglobava avidamente la freccia `-->` e il nodo successivo se presenti sulla stessa riga (`A[L1] --> B[L2]`), convertendo `-->` in `- -` e spezzando la topologia. Sostituito con tokenizer deterministico split-on-arrows.
+- **Pass di re-indirizzamento automatico**: `sanitize_mermaid_flowchart` mappa preventivamente ogni subgraph al suo primo nodo membro e re-indirizza automaticamente qualsiasi arco subgraph-targeted al nodo reale.
+- **Patch live applicata su Notion**: Block 1 e Block 2 della pagina Big Data Session 1 patchati direttamente via Notion API con sintassi 100% nodo-a-nodo e subgraphs unquoted.
+- **117/117 test superati**, commit `8e501e4` pushato su `origin/main`.
+
 ### 2026-10-08 (Fix Mermaid ELK Crash, Subgraph Normalization & Notion Block Patch)
 - **Root cause pinpointed**: `Cannot read properties of null (reading 're')` in Notion originates from the ELK layout engine (function `vDd/N1` in mermaid.min.js) when `subgraph` declarations use multi-word titles without an explicit alphanumeric ID (e.g. `subgraph MapReduce Word Count` crashes ELK parent resolution in the AST).
 - **Additional sources**: corrupt `\ufffd` replacement characters in Mindmap Block 1 (CP1252/UTF-8 transcoding mismatch from previous terminal runs) + nested square brackets inside quoted node labels (e.g. `Bear:[1,1]` raises premature tokenizer closure).
