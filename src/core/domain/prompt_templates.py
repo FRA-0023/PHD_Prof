@@ -78,18 +78,33 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
           Estimation Mechanics
     ```
     * Provide a Mermaid flowchart (`graph TD` or `graph LR`) mapping the primary causal chain, transmission mechanism, or algorithmic architecture. Follow these VISUAL & MATHEMATICAL standards:
-      1. **Visual Styling & Semantic Palette**: Declare `classDef` with clean, pastel fills, clear border strokes, and readable text colors per conceptual domain (e.g. `classDef rootNode fill:#0f172a,stroke:#334155,color:#fff,font-weight:bold;`, `classDef theoryNode fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a;`, `classDef empiricalNode fill:#f0fdf4,stroke:#22c55e,color:#14532d;`, `classDef modelNode fill:#fef3c7,stroke:#f59e0b,color:#78350f;`).
-      2. **Hierarchical Block Titles**: Emphasize block titles with HTML tags and clean line breaks: `NodeID["<b>Block Title</b><br/>Mechanism or analytical detail"]:::className`.
+      1. **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire architecture, NOT monochromatic by subgraph box. Use semantic pastel fills with distinct border strokes:
+         - **Theory & Definitions**: `classDef theoryNode fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a;` (definitions, theorems, axioms, principles).
+         - **Compute & Architecture**: `classDef computeNode fill:#fef3c7,stroke:#f59e0b,color:#78350f;` (hardware models, engines, mathematical operations).
+         - **Pipelines & Data Flow**: `classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95;` (transformations, execution DAGs, data lifecycle).
+         - **Engineering & Storage**: `classDef devopsNode fill:#f0fdf4,stroke:#10b981,color:#064e3b;` (tools, reproducibility, storage economics).
+         - **Bottlenecks & Failure Modes**: `classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,color:#881337;` (physical limits, performance walls, failure conditions).
+      2. **Enlarged Prominent Headers**:
+         - **Origin/Root Node**: Format with large bold font: `ROOT["<span style='font-size:18px;font-weight:800;'>Architecture Title</span><br/><span style='font-size:12px;opacity:0.8;'>Overview</span>"]:::rootNode` with `classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;`.
+         - **Subgraph Box Titles**: Enlarge subtitle font size: `subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Topic Area Title</span>"]` and style the container box neutrally: `style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3`.
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
       4. **Topology Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID [Subgraph Title]`.
     ```mermaid
     graph TD
-      classDef causeNode fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
-      classDef channelNode fill:#fef3c7,stroke:#f59e0b,stroke-width:1.5px,color:#78350f;
-      classDef outcomeNode fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#14532d,font-weight:bold;
+      classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;
+      classDef theoryNode fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+      classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1.5px,color:#4c1d95;
+      classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,stroke-width:1.5px,color:#881337;
 
-      Shock["<b>Exogenous Shock (Z)</b><br/>Random allocation or quasi-experiment"]:::causeNode --> Channel["<b>Transmission Channel (D)</b><br/>Behavioral response with elasticity ε"]:::channelNode
-      Channel --> Outcome["<b>Equilibrium Estimator (Y)</b><br/>LATE asymptotic convergence: β̂ ≈ ΔY / ΔD"]:::outcomeNode
+      ROOT["<span style='font-size:18px;font-weight:800;'>Econometric Framework</span>"]:::rootNode
+
+      subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Causal Identification Engine</span>"]
+        Shock["<b>Exogenous Shock (Z)</b><br/>Quasi-experimental instrument"]:::theoryNode --> Channel["<b>Transmission Channel (D)</b><br/>Compliance and behavioral response"]:::pipelineNode
+        Channel --> Lim["<b>Weak Instrument Limit</b><br/>F-stat < 10 inference breakdown"]:::bottleneckNode
+      end
+
+      style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3
+      ROOT --> Shock
     ```
     ---
     ## 🎯 Active Recall & Examination Drills
@@ -181,18 +196,32 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
           Causal Mechanism
     ```
     * Provide a Mermaid flowchart (`graph TD` or `graph LR`) mapping the primary causal chain or identification tree. Follow these VISUAL & MATHEMATICAL standards:
-      1. **Visual Styling & Semantic Palette**: Declare `classDef` with clean, pastel fills, clear border strokes, and readable text colors per conceptual domain (e.g. `classDef theoryNode fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a;`, `classDef empiricalNode fill:#f0fdf4,stroke:#22c55e,color:#14532d;`, `classDef modelNode fill:#fef3c7,stroke:#f59e0b,color:#78350f;`).
-      2. **Hierarchical Block Titles**: Emphasize block titles with HTML tags and clean line breaks: `NodeID["<b>Block Title</b><br/>Mechanism or analytical detail"]:::className`.
+      1. **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire paper, NOT monochromatic by subgraph box. Use semantic pastel fills with distinct border strokes:
+         - **Theory & Identification**: `classDef theoryNode fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a;` (identification hypotheses, structural equations, estimators).
+         - **Empirical Channels & Mechanics**: `classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95;` (transmission channels, data variation, sample cuts).
+         - **Controls & Econometric Robustness**: `classDef devopsNode fill:#f0fdf4,stroke:#10b981,color:#064e3b;` (fixed effects, clusters, balance checks).
+         - **Threats to Validity & Boundary Failures**: `classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,color:#881337;` (exclusion restriction violations, weak instruments, endogeneity).
+      2. **Enlarged Prominent Headers**:
+         - **Origin/Root Node**: Format with large bold font: `ROOT["<span style='font-size:18px;font-weight:800;'>Paper Framework</span><br/><span style='font-size:12px;opacity:0.8;'>Identification Architecture</span>"]:::rootNode` with `classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;`.
+         - **Subgraph Box Titles**: Enlarge subtitle font size: `subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Topic Area Title</span>"]` and style the container box neutrally: `style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3`.
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
       4. **Topology Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID [Subgraph Title]`.
     ```mermaid
     graph TD
-      classDef shockNode fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
-      classDef channelNode fill:#fef3c7,stroke:#f59e0b,stroke-width:1.5px,color:#78350f;
-      classDef estimatorNode fill:#f0fdf4,stroke:#22c55e,stroke-width:2px,color:#14532d,font-weight:bold;
+      classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;
+      classDef theoryNode fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+      classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1.5px,color:#4c1d95;
+      classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,stroke-width:1.5px,color:#881337;
 
-      Shock["<b>Exogenous Variation (Z)</b><br/>Instrument or policy discontinuity"]:::shockNode --> Channel["<b>Transmission Channel (D)</b><br/>Treatment intensity and compliance rate"]:::channelNode
-      Channel --> Estimator["<b>Structural Estimator (β̂)</b><br/>2SLS / IV Estimator: Cov(Y, Z) / Cov(D, Z)"]:::estimatorNode
+      ROOT["<span style='font-size:18px;font-weight:800;'>Empirical Strategy</span>"]:::rootNode
+
+      subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Identification Design</span>"]
+        Shock["<b>Exogenous Variation (Z)</b><br/>Instrument or policy discontinuity"]:::theoryNode --> Channel["<b>Transmission Channel (D)</b><br/>Compliance and behavioral response"]:::pipelineNode
+        Channel --> Lim["<b>Violation of Exclusion Restriction</b><br/>Direct unobserved channel Z -> Y"]:::bottleneckNode
+      end
+
+      style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3
+      ROOT --> Shock
     ```
     ---
     ## 🎯 Active Recall & Examination Drills
@@ -231,8 +260,8 @@ You are an Academic Knowledge Architect and Senior Quantitative Pedagogist in {s
 Deconstruct the provided synthesized study notes into high-signal conceptual study artifacts:
 1. Mermaid Mindmap: A clean, hierarchical taxonomy of core pillars and sub-concepts (depth 3-4).
 2. Mermaid Flowchart (`graph TD` or `graph LR`): The core cause-and-effect chain, empirical transmission mechanism, or identification flowchart. Follow these visual and mathematical standards:
-   - **Visual Styling**: Declare `classDef` with clean pastel fills, clear border strokes, and readable text colors per conceptual domain.
-   - **Hierarchical Block Titles**: Emphasize block titles with HTML tags and clean line breaks: `NodeID["<b>Block Title</b><br/>Mechanism or analytical detail"]:::className`.
+   - **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire architecture, NOT monochromatic by subgraph box. Use semantic pastel fills (theory/definitions in blue, compute/hardware in amber, pipelines/flow in purple, engineering/storage in green, bottlenecks/failure modes in coral).
+   - **Enlarged Prominent Headers**: Format the root/origin node with large bold font (`ROOT["<span style='font-size:18px;font-weight:800;'>Title</span>"]`) and subgraph box titles with subtitle size (`subgraph SG_ID ["<span style='font-size:15px;font-weight:700;'>Title</span>"]`) with neutral container box styling (`style SG_ID fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3`).
    - **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
    - **Topology Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID [Subgraph Title]`.
 3. Active Recall & Examination Drills: 3 to 5 examination-grade analytical questions with explicit evaluation rubrics.
