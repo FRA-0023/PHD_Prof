@@ -416,9 +416,10 @@ def test_build_notion_blocks_large_code_block_preserves_single_block_integrity()
     assert total_reconstructed == long_code.strip()
 
 
-def test_sanitize_mermaid_flowchart_normalizes_subgraph_style_to_transparent():
-    # ARCHITETTURA: Previene bug 'bianco su bianco' in Notion Dark Mode dove
-    # fill:#f8fafc forza uno sfondo chiaro sotto il titolo renderizzato in bianco.
+def test_sanitize_mermaid_flowchart_drops_subgraph_style_to_prevent_elk_crash():
+    # ARCHITETTURA: Previene il crash ELK/Dagre in Notion 'Cannot read properties of null (reading re)'.
+    # Le direttive `style <subgraphId>` su cluster causano lookup null nella tabella nodi atomici.
+    # Devono essere scartate deterministicamente.
     raw_flowchart = (
         "graph TD\n"
         "  subgraph BDF [Big Data Fundamentals]\n"
@@ -427,7 +428,119 @@ def test_sanitize_mermaid_flowchart_normalizes_subgraph_style_to_transparent():
         "  style BDF fill:#f8fafc,stroke:#94a3b8,stroke-width:1px,stroke-dasharray: 3 3\n"
     )
     sanitized = sanitize_mermaid_flowchart(raw_flowchart)
-    assert "style BDF fill:none,stroke:#64748b,stroke-width:1px,stroke-dasharray: 3 3" in sanitized
+    assert "style BDF" not in sanitized
+    assert 'subgraph BDF ["Big Data Fundamentals"]' in sanitized
+    assert 'BDF1["Node 1"]' in sanitized
+
+
+def test_sanitize_mermaid_flowchart_strips_html_tags_and_spans():
+    # ARCHITETTURA: Tag HTML inline (<span style=...>, <b>, <br/>) rompono il calcolo
+    # delle bounding-box SVG in Notion ed ELK.
+    raw_flowchart = (
+        "graph TD\n"
+        "  ROOT[\"<span style='font-size:18px;font-weight:800;'>Big Data Architecture</span><br/><span style='font-size:12px;'>Core</span>\"]:::rootNode\n"
+        "  subgraph SG1 [\"<span style='font-size:15px;'>Ingestion Layer</span>\"]\n"
+        "    A[\"<b>Kafka Broker</b><br/>Partitioned topic\"] --> B[\"<i>Flink Worker</i>\"]\n"
+        "  end\n"
+        "  ROOT --> A\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert "<span" not in sanitized
+    assert "</span>" not in sanitized
+    assert "<b>" not in sanitized
+    assert "<i>" not in sanitized
+    assert "<br/>" not in sanitized
+    assert 'ROOT["Big Data Architecture - Core"]:::rootNode' in sanitized
+    assert 'subgraph SG1 ["Ingestion Layer"]' in sanitized
+    assert 'A["Kafka Broker - Partitioned topic"]' in sanitized
+    assert 'B["Flink Worker"]' in sanitized
+
+
+def test_sanitize_mermaid_flowchart_hoists_cross_subgraph_edges():
+    # ARCHITETTURA: Dichiarare archi con nodi esterni dentro un subgraph causa
+    # duplicazione del nodo in più cluster (multi-parent) mandando in crash l'engine di layout.
+    raw_flowchart = (
+        "graph TD\n"
+        "  subgraph SG1 [Layer 1]\n"
+        "    A[Producer]\n"
+        "  end\n"
+        "  subgraph SG2 [Layer 2]\n"
+        "    B[Consumer]\n"
+        "    A --> B\n"
+        "  end\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    lines = sanitized.splitlines()
+
+    sg2_body = []
+    in_sg2 = False
+    for line in lines:
+        if "subgraph SG2" in line:
+            in_sg2 = True
+            continue
+        if in_sg2 and "end" in line:
+            in_sg2 = False
+            continue
+        if in_sg2:
+            sg2_body.append(line.strip())
+
+    assert "A --> B" not in sg2_body
+    assert any("A --> B" in line for line in lines)
+    assert "%% Cross-subgraph edges hoisted" in sanitized
+
+
+def test_sanitize_mermaid_flowchart_normalizes_all_node_shapes_and_quotes():
+    # ARCHITETTURA: Tutte le forme grafiche (tonde, doppie tonde, rombi, stadi, esagoni)
+    # devono avere il contenuto quotato con double quotes per proteggere formule e trattini.
+    raw_flowchart = (
+        "graph TD\n"
+        "  N1(Rounded Node: 10ms)\n"
+        "  N2((Double Circle: Target))\n"
+        "  N3([Stadium Shape: Batch processing])\n"
+        "  N4{Rhombus Condition: x > 0}\n"
+        "  N5{{Hexagon Prep: init()}}\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert 'N1("Rounded Node: 10ms")' in sanitized
+    assert 'N2(("Double Circle: Target"))' in sanitized
+    assert 'N3(["Stadium Shape: Batch processing"])' in sanitized
+    assert 'N4{"Rhombus Condition: x > 0"}' in sanitized
+    assert 'N5{"Hexagon Prep: init()"}' in sanitized
+
+
+def test_sanitize_mermaid_flowchart_normalizes_edge_labels():
+    # ARCHITETTURA: Sintassi non standard come `A -- "label" --> B` o `A -- label --> B`
+    # devono essere tradotte nel formato universale Mermaid `A -->|label| B`.
+    raw_flowchart = (
+        "graph TD\n"
+        '  A -- "HTTP Post (JSON)" --> B\n'
+        "  B -- Event Stream --> C\n"
+        "  C -.->|Standard Label| D\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert "A -->|HTTP Post (JSON)| B" in sanitized
+    assert "B -->|Event Stream| C" in sanitized
+    assert "C -.->|Standard Label| D" in sanitized
+
+
+def test_sanitize_mermaid_mindmap_deep_html_and_punctuation_cleaning():
+    # ARCHITETTURA: In mindmap, tag HTML o formule con parentesi e virgolette
+    # devono essere bonificati per evitare parsing errors.
+    raw_mindmap = (
+        "mindmap\n"
+        "  root((<b>Academic Core</b><br/>Syllabus))\n"
+        "    Pillars\n"
+        "      <span style='color:red;'>Optimization Problem (min f(x))</span>\n"
+        '      ["`Complex Feature` (O(N^2))"]\n'
+    )
+    sanitized = sanitize_mermaid_mindmap(raw_mindmap)
+    assert "<b" not in sanitized
+    assert "<span" not in sanitized
+    assert "`" not in sanitized
+    assert 'root(("Academic Core - Syllabus"))' in sanitized
+    assert '["Optimization Problem (min f(x))"]' in sanitized
+    assert '["Complex Feature (O(N^2))"]' in sanitized
+
 
 
 

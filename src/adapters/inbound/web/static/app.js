@@ -175,6 +175,117 @@
     }
   }
 
+  // --- 2.1 Sequential Graph Append Queue ---
+  // # ARCHITETTURA: Coda FIFO serializzata per l'azione on-demand '+ Grafo'.
+  // Previene sovrapposizioni e timeout ('Failed to fetch') generati da dispatch multipli
+  // concorrenti a LLM e Notion API, garantendo feedback visivo reattivo 'In coda (N)'.
+  const graphQueue = {
+    items: [],
+    activeHash: null,
+
+    isQueued(hash) {
+      return this.items.some((item) => item.file_hash === hash);
+    },
+
+    isActive(hash) {
+      return this.activeHash === hash;
+    },
+
+    enqueue(file) {
+      if (state.isBatchRunning) {
+        appendLog("sys", "Impossibile avviare Append Grafo mentre è attivo un batch ETL.", "warn");
+        return;
+      }
+
+      if (this.isActive(file.file_hash)) {
+        appendLog("sys", `Append Grafo già in esecuzione per ${file.name}.`, "warn");
+        return;
+      }
+
+      if (this.isQueued(file.file_hash)) {
+        appendLog("sys", `Il file ${file.name} è già presente nella coda di attesa.`, "warn");
+        return;
+      }
+
+      this.items.push(file);
+      const position = this.items.length;
+      appendLog("sys", `File ${file.name} aggiunto alla coda Append Grafo (in attesa: ${position}).`);
+      this.updateUI();
+
+      if (!this.activeHash) {
+        this.processNext();
+      }
+    },
+
+    updateUI() {
+      document.querySelectorAll(".btn-append-graph").forEach((btn) => {
+        const hash = btn.dataset.hash;
+        if (this.isActive(hash)) {
+          btn.disabled = true;
+          btn.innerHTML = `<span class="pulse-dot syncing" style="width: 5px; height: 5px;"></span> Grafo...`;
+          btn.style.color = "#8b5cf6";
+          btn.style.borderColor = "rgba(139, 92, 246, 0.4)";
+        } else if (this.isQueued(hash)) {
+          const index = this.items.findIndex((item) => item.file_hash === hash) + 1;
+          btn.disabled = true;
+          btn.innerHTML = `<span class="pulse-dot" style="width: 5px; height: 5px; background-color: var(--status-warning-fg);"></span> Coda (${index})`;
+          btn.style.color = "var(--status-warning-fg)";
+          btn.style.borderColor = "rgba(251, 191, 36, 0.4)";
+        }
+      });
+    },
+
+    async processNext() {
+      if (this.items.length === 0) {
+        this.activeHash = null;
+        this.updateUI();
+        return;
+      }
+
+      const file = this.items.shift();
+      this.activeHash = file.file_hash;
+      this.updateUI();
+
+      appendLog("sys", `Append Grafo avviato per ${file.name}...`);
+
+      try {
+        const res = await fetch(`/api/documents/${file.file_hash}/append-graph`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || "Errore durante l'append del grafo");
+        }
+        appendLog("notion", `Grafo aggiunto alla pagina Notion per ${file.name} (${data.blocks_count} blocchi)!`);
+
+        const btn = document.querySelector(`.btn-append-graph[data-hash="${file.file_hash}"]`);
+        if (btn) {
+          btn.innerHTML = `✓ Grafo`;
+          btn.style.color = "var(--status-synced-fg)";
+          btn.style.borderColor = "rgba(52, 211, 153, 0.4)";
+          setTimeout(() => {
+            btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> + Grafo`;
+            btn.disabled = false;
+            btn.style.color = "#8b5cf6";
+            btn.style.borderColor = "rgba(139, 92, 246, 0.3)";
+          }, 3000);
+        }
+      } catch (err) {
+        appendLog("sys", `Fallito append grafo per ${file.name}: ${err.message}`, "error");
+        const btn = document.querySelector(`.btn-append-graph[data-hash="${file.file_hash}"]`);
+        if (btn) {
+          btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> + Grafo`;
+          btn.disabled = false;
+          btn.style.color = "#8b5cf6";
+          btn.style.borderColor = "rgba(139, 92, 246, 0.3)";
+        }
+      } finally {
+        this.activeHash = null;
+        setTimeout(() => this.processNext(), 400);
+      }
+    }
+  };
+
   function renderFiles() {
     el.fileTableBody.innerHTML = "";
 
@@ -193,6 +304,23 @@
       const isChecked = state.selectedFiles.has(file.name);
       const shortHash = file.file_hash ? file.file_hash.substring(0, 8) : "--";
       const statusClass = (file.status || "idle").toLowerCase();
+
+      let appendGraphHtml = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> + Grafo`;
+      let appendGraphDisabled = false;
+      let appendGraphColor = "#8b5cf6";
+      let appendGraphBorder = "rgba(139, 92, 246, 0.3)";
+
+      if (graphQueue.isActive(file.file_hash)) {
+        appendGraphHtml = `<span class="pulse-dot syncing" style="width: 5px; height: 5px;"></span> Grafo...`;
+        appendGraphDisabled = true;
+        appendGraphBorder = "rgba(139, 92, 246, 0.4)";
+      } else if (graphQueue.isQueued(file.file_hash)) {
+        const pos = graphQueue.items.findIndex((item) => item.file_hash === file.file_hash) + 1;
+        appendGraphHtml = `<span class="pulse-dot" style="width: 5px; height: 5px; background-color: var(--status-warning-fg);"></span> Coda (${pos})`;
+        appendGraphDisabled = true;
+        appendGraphColor = "var(--status-warning-fg)";
+        appendGraphBorder = "rgba(251, 191, 36, 0.4)";
+      }
 
       tr.innerHTML = `
         <td>
@@ -225,6 +353,9 @@
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     OPML
                   </a>
+                  <button class="btn-secondary btn-append-graph" data-hash="${escapeHtml(file.file_hash)}" data-filename="${escapeHtml(file.name)}" title="Aggiungi schema concettuale Mermaid alla pagina Notion" style="padding: 2px 7px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px; color: ${appendGraphColor}; border-color: ${appendGraphBorder};" ${appendGraphDisabled ? "disabled" : ""}>
+                    ${appendGraphHtml}
+                  </button>
                   <a href="https://www.notion.so/${file.page_id.replace(/-/g, '')}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-notion-link" title="Apri nota su Notion" style="padding: 2px 8px; font-size: 11px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: var(--accent-primary);">
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     Notion
@@ -260,6 +391,14 @@
         updateBatchButton();
       });
 
+      // Append graph button listener
+      const btnAppendGraph = tr.querySelector(".btn-append-graph");
+      if (btnAppendGraph) {
+        btnAppendGraph.addEventListener("click", () => {
+          graphQueue.enqueue(file);
+        });
+      }
+
       // Single sync button listener
       const btnSync = tr.querySelector(".btn-single-sync");
       btnSync.addEventListener("click", () => {
@@ -282,6 +421,11 @@
   // --- 3. Batch ETL Execution ---
   async function startBatch(customFileList = null) {
     if (state.isBatchRunning || !state.activeProfile) return;
+
+    if (graphQueue.activeHash || graphQueue.items.length > 0) {
+      appendLog("sys", "Attendere il completamento della coda Append Grafo prima di avviare il batch.", "warn");
+      return;
+    }
 
     const filesToRun = customFileList || Array.from(state.selectedFiles);
     if (filesToRun.length === 0) {
@@ -571,6 +715,17 @@
     if (el.btnThemeToggle) {
       el.btnThemeToggle.addEventListener("click", toggleTheme);
     }
+
+    // Segmented Output Mode Selector
+    document.querySelectorAll(".mode-segment-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".mode-segment-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        if (el.selectGenerationMode) {
+          el.selectGenerationMode.value = btn.dataset.mode;
+        }
+      });
+    });
 
     // Keyboard Shortcuts
     document.addEventListener("keydown", (e) => {

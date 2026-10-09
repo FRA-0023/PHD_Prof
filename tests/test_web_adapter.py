@@ -9,7 +9,7 @@ import httpx
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.core.domain.models import CourseProfile, DocumentType, NotionTarget
+from src.core.domain.models import CourseProfile, DocumentType, NotionTarget, SyncEntry, SyncStatus
 from src.ports.outbound.notion_client_port import INotionClient
 from src.ports.outbound.llm_client_port import ILlmClient
 from src.ports.outbound.course_profile_repository_port import ICourseProfileRepository
@@ -249,5 +249,144 @@ def test_pdf_to_notion_syntax_valid():
     import py_compile
     compiled_path = py_compile.compile("pdf_to_notion.py", doraise=True)
     assert compiled_path is not None
+
+
+@pytest.mark.anyio
+async def test_append_graph_not_synced_raises_404(mock_dependencies):
+    adapter = mock_dependencies["adapter"]
+    state_repo = mock_dependencies["state_repo"]
+    state_repo.get_entry.return_value = None
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+        response = await client.post("/api/documents/non_existent_hash/append-graph")
+        assert response.status_code == 404
+        assert "non sincronizzato" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_append_graph_staging_missing_raises_404(mock_dependencies):
+    adapter = mock_dependencies["adapter"]
+    state_repo = mock_dependencies["state_repo"]
+    state_repo.get_entry.return_value = SyncEntry(file_hash="valid_hash_1", status=SyncStatus.SYNCED, page_id="page_111")
+
+    staging_file = Path("staging") / "valid_hash_1.md"
+    if staging_file.exists():
+        staging_file.unlink()
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+        response = await client.post("/api/documents/valid_hash_1/append-graph")
+        assert response.status_code == 404
+        assert "non trovato nella cache di staging" in response.json()["detail"]
+
+
+@pytest.mark.anyio
+async def test_append_graph_with_existing_mermaid_success(mock_dependencies):
+    adapter = mock_dependencies["adapter"]
+    state_repo = mock_dependencies["state_repo"]
+    notion_client = mock_dependencies["adapter"].notion_client
+    llm_client = mock_dependencies["llm_client"]
+
+    state_repo.get_entry.return_value = SyncEntry(file_hash="hash_with_mermaid", status=SyncStatus.SYNCED, page_id="page_222")
+
+    staging_dir = Path("staging")
+    staging_dir.mkdir(exist_ok=True)
+    staging_file = staging_dir / "hash_with_mermaid.md"
+    sample_content = (
+        "# Lecture 1: System Design\n\n"
+        "Some detailed academic theory.\n\n"
+        "---\n"
+        "## 🧠 Conceptual Architecture & Relational Graphs\n\n"
+        "```mermaid\nmindmap\n  root((Arch))\n    Pillars\n```\n\n"
+        "```mermaid\ngraph TD\n  A --> B\n```\n"
+    )
+    staging_file.write_text(sample_content, encoding="utf-8")
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+            response = await client.post("/api/documents/hash_with_mermaid/append-graph")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "ok"
+            assert data["page_id"] == "page_222"
+            assert data["blocks_count"] > 0
+
+            notion_client.append_blocks.assert_called_once()
+            call_args = notion_client.append_blocks.call_args[0]
+            assert call_args[0] == "page_222"
+            blocks = call_args[1]
+            assert any(b.get("type") == "code" and b.get("code", {}).get("language") == "mermaid" for b in blocks)
+
+            llm_client.generate_notes.assert_not_called()
+    finally:
+        if staging_file.exists():
+            staging_file.unlink()
+
+
+@pytest.mark.anyio
+async def test_append_graph_generates_artifacts_when_missing(mock_dependencies):
+    adapter = mock_dependencies["adapter"]
+    state_repo = mock_dependencies["state_repo"]
+    notion_client = mock_dependencies["adapter"].notion_client
+    llm_client = mock_dependencies["llm_client"]
+
+    state_repo.get_entry.return_value = SyncEntry(file_hash="hash_no_mermaid", status=SyncStatus.SYNCED, page_id="page_333")
+
+    staging_dir = Path("staging")
+    staging_dir.mkdir(exist_ok=True)
+    staging_file = staging_dir / "hash_no_mermaid.md"
+    initial_content = "# Chapter 2\n\nPure lecture text without any diagrams."
+    staging_file.write_text(initial_content, encoding="utf-8")
+
+    llm_client.generate_notes.return_value = (
+        "## 🧠 Conceptual Architecture & Relational Graphs\n\n"
+        "```mermaid\nmindmap\n  root((Generated))\n    Concept\n```\n"
+    )
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+            response = await client.post("/api/documents/hash_no_mermaid/append-graph")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "ok"
+            assert data["page_id"] == "page_333"
+
+            llm_client.generate_notes.assert_called_once()
+            notion_client.append_blocks.assert_called_once()
+            call_args = notion_client.append_blocks.call_args[0]
+            assert call_args[0] == "page_333"
+    finally:
+        if staging_file.exists():
+            staging_file.unlink()
+
+
+@pytest.mark.anyio
+async def test_append_graph_broadcasts_quota_update(mock_dependencies):
+    # ARCHITETTURA: Verifica che l'azione On-Demand '+ Grafo' emetta l'evento SSE 'quota_update'
+    # per mantenere perfettamente sincronizzato il contatore delle chiamate residue nella Topbar.
+    adapter = mock_dependencies["adapter"]
+    state_repo = mock_dependencies["state_repo"]
+    llm_client = mock_dependencies["llm_client"]
+    llm_client.get_remaining_calls.return_value = 142
+
+    state_repo.get_entry.return_value = SyncEntry(file_hash="hash_quota_test", status=SyncStatus.SYNCED, page_id="page_quota")
+
+    staging_dir = Path("staging")
+    staging_dir.mkdir(exist_ok=True)
+    staging_file = staging_dir / "hash_quota_test.md"
+    staging_file.write_text("# Title\n\n```mermaid\nmindmap\n  root((A))\n```", encoding="utf-8")
+
+    from unittest.mock import MagicMock
+    adapter.streamer.broadcast = MagicMock()
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+            response = await client.post("/api/documents/hash_quota_test/append-graph")
+            assert response.status_code == 200
+
+            adapter.streamer.broadcast.assert_any_call("quota_update", {"remaining": 142})
+    finally:
+        if staging_file.exists():
+            staging_file.unlink()
+
 
 

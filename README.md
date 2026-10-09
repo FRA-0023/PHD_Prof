@@ -499,10 +499,11 @@ Provides full visual observability and selective batch control:
   # --no-browser          (prevents opening browser automatically)
   ```
 
-- **Output Mode Selector**: In the toolbar above the document queue, choose what to generate for each lecture:
-  - `🎯 Entrambi (Note + Grafo)` (default): Complete analytical chapter + visual Mermaid architecture map & examination drills.
-  - `📝 Solo Note`: Only the deep textbook synthesis (excluding graphs and study drills).
-  - `🧠 Solo Grafo`: Only the conceptual architecture diagram, flowchart, active recall drills, and model boundary conditions.
+- **Output Mode Selector**: In the toolbar above the document queue, use the compact segmented control (`Entrambi` / `Note` / `Grafo`):
+  - `Entrambi` (default): Complete analytical chapter + visual Mermaid architecture map & examination drills.
+  - `Note`: Only the deep textbook synthesis (excluding graphs and study drills).
+  - `Grafo`: Only the conceptual architecture diagram, flowchart, active recall drills, and model boundary conditions.
+- **On-Demand Graph Append (`+ Grafo`)**: For documents already synchronized (`SYNCED`), a dedicated `+ Grafo` action button in the document table extracts or generates the Mermaid conceptual architecture and appends it directly to the existing Notion page without re-running the entire text synthesis.
 
 ---
 

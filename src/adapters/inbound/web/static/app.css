@@ -142,17 +142,13 @@ body {
 }
 
 .brand-icon {
-  width: 24px;
-  height: 24px;
-  background: var(--accent-primary);
+  width: 32px;
+  height: 32px;
   border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 11px;
-  color: #fff;
-  letter-spacing: -0.5px;
+  object-fit: contain;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
 }
 
 .brand-title {
@@ -482,50 +478,60 @@ body {
   flex-shrink: 0;
 }
 
-.mode-selector-group {
-  display: flex;
+/* --- Mode Segmented Control --- */
+.mode-segmented-control {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   background-color: var(--bg-surface-elev);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
-  padding: 3px 8px;
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.1);
+  padding: 2px 4px 2px 8px;
+  height: 28px;
   flex-shrink: 0;
 }
 
-.mode-label {
+.mode-segment-label {
   font-size: 11px;
-  font-weight: 800;
-  color: #38BDF8;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.select-mode {
-  background-color: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-focus);
-  border-radius: var(--radius-sm);
-  padding: 4px 10px;
-  font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
-  outline: none;
-  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
 }
 
-.select-mode:hover {
-  border-color: #38BDF8;
+.mode-segment-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background-color: var(--bg-surface-sub);
+  border: 1px solid var(--border-subtle);
+  border-radius: 3px;
+  padding: 1px;
+}
+
+.mode-segment-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  line-height: 16px;
+}
+
+.mode-segment-btn:hover:not(.active) {
+  color: var(--text-primary);
   background-color: var(--bg-surface-elev);
 }
 
-.select-mode:focus {
-  border-color: #38BDF8;
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+.mode-segment-btn.active {
+  background-color: var(--accent-primary);
+  color: var(--text-on-accent);
 }
 
 /* --- Table File Queue --- */
@@ -934,26 +940,33 @@ button:disabled {
   background-color: #FECACA;
 }
 
-/* Output Mode Selector in Light Mode */
-[data-theme="light"] .mode-selector-group {
-  background-color: #F8FAFC;
-  border-color: #38BDF8;
-  box-shadow: 0 1px 3px rgba(2, 132, 199, 0.1);
+/* Output Mode Segmented Control in Light Mode */
+[data-theme="light"] .mode-segmented-control {
+  background-color: var(--bg-surface-sub);
+  border-color: var(--border-muted);
 }
 
-[data-theme="light"] .mode-label {
-  color: #0284C7;
+[data-theme="light"] .mode-segment-label {
+  color: var(--text-secondary);
 }
 
-[data-theme="light"] .select-mode {
-  background-color: #FFFFFF;
-  color: #0F172A;
-  border-color: #0284C7;
+[data-theme="light"] .mode-segment-group {
+  background-color: var(--bg-surface-elev);
+  border-color: var(--border-muted);
 }
 
-[data-theme="light"] .select-mode:hover {
-  background-color: #F1F5F9;
-  border-color: #0369A1;
+[data-theme="light"] .mode-segment-btn {
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .mode-segment-btn:hover:not(.active) {
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+[data-theme="light"] .mode-segment-btn.active {
+  background-color: var(--accent-primary);
+  color: #FFFFFF;
 }
 
 /* Badges in Light Mode */
@@ -1000,44 +1013,45 @@ button:disabled {
   border-color: #FCA5A5;
 }
 
-/* Live Telemetry Console (Dark Console Preserved in Light Mode) */
-/* # ARCHITETTURA: Conserviamo il dark terminal deck per massimizzare la leggibilità SSE */
+/* Live Telemetry Console in Light Mode (Pure White & Clean Paper) */
+/* # ARCHITETTURA: Sostituzione deterministica con tema chiaro completo (console bianca pura)
+   confermando la piena leggibilità WCAG 2.2 AA sui log streaming e badge semantici. */
 [data-theme="light"] .telemetry-deck {
-  background-color: #0F1522;
-  border-top: 1px solid #CBD5E1;
+  background-color: #FFFFFF;
+  border-top: 1px solid #E2E8F0;
 }
 
 [data-theme="light"] .telemetry-toolbar {
-  background-color: #111827;
-  border-top-color: #1E293B;
-  border-bottom-color: #1E293B;
+  background-color: #F8FAFC;
+  border-top-color: #E2E8F0;
+  border-bottom-color: #E2E8F0;
 }
 
 [data-theme="light"] .telemetry-title {
-  color: #94A3B8;
+  color: #475569;
 }
 
 [data-theme="light"] .telemetry-toolbar label {
-  color: #94A3B8 !important;
+  color: #64748B !important;
 }
 
 [data-theme="light"] .telemetry-toolbar .btn-secondary {
-  background-color: #1E293B;
-  color: #E2E8F0;
-  border-color: #334155;
+  background-color: #FFFFFF;
+  color: #0F172A;
+  border-color: #CBD5E1;
 }
 
 [data-theme="light"] .telemetry-toolbar .btn-secondary:hover:not(:disabled) {
-  background-color: #2D3D54;
-  border-color: #64748B;
+  background-color: #F1F5F9;
+  border-color: #94A3B8;
 }
 
 [data-theme="light"] .log-scroll-pane {
-  background-color: #0A0E17;
+  background-color: #FFFFFF;
 }
 
 [data-theme="light"] .log-text {
-  color: #F1F5F9;
+  color: #0F172A;
 }
 
 [data-theme="light"] .log-time {
@@ -1045,12 +1059,19 @@ button:disabled {
 }
 
 [data-theme="light"] .log-text.error {
-  color: #F87171;
+  color: #DC2626;
+  font-weight: 600;
 }
 
 [data-theme="light"] .log-text.warn {
-  color: #FBBF24;
+  color: #D97706;
+  font-weight: 600;
 }
+
+[data-theme="light"] .log-src.local  { background: #E2E8F0; color: #334155; }
+[data-theme="light"] .log-src.llm    { background: #E0F2FE; color: #0284C7; }
+[data-theme="light"] .log-src.notion { background: #FEF3C7; color: #B45309; }
+[data-theme="light"] .log-src.sys    { background: #F1F5F9; color: #475569; }
 
 /* Modal Form Controls in Light Mode */
 [data-theme="light"] .modal-overlay {

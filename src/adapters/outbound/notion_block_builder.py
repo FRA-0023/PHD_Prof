@@ -167,6 +167,54 @@ def sanitize_mermaid_mindmap(content: str) -> str:
         stripped = line.strip()
         if not stripped:
             sanitized_lines.append(line)
+def _clean_mermaid_label(inner_text: str) -> str:
+    """
+    Rimuove tag HTML, backticks e normalizza virgolette e parentesi per la compatibilità con Notion ed ELK.
+    # ARCHITETTURA: Notion e i renderer web sanitizzano o isolano i nodi SVG; la presenza di tag
+    # inline (es. <span style='...'>, <br/>, <b>) o backticks genera errori di calcolo bounding-box
+    # o manda in crash l'engine di layout con 'TypeError: Cannot read properties of null (reading re)'.
+    """
+    # 1. Rimozione tag HTML
+    inner_text = re.sub(r'<span[^>]*>', '', inner_text, flags=re.IGNORECASE)
+    inner_text = re.sub(r'</span>', '', inner_text, flags=re.IGNORECASE)
+    inner_text = re.sub(r'</?[bi]>', '', inner_text, flags=re.IGNORECASE)
+    inner_text = re.sub(r'<br\s*/?>', ' - ', inner_text, flags=re.IGNORECASE)
+    inner_text = re.sub(r'<[^>]+>', '', inner_text)
+
+    # 2. Rimozione backticks
+    inner_text = inner_text.replace('`', "'")
+
+    # 3. Rimozione virgolette delimitatrici esterne
+    inner_text = inner_text.strip()
+    if (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
+        inner_text = inner_text[1:-1].strip()
+
+    # 4. Eliminazione virgolette doppie interne e apici spaiati isolati
+    inner_text = inner_text.replace('"', "")
+    inner_text = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", inner_text)
+
+    # 5. Conversione quadre annidate a parentesi tonde (es. Bear:[1,1] -> Bear:(1,1))
+    inner_text = re.sub(r'\[([^\]]*)\]', r'(\1)', inner_text)
+
+    # 6. Conversione frecce interne a trattino
+    inner_text = re.sub(r'\s*(?:->|—)\s*', ' - ', inner_text)
+
+    # 7. Normalizzazione whitespace
+    inner_text = re.sub(r'\s+', ' ', inner_text).strip()
+    return inner_text
+
+
+def sanitize_mermaid_mindmap(content: str) -> str:
+    """
+    Sanitizza diagrammi mindmap Mermaid per compatibilità con l'anteprima nativa Notion.
+    """
+    lines = content.splitlines()
+    sanitized_lines = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            sanitized_lines.append(line)
             continue
 
         if stripped.lower() == "mindmap":
@@ -179,7 +227,8 @@ def sanitize_mermaid_mindmap(content: str) -> str:
         # Nodo radice: root((...)) senza apici annidati
         if stripped.startswith("root((") and stripped.endswith("))"):
             raw_inner = stripped[6:-2].strip().strip("\"'").replace('"', "").replace("'", "")
-            sanitized_lines.append(f'{indent_str}root(("{raw_inner}"))')
+            clean_root = _clean_mermaid_label(raw_inner)
+            sanitized_lines.append(f'{indent_str}root(("{clean_root}"))')
             continue
 
         # Già formattato con delimitatori espliciti sicuri racchiusi da apici
@@ -189,25 +238,22 @@ def sanitize_mermaid_mindmap(content: str) -> str:
             (stripped.startswith('(("') and stripped.endswith('"))'))
         )
         if is_bracketed:
-            # Sostituisce eventuali frecce -> o em-dash con trattino standard
-            clean_line = re.sub(r'\s*(?:->|—)\s*', ' - ', line)
-            sanitized_lines.append(clean_line)
+            raw_inner = stripped[2:-2]
+            clean_text = _clean_mermaid_label(raw_inner)
+            sanitized_lines.append(f'{indent_str}["{clean_text}"]')
             continue
 
         # Forme composte con testo prefisso: es. Moore's Law((N_T(t) ...))
         m_shape = re.match(r"^(.*?)\(\((.*?)\)\)$", stripped)
         if m_shape:
             prefix, inner = m_shape.group(1).strip(), m_shape.group(2).strip()
-            clean_text = f"{prefix}: {inner}" if prefix else inner
-            clean_text = clean_text.replace('"', "'")
-            clean_text = re.sub(r'\s*(?:->|—)\s*', ' - ', clean_text)
+            clean_text = _clean_mermaid_label(f"{prefix}: {inner}" if prefix else inner)
             sanitized_lines.append(f'{indent_str}["{clean_text}"]')
             continue
 
         # Se il nodo contiene parentesi, operatori o punteggiatura, racchiudi in ["..."]
         if any(c in stripped for c in "()[]:\"->,;"):
-            clean_text = stripped.strip("\"'").replace('"', "'")
-            clean_text = re.sub(r'\s*(?:->|—)\s*', ' - ', clean_text)
+            clean_text = _clean_mermaid_label(stripped)
             sanitized_lines.append(f'{indent_str}["{clean_text}"]')
         else:
             sanitized_lines.append(line)
@@ -218,23 +264,24 @@ def sanitize_mermaid_mindmap(content: str) -> str:
 def sanitize_mermaid_flowchart(content: str) -> str:
     """
     Sanitizza diagrammi di flusso Mermaid (graph TD / flowchart TD) per Notion e renderer web.
-    # ARCHITETTURA: Nei flowchart Mermaid elaborati con motore ELK (Eclipse Layout Kernel,
-    # usato internamente da Notion e dai moderni renderer per layout gerarchici), si verificano due
-    # crash critici 'TypeError: Cannot read properties of null (reading \'re\')':
-    # 1. Dichiarazione di subgraph senza ID alfanumerico esplicito (es. 'subgraph MapReduce Word Count'):
-    #    il parser ELK perde la risoluzione del genitore nell'AST e fallisce il lookup shape;
-    # 2. Parentesi quadre annidate o apici spaiati dentro label quotate (es. 'Bear:[1,1]' o '\"\'Deer\'\"'):
-    #    la regex del tokenizer Mermaid si interrompe prematuramente lasciando nodi orfani.
-    # Normalizziamo deterministicamente subgraphs e nodi a sintassi pienamente conforme.
+    # ARCHITETTURA: Nei flowchart Mermaid elaborati con motore ELK (Eclipse Layout Kernel) o Dagre
+    # in Notion, si verificano crash sistematici 'TypeError: Cannot read properties of null (reading \'re\')':
+    # 1. Direttive `style <subgraphId>` su cluster/subgraph: ELK cerca la shape nella tabella nodi atomici,
+    #    restituisce null e manda in crash il layout engine. Esse vengono scartate deterministicamente.
+    # 2. Tag HTML inline (<span style=...>, <br/>, <b>): rompono il calcolo geometrico delle bounding box SVG.
+    # 3. Archi cross-subgraph dichiarati all'interno di un subgraph: causano conflitti di gerarchia ad albero
+    #    multi-genitore in Dagre/ELK; vengono estratti e spostati (hoisted) a livello radice.
+    # 4. Forme di nodo non standard (tonde, doppie tonde, rombi, stadi) non quotate: vengono normalizzate.
+    # 5. Sintassi frecce con etichetta non standard (`-- "label" -->`): normalizzate a `-->|label|`.
+    # 6. Archi puntati a ID di subgraph: re-indirizzati al primo nodo concreto del subgraph.
     """
     content = content.replace("\ufffd", " - ").replace("\u00a0", " ")
     lines = content.splitlines()
 
-    # ARCHITETTURA: Identificazione preventiva di tutti i subgraph e del rispettivo primo nodo membro.
-    # Se un arco punta direttamente all'ID di un subgraph (es. 'ROOT --> BDF' o 'BDF --> NEXT'),
-    # l'engine ELK fallisce la risoluzione del vertice sollevando 'Cannot read properties of null (reading re)'.
-    # Ridirigiamo deterministicamente tali archi al primo nodo effettivo del cluster.
+    # Pass 1: Identificazione preventiva di tutti i subgraph e dei rispettivi nodi membri
     subgraph_map: Dict[str, Optional[str]] = {}
+    subgraph_nodes: Dict[str, set] = {}
+    all_declared_nodes = set()
     current_sg: Optional[str] = None
 
     for line in lines:
@@ -244,16 +291,24 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             current_sg = m_sub.group(1)
             if current_sg not in subgraph_map:
                 subgraph_map[current_sg] = None
+                subgraph_nodes[current_sg] = set()
             continue
         if stripped.lower() == 'end':
             current_sg = None
             continue
-        if current_sg and subgraph_map[current_sg] is None:
-            m_node = re.match(r'^([A-Za-z0-9_]+)\s*[\(\[\{]', stripped)
-            if m_node:
-                subgraph_map[current_sg] = m_node.group(1)
+        if current_sg:
+            m_node = re.search(r'\b([A-Za-z0-9_]+)\s*(\[|\(|\{|\(\(|\[\(|\{\{)', stripped)
+            if m_node and m_node.group(1).lower() not in ('style', 'subgraph', 'end', 'direction', 'classdef', 'class'):
+                nid = m_node.group(1)
+                subgraph_nodes[current_sg].add(nid)
+                all_declared_nodes.add(nid)
+                if subgraph_map[current_sg] is None:
+                    subgraph_map[current_sg] = nid
 
     sanitized_lines = []
+    cross_sg_edges = []
+    in_subgraph = False
+    current_sg_id = None
 
     for line in lines:
         stripped = line.strip()
@@ -264,105 +319,167 @@ def sanitize_mermaid_flowchart(content: str) -> str:
         indent = len(line) - len(line.lstrip(" "))
         indent_str = " " * indent
 
-        # 1. Rimuove punto e virgola finale ridondante a fine riga
+        # Rimuove punto e virgola finale ridondante a fine riga
         line_clean = re.sub(r';\s*$', '', stripped)
 
-        # 2. Normalizzazione Subgraph (risoluzione root cause 'reading re' in ELK)
+        # 1. Normalizzazione Subgraph Header
         m_sub = re.match(r'^subgraph\s+(.+)$', line_clean, re.IGNORECASE)
         if m_sub:
+            in_subgraph = True
             sub_body = m_sub.group(1).strip()
-            # Caso a: già valido con ID e titolo quotato (es. 'subgraph MR ["Word Count"]')
-            if re.match(r'^[A-Za-z0-9_]+\s*\["[^"]+"\]$', sub_body):
-                sanitized_lines.append(f"{indent_str}subgraph {sub_body}")
-                continue
-            # Caso b: ID con titolo in quadre ma non quotato (es. 'subgraph MR [Word Count]')
-            m_id_bracket = re.match(r'^([A-Za-z0-9_]+)\s*\[([^"\]]+)\]$', sub_body)
+            # Caso a: ID con titolo tra parentesi quadre
+            m_id_bracket = re.match(r'^([A-Za-z0-9_]+)\s*\[(.*)\]$', sub_body)
             if m_id_bracket:
-                sid, stitle = m_id_bracket.group(1), m_id_bracket.group(2).strip()
+                sid = m_id_bracket.group(1)
+                stitle = _clean_mermaid_label(m_id_bracket.group(2))
+                current_sg_id = sid
                 sanitized_lines.append(f'{indent_str}subgraph {sid} ["{stitle}"]')
                 continue
-            # Caso c: solo titolo tra virgolette senza ID (es. 'subgraph "Word Count"')
+            # Caso b: solo titolo tra virgolette senza ID
             m_quoted_only = re.match(r'^"([^"]+)"$', sub_body)
             if m_quoted_only:
-                stitle = m_quoted_only.group(1).strip()
+                stitle = _clean_mermaid_label(m_quoted_only.group(1))
                 slug = "sg_" + re.sub(r'[^A-Za-z0-9_]+', '_', stitle).strip('_')
+                current_sg_id = slug
                 sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
                 continue
-            # Caso d: singolo identificatore alfanumerico (es. 'subgraph MR')
+            # Caso c: singolo identificatore alfanumerico
             if re.match(r'^[A-Za-z0-9_]+$', sub_body):
+                current_sg_id = sub_body
                 sanitized_lines.append(f"{indent_str}subgraph {sub_body}")
                 continue
-            # Caso e: titolo con parole multiple non quotato (es. 'subgraph MapReduce Word Count Example')
-            stitle = sub_body.strip("\"'")
+            # Caso d: titolo con parole multiple non quotato
+            stitle = _clean_mermaid_label(sub_body)
             slug = "sg_" + re.sub(r'[^A-Za-z0-9_]+', '_', stitle).strip('_')
+            current_sg_id = slug
             sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
             continue
 
-        # 3. Normalizzazione stile subgraph: impedisce fill opachi o chiari (es. fill:#f8fafc) che in Notion Dark Mode
-        # causano contrasto inverso bianco-su-bianco ('white on white') per i titoli dei cluster.
-        # Imponiamo deterministico fill:none e stroke adattivo neutro (#64748b).
-        m_style_sg = re.match(r'^style\s+([A-Za-z0-9_]+)\s+(.+)$', line_clean, re.IGNORECASE)
-        if m_style_sg:
-            sg_id = m_style_sg.group(1)
-            style_props = m_style_sg.group(2)
-            if sg_id in subgraph_map:
-                style_props = re.sub(r'fill:[^,;]+', 'fill:none', style_props)
-                style_props = re.sub(r'stroke:(?:#94a3b8|#cbd5e1|#e2e8f0)', 'stroke:#64748b', style_props)
-                sanitized_lines.append(f"{indent_str}style {sg_id} {style_props}")
-                continue
+        if stripped.lower() == 'end':
+            in_subgraph = False
+            current_sg_id = None
+            sanitized_lines.append(f"{indent_str}end")
+            continue
 
-        # 4. Normalizzazione sicura dei nodi rettangolari [ ... ] e rombi { ... }
-        # ARCHITETTURA: Un regex greedy su [ ... ] o { ... } ingloba frecce come '-->'
-        # e nodi successivi sulla stessa riga (es. 'A[L1] --> B[L2]'), distruggendo la topologia
-        # e generando un blocco non valido che manda in crash il layout ELK.
-        # Splittiamo deterministicamente sui token freccia per processare ciascun nodo isolatamente.
+        # 2. Direttiva style: scarta deterministiche style directives sui subgraph per evitare crash ELK
+        m_style = re.match(r'^style\s+([A-Za-z0-9_]+)\s+(.+)$', line_clean, re.IGNORECASE)
+        if m_style:
+            target_id = m_style.group(1)
+            if target_id in subgraph_map:
+                continue
+            sanitized_lines.append(f"{indent_str}{line_clean}")
+            continue
+
+        # 3. Normalizzazione frecce con label:
+        # Trasforma `A -- "label" --> B` o `A -- label --> B` in standard universale `A -->|label| B`
+        def _normalize_edge_labels(l: str) -> str:
+            p_labeled = r'--\s*(?:\||"|)?(.*?)(?:\||"|)?\s*(-->|---|-.->|==>)'
+            def rep_edge(m):
+                lbl = _clean_mermaid_label(m.group(1))
+                arr = m.group(2)
+                return f'{arr}|{lbl}|'
+            return re.sub(p_labeled, rep_edge, l)
+
+        line_clean = _normalize_edge_labels(line_clean)
+
+        # 4. Riconoscimento e sanitizzazione dei nodi in tutte le forme grafiche
         arrow_pattern = r'(\s*(?:-->|---|-.->|-.-|==>|==)(?:\|[^|\n]+\|)?\s*)'
         parts = re.split(arrow_pattern, line_clean)
         cleaned_parts = []
+        is_edge_line = len(parts) > 1
 
         for part in parts:
             if re.match(r'^\s*(?:-->|---|-.->|-.-|==>|==)', part):
+                m_edge_lbl = re.match(r'^(\s*(?:-->|---|-.->|-.-|==>|==)\|)([^|\n]+)(\|\s*)$', part)
+                if m_edge_lbl:
+                    clean_elbl = _clean_mermaid_label(m_edge_lbl.group(2))
+                    part = f'{m_edge_lbl.group(1)}{clean_elbl}{m_edge_lbl.group(3)}'
                 cleaned_parts.append(part)
                 continue
 
             semicolon = ";" if part.rstrip().endswith(";") else ""
-            clean_part = part.rstrip().rstrip(";").strip()
+            clean_part = re.sub(r';\s*$', '', part).strip()
+            if not clean_part:
+                cleaned_parts.append(part)
+                continue
 
-            m_bracket = re.match(r'^([A-Za-z0-9_]+)\[(.*)\]$', clean_part)
-            m_rhombus = re.match(r'^([A-Za-z0-9_]+)\{(.*)\}$', clean_part)
+            # ARCHITETTURA: Estrazione preventiva di annotazioni di stile di classe (:::className)
+            # per consentire il parsing pulito della shape del nodo e ri-agganciarla all'uscita.
+            class_suffix = ""
+            m_cls = re.search(r':::([A-Za-z0-9_]+)$', clean_part)
+            if m_cls:
+                class_suffix = f":::{m_cls.group(1)}"
+                clean_part = clean_part[:m_cls.start()].strip()
 
-            if m_bracket:
-                nid = m_bracket.group(1)
-                content = m_bracket.group(2).strip()
-                if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
-                    content = content[1:-1].strip()
-                content = content.replace('"', "")
-                content = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", content)
-                content = re.sub(r'\[([^\]]*)\]', r'(\1)', content)
-                content = re.sub(r'\s*->\s*', ' - ', content)
-                part = f'{nid}["{content}"]{semicolon}'
+            # a) Double circle (( ... ))
+            m_dcircle = re.match(r'^([A-Za-z0-9_]+)\s*\(\((.*)\)\)$', clean_part)
+            # b) Stadium ([ ... ])
+            m_stadium = re.match(r'^([A-Za-z0-9_]+)\s*\(\[(.*)\]\)$', clean_part)
+            # c) Cylinder [( ... )]
+            m_cylinder = re.match(r'^([A-Za-z0-9_]+)\s*\[\((.*)\)\]$', clean_part)
+            # d) Hexagon {{ ... }}
+            m_hex = re.match(r'^([A-Za-z0-9_]+)\s*\{\{(.*)\}\}$', clean_part)
+            # e) Rhombus { ... }
+            m_rhombus = re.match(r'^([A-Za-z0-9_]+)\s*\{(.*)\}$', clean_part)
+            # f) Circle / Rounded ( ... )
+            m_round = re.match(r'^([A-Za-z0-9_]+)\s*\((.*)\)$', clean_part)
+            # g) Square [ ... ]
+            m_bracket = re.match(r'^([A-Za-z0-9_]+)\s*\[(.*)\]$', clean_part)
+
+            if m_dcircle:
+                nid, text = m_dcircle.group(1), _clean_mermaid_label(m_dcircle.group(2))
+                part = f'{nid}(("{text}")){class_suffix}{semicolon}'
+            elif m_stadium:
+                nid, text = m_stadium.group(1), _clean_mermaid_label(m_stadium.group(2))
+                part = f'{nid}(["{text}"]){class_suffix}{semicolon}'
+            elif m_cylinder:
+                nid, text = m_cylinder.group(1), _clean_mermaid_label(m_cylinder.group(2))
+                part = f'{nid}[("{text}")]{class_suffix}{semicolon}'
+            elif m_hex:
+                nid, text = m_hex.group(1), _clean_mermaid_label(m_hex.group(2))
+                part = f'{nid}{{"{text}"}}{class_suffix}{semicolon}'
             elif m_rhombus:
-                nid = m_rhombus.group(1)
-                content = m_rhombus.group(2).strip()
-                if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
-                    content = content[1:-1].strip()
-                content = content.replace('"', "")
-                content = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", content)
-                content = re.sub(r'\[([^\]]*)\]', r'(\1)', content)
-                content = re.sub(r'\s*->\s*', ' - ', content)
-                part = f'{nid}{{"{content}"}}{semicolon}'
+                nid, text = m_rhombus.group(1), _clean_mermaid_label(m_rhombus.group(2))
+                part = f'{nid}{{"{text}"}}{class_suffix}{semicolon}'
+            elif m_round:
+                nid, text = m_round.group(1), _clean_mermaid_label(m_round.group(2))
+                part = f'{nid}("{text}"){class_suffix}{semicolon}'
+            elif m_bracket:
+                nid, text = m_bracket.group(1), _clean_mermaid_label(m_bracket.group(2))
+                part = f'{nid}["{text}"]{class_suffix}{semicolon}'
 
             cleaned_parts.append(part)
 
         line_clean = "".join(cleaned_parts)
 
-        # 4. Re-indirizzamento archi che puntano a subgraph ID invece che a nodi
+        # 5. Re-indirizzamento archi che puntano a subgraph ID invece che a nodi concreti
         for sg_id, first_node in subgraph_map.items():
             if first_node:
                 line_clean = re.sub(rf'\b{sg_id}\s*(-->|---|-.->|==>)\s*', f'{first_node} \\1 ', line_clean)
                 line_clean = re.sub(rf'\s*(-->|---|-.->|==>)\s*{sg_id}\b', f' \\1 {first_node}', line_clean)
 
+        # 6. Hoisting degli archi cross-subgraph:
+        # Se un arco dichiarato dentro un subgraph fa riferimento a un nodo dichiarato altrove,
+        # estrailo fuori dal cluster per non inquinare la gerarchia compound in Dagre/ELK
+        if in_subgraph and is_edge_line and current_sg_id:
+            edge_nodes = re.findall(r'\b([A-Za-z0-9_]+)\b', line_clean)
+            has_external_node = False
+            for en in edge_nodes:
+                if en in all_declared_nodes and en not in subgraph_nodes.get(current_sg_id, set()):
+                    has_external_node = True
+                    break
+            if has_external_node:
+                cross_sg_edges.append(line_clean.strip())
+                continue
+
         sanitized_lines.append(f"{indent_str}{line_clean}")
+
+    # Aggiungi in coda eventuali archi cross-subgraph hoisted
+    if cross_sg_edges:
+        sanitized_lines.append("")
+        sanitized_lines.append("  %% Cross-subgraph edges hoisted for ELK/Dagre hierarchy stability")
+        for edge in cross_sg_edges:
+            sanitized_lines.append(f"  {edge}")
 
     return "\n".join(sanitized_lines)
 

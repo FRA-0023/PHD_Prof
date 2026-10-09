@@ -21,7 +21,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from src.core.domain.models import Document, DocumentType, NotionTarget, CourseProfile, SyncStatus, GenerationMode
-from src.core.domain.prompt_templates import get_prompt_template
+from src.core.domain.prompt_templates import get_prompt_template, get_artifacts_extraction_prompt
+from src.adapters.outbound.notion_block_builder import build_notion_blocks
+from src.adapters.outbound.study_schema_exporter_adapter import StudySchemaExporterAdapter
 from src.core.usecases.process_document import ProcessDocumentUseCase, compute_file_hash
 from src.ports.outbound.notion_client_port import INotionClient
 from src.ports.outbound.llm_client_port import ILlmClient
@@ -101,6 +103,7 @@ class WebAdapter:
         self.stop_requested = False
         self.active_profile_key: Optional[str] = None
         self._batch_lock = threading.Lock()
+        self._graph_lock = threading.Lock()
         self.static_dir = pathlib.Path(__file__).parent / "static"
         
         # Watchdog & automatic shutdown state
@@ -375,6 +378,126 @@ class WebAdapter:
                     "Content-Disposition": f'attachment; filename="{file_hash}.opml"',
                 },
             )
+
+        # ── On-Demand Graph Append to Notion ──────────────────────────────────
+        @app.post("/api/documents/{file_hash}/append-graph")
+        def append_graph_to_document(file_hash: str):
+            """
+            # ARCHITETTURA: Funzione sincrona 'def' delegata da FastAPI a un worker threadpool dedicato.
+            # Questo evita categoricamente il blocco dell'event loop asyncio di Uvicorn durante le chiamate
+            # di rete prolungate (15-30s) a LLM e Notion API, garantendo fluidità per heartbeat e SSE.
+            # TRADE-OFF: L'uso di self._graph_lock serializza rigidamente le richieste multiple concorrenti
+            # alla risorsa esterna, prevenendo collisioni di rate limit, sovrapposizioni e handshake timeout.
+            # PERFORMANCE: Se Mermaid è già presente in staging, 0 chiamate LLM consumate.
+            """
+            with self._graph_lock:
+                if not self.state_repo:
+                    raise HTTPException(status_code=500, detail="State repository non configurato")
+
+                entry = self.state_repo.get_entry(file_hash)
+                if not entry or not entry.page_id:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Documento con hash '{file_hash}' non sincronizzato o privo di pagina Notion",
+                    )
+
+                page_id = entry.page_id
+
+                # Lettura markdown dalla cache di staging
+                staging_file = pathlib.Path("staging") / f"{file_hash}.md"
+                if not staging_file.exists():
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Markdown del documento '{file_hash}' non trovato nella cache di staging",
+                    )
+
+                md_text = staging_file.read_text(encoding="utf-8")
+
+                # Verifica presenza di schemi Mermaid tramite StudySchemaExporterAdapter
+                exporter = StudySchemaExporterAdapter()
+                artifact = exporter.extract_artifacts(md_text, file_hash, file_hash)
+
+                has_mermaid = bool(artifact.mindmap_mermaid or artifact.flowchart_mermaid)
+
+                if not has_mermaid:
+                    # LLM generation on-demand per i soli schemi concettuali (Two-Stage artifacts prompt)
+                    subject = "Academic Course"
+                    if self.course_profile_repo:
+                        for p in self.course_profile_repo.list_profiles():
+                            if p.folder_path.is_dir():
+                                for doc_p in scan_documents(p.folder_path):
+                                    if compute_file_hash(doc_p) == file_hash:
+                                        subject = p.target.course_name or p.subject
+                                        break
+
+                    self.streamer.log(f"Estrazione schemi concettuali Mermaid per {file_hash[:8]} via LLM...", source="llm")
+                    artifacts_prompt = get_artifacts_extraction_prompt(subject, md_text)
+                    artifacts_text = self.llm_client.generate_notes(artifacts_prompt, md_text)
+
+                    md_text = f"{md_text.rstrip()}\n\n{artifacts_text.lstrip()}"
+                    staging_file.write_text(md_text, encoding="utf-8")
+                    if hasattr(self.usecase, "staging_storage") and self.usecase.staging_storage:
+                        self.usecase.staging_storage.save(file_hash, md_text)
+
+                    # Re-estrai artefatti dopo generazione
+                    artifact = exporter.extract_artifacts(md_text, file_hash, file_hash)
+
+                    # Esporta o aggiorna OPML se applicabile
+                    if artifact.opml_content:
+                        opml_file = pathlib.Path("staging/schemas") / f"{file_hash}.opml"
+                        opml_file.parent.mkdir(parents=True, exist_ok=True)
+                        opml_file.write_text(artifact.opml_content, encoding="utf-8")
+                else:
+                    # PERFORMANCE: Lo schema è già memorizzato nel markdown di staging.
+                    # Viene estratto deterministicamente senza effettuare alcuna chiamata LLM (0 token consumati).
+                    self.streamer.log(
+                        f"Schema concettuale per {file_hash[:8]} recuperato dalla cache di staging locale (0 chiamate LLM consumate).",
+                        source="sys",
+                    )
+
+                # Estrazione sezione concettuale completa o blocchi Mermaid
+                import re
+                m = re.search(
+                    r"(##\s*[^\n]*(?:Conceptual Architecture|Relational Graphs)[\s\S]*?)(?=\n---\n|\n##\s*(?:Active Recall|Examination|Model Boundary)|\Z)",
+                    md_text,
+                    re.IGNORECASE,
+                )
+                if m:
+                    graph_md = m.group(1).strip()
+                else:
+                    pieces = ["## 🧠 Conceptual Architecture & Relational Graphs"]
+                    if artifact.mindmap_mermaid:
+                        pieces.append(f"```mermaid\n{artifact.mindmap_mermaid}\n```")
+                    if artifact.flowchart_mermaid:
+                        pieces.append(f"```mermaid\n{artifact.flowchart_mermaid}\n```")
+                    graph_md = "\n\n".join(pieces)
+
+                blocks = build_notion_blocks(graph_md)
+                if not blocks:
+                    raise HTTPException(status_code=400, detail="Impossibile generare blocchi Notion dal grafo concettuale")
+
+                # Iniezione in coda alla pagina Notion esistente
+                self.notion_client.append_blocks(page_id, blocks)
+                self.streamer.log(
+                    f"Grafo concettuale aggiunto con successo alla pagina Notion {page_id[:8]}... ({len(blocks)} blocchi)",
+                    source="notion",
+                )
+
+                # ARCHITETTURA: Notifica broadcast via SSE dello stato quote rimanenti per allineare
+                # in tempo reale il badge numerico nella Topbar del Web Cockpit.
+                try:
+                    remaining = self.llm_client.get_remaining_calls()
+                    self.streamer.broadcast("quota_update", {"remaining": remaining})
+                except Exception:
+                    pass
+
+                return {
+                    "status": "ok",
+                    "file_hash": file_hash,
+                    "page_id": page_id,
+                    "blocks_count": len(blocks),
+                    "message": "Grafo concettuale aggiunto con successo alla pagina Notion",
+                }
 
         @app.get("/api/events")
         async def sse_events():

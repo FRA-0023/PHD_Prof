@@ -8,7 +8,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-  <link rel="stylesheet" href="/static/app.css?v=2.3">
+  <link rel="stylesheet" href="/static/app.css?v=2.4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -30,9 +30,8 @@
   <!-- TOPBAR -->
   <header class="topbar">
     <div class="brand">
-      <div class="brand-icon">PD</div>
+      <img src="/static/phd_prof.ico" alt="PHD Prof" class="brand-icon" width="32" height="32">
       <span class="brand-title">PHD Prof Cockpit</span>
-      <span class="brand-version">v2.0 ESAGONALE</span>
     </div>
 
     <div class="topbar-telemetry">
@@ -116,13 +115,14 @@
           </div>
 
           <div class="deck-actions">
-            <div class="mode-selector-group" title="Modalità di generazione artefatti per ciascun documento">
-              <span class="mode-label">Output:</span>
-              <select id="select-generation-mode" class="select-mode">
-                <option value="both" selected>🎯 Entrambi (Note + Grafo)</option>
-                <option value="notes_only">📝 Solo Note</option>
-                <option value="graphs_only">🧠 Solo Grafo</option>
-              </select>
+            <div class="mode-segmented-control" role="group" aria-label="Modalità di generazione output" title="Modalità di generazione output">
+              <span class="mode-segment-label">Output:</span>
+              <div class="mode-segment-group">
+                <button type="button" class="mode-segment-btn active" data-mode="both" title="Genera sia Note che Grafo">Entrambi</button>
+                <button type="button" class="mode-segment-btn" data-mode="notes_only" title="Genera solo Note analitiche">Note</button>
+                <button type="button" class="mode-segment-btn" data-mode="graphs_only" title="Genera solo Grafo concettuale">Grafo</button>
+              </div>
+              <input type="hidden" id="select-generation-mode" value="both">
             </div>
             <button id="btn-select-all" class="btn-secondary" title="Inverti selezione">Tutti / Nessuno</button>
             <button id="btn-refresh-files" class="btn-secondary" title="Riscansiona disco">Aggiorna</button>
@@ -146,7 +146,7 @@
                 <th style="width: 80px;">Dimensione</th>
                 <th style="width: 110px;">Hash SHA-256</th>
                 <th style="width: 120px;">Stato Sync</th>
-                <th style="width: 90px; text-align: right;">Azioni</th>
+                <th style="width: 240px; text-align: right;">Azioni</th>
               </tr>
             </thead>
             <tbody id="file-table-body">
@@ -237,6 +237,6 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=2.3"></script>
+  <script src="/static/app.js?v=2.4"></script>
 </body>
 </html>

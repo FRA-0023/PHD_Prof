@@ -14,17 +14,47 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Test Suite**: 116 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
-## Prossimi Passi (Phase 8: UI Streamlining & On-Demand Graph Append)
-- **UI Streamlining Selettore Output**: Sostituire il selettore esteso ('Entrambi / Solo Note / Solo Grafo') con un selettore compatto e minimale (segmented pill o dropdown discreto) perfettamente integrato con il design token di sistema.
-- **Append Grafo On-Demand**: Implementare l'azione dedicata per iniettare/appendere il grafo concettuale Mermaid a una pagina Notion già precedentemente sincronizzata, evitando di rigenerare l'intero testo.
-- **Pulizia Topbar (Zero Fluff)**: Rimuovere il badge ridondante 'v2.0 ESAGONALE'.
-- **Integrazione Icona Brand**: Sostituire il badge testuale 'PD' nella Topbar con la nuova icona applicativa ad alta risoluzione.
+## Prossimi Passi (Futuro / Manutenzione)
+- **Supporto Modelli Aggiuntivi**: Eventuale configurazione UI per modelli LLM alternativi oltre a Gemini.
+- **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
+### 2026-10-09 (Definitive Fix: Notion Mermaid ELK Crash, Pure White Console & Quota Feedback Loop)
+- **Root Cause Sistemiche Isolate**:
+  1. *Direttive `style <subgraphId>`*: Il layout engine compound di Notion (ELK / Dagre) cerca il subgraph nella tabella dei nodi atomici. Trovando `null`, l'accesso alla proprietà geometrica (`.rect` o minificato `.re`) solleva `TypeError: Cannot read properties of null (reading 're')`.
+  2. *Archi Cross-Subgraph Annidati nei Cluster*: La dichiarazione di archi tra nodi di cluster differenti all'interno del corpo di un subgraph corrompe l'albero gerarchico genitore-figlio (multi-parent acyclic layout violation).
+  3. *Inquinamento HTML Inline*: Tag `<span style=...>`, `<b>`, `<i>`, `<br/>` e backticks nei nodi o nei titoli rompono il calcolo dei bounding-box SVG e violano il tokenizer di Notion.
+  4. *Forme di Nodo Non Standard Senza Virgolette*: Rombi `{}`, stadi `([])`, cerchi doppi `(())` contenenti trattini o caratteri speciali mandavano in fallimento il tokenizer Mermaid.
+- **Risoluzione Deterministica nel Core & Block Builder (`notion_block_builder.py`)**:
+  - `_clean_mermaid_label()`: Bonifica universale da tag HTML (`<span...>`, `<b>`, `<br/>`), backticks, doppie virgolette interne e converte `<br/>` in trattini ` - `.
+  - `sanitize_mermaid_flowchart()`: Scarta deterministicamente ogni direttiva `style <subgraphId>`; esegue l'hoisting a livello radice di tutti gli archi cross-subgraph; normalizza tutte le forme grafiche (`[]`, `()`, `(())`, `([])`, `[()]`, `{}`, `{{}}`) con double quotes esterne preservando annotazioni `:::classDefName` e punti e virgola; converte `-- label -->` in `-->|label|`; re-indirizza archi diretti a subgraph verso il primo nodo concreto.
+- **Hardening dei Prompt Template (`prompt_templates.py`)**:
+  - Bonificati `SLIDES_PROMPT_TEMPLATE`, `PAPER_OR_BOOK_PROMPT_TEMPLATE` e `TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT`.
+  - Eliminati definitivamente gli esempi e le istruzioni con `<span style=...>`, `<b>`, `<br/>` e `style SG_ID`.
+  - Inserite regole vincolanti negative: divieto assoluto di HTML nei grafi, divieto di styling dei subgraph (`style SG_ID`), dichiarazione di archi cross-cluster obbligatoriamente a livello radice, e wrapping sistematico con doppie virgolette.
+- **Circuito di Feedback Quote & Determinismo Grafo**:
+  - Quando un file è stato sincronizzato in modalità `both` o contiene già gli schemi concettuali, `+ Grafo` estrae deterministicamente la sezione dal markdown di staging (`0` chiamate LLM consumate).
+  - Quando lo schema non è presente, viene eseguita la generazione on-demand LLM e, ad ogni esecuzione di `/api/documents/{file_hash}/append-graph`, viene emesso l'evento SSE `quota_update` per aggiornare in tempo reale il badge nella Topbar del Web Cockpit.
+- **Console Telemetrica Pure White in Light Mode**:
+  - Mappatura completa di `.telemetry-deck`, `.telemetry-toolbar` e `.log-scroll-pane` su bianco puro `#FFFFFF` e ardesia chiarissimo `#F8FAFC`, con testo scuro ad alto contrasto `#0F172A` e badge di sorgente pastello (`.log-src.llm`, `.log-src.sys`, ecc.). Piena conformità WCAG 2.2 AA.
+  - Bump del query parameter cache-busting a `?v=2.4` in `index.html`.
+- **Notion Live Blocks Riparati**:
+  - Block 118 sulla pagina SQL Session 1 (`3ecb63e8-59c8-8168-8cc4-cb309650835b`) patchato via Notion API con diagramma concettuale pulito ed elegante (HTTP 200).
+  - Block 78 sulla pagina SQL Session 2 (`3ecb63e8-59c8-813f-9177-c5bf4d681fc1`) patchato via Notion API con diagramma chunked (HTTP 200).
+- **Suite di Test Estesa a 129 Test (100% Green)**:
+  - 129/129 test superati al 100% su pytest. Zero regressioni.
+
+### 2026-10-09 (Phase 8: UI Streamlining & On-Demand Graph Append)
+- **Topbar Modernizzata & Zero-Slop**: Rimosso il badge ridondante 'v2.0 ESAGONALE' da `index.html`. Sostituito il box testuale 'PD' con l'immagine reale dell'icona applicativa `phd_prof.ico` renderizzata a 32x32px nitida.
+- **Selettore Output Segmentato & Minimale**: Rimosso il menu a tendina prolisso ed emoji-heavy. Introdotto un controllo segmentato compatto (`.mode-segmented-control`: 'Entrambi / Note / Grafo') allineato ai design token e ai bottoni secondari della toolbar (`.btn-secondary`), con supporto completo in Dark e Light mode (WCAG 2.2 AA).
+- **Azione On-Demand '+ Grafo'**: Integrato pulsante contestuale `+ Grafo` nella tabella dei file per documenti con stato `SYNCED`.
+- **Endpoint Dedicato `/api/documents/{file_hash}/append-graph`**: Esposta route POST in `web_adapter.py` che recupera lo schema concettuale Mermaid dal markdown di staging o lo genera on-demand via prompt artefatti (senza rielaborare il testo integrale), converte in blocchi Notion e appende via Notion API in coda alla pagina esistente.
+- **Suite di Test Estesa & 100% Green**: Aggiunti 4 test unitari dedicati in `tests/test_web_adapter.py`. 123/123 test superati al 100% su pytest.
+
 ### 2026-10-09 (Windows Desktop Launcher, Bespoke Academic Icon & Favicon)
 - **Windows Desktop Shortcut**: Creato collegamento operativo in C:\Users\3003f\OneDrive\Desktop\MY ARMY\PHD Prof.lnk mirato a wscript.exe con argomento Launch_PHD_Prof.vbs, avvio silenzioso e directory di lavoro corretta.
 - **Bespoke Multi-Resolution Icon**: Generata icona ad alta risoluzione phd_prof.ico (256x256 fino a 16x16) con design accademico (tocco dorato, libro con nodi a grafo, container squircle blu notte/ciano) e trasparenza alfa. Salvata anche in src/adapters/inbound/web/static/favicon.ico e collegata al Web Cockpit in index.html.
-- **Prevenzione Regressioni Sintassi**: Integrato test automatico 	est_pdf_to_notion_syntax_valid() in 	ests/test_web_adapter.py. 119/119 test unitari superati al 100%.
+- **Prevenzione Regressioni Sintassi**: Integrato test automatico test_pdf_to_notion_syntax_valid() in tests/test_web_adapter.py. 119/119 test unitari superati al 100%.
 
 ### 2026-10-08 (Phase 7: Native Dark/Light Mode Toggle & High-Contrast WCAG 2.2 AA Polish)
 - **Topbar Theme Toggle**: Inserito pulsante reattivo `#btn-theme-toggle` nella Topbar con icona vettoriale dinamica (Sole/Luna in SVG), tooltip esplicito, label contestuale ("Chiaro" / "Scuro") e shortcut da tastiera (`Alt+T`).
