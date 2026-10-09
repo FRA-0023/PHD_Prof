@@ -14,11 +14,18 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Test Suite**: 116 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
-## Prossimi Passi
-- **Monitoring & Telemetria di Produzione**: Esecuzione end-to-end su interi corsi con metriche di latenza e token usage.
-- **Export & Reportistica**: Valutare future utility di reportistica batch e audit degli stati sincronizzati.
+## Prossimi Passi (Phase 8: UI Streamlining & On-Demand Graph Append)
+- **UI Streamlining Selettore Output**: Sostituire il selettore esteso ('Entrambi / Solo Note / Solo Grafo') con un selettore compatto e minimale (segmented pill o dropdown discreto) perfettamente integrato con il design token di sistema.
+- **Append Grafo On-Demand**: Implementare l'azione dedicata per iniettare/appendere il grafo concettuale Mermaid a una pagina Notion già precedentemente sincronizzata, evitando di rigenerare l'intero testo.
+- **Pulizia Topbar (Zero Fluff)**: Rimuovere il badge ridondante 'v2.0 ESAGONALE'.
+- **Integrazione Icona Brand**: Sostituire il badge testuale 'PD' nella Topbar con la nuova icona applicativa ad alta risoluzione.
 
 ## Log delle Sessioni
+### 2026-10-09 (Windows Desktop Launcher, Bespoke Academic Icon & Favicon)
+- **Windows Desktop Shortcut**: Creato collegamento operativo in C:\Users\3003f\OneDrive\Desktop\MY ARMY\PHD Prof.lnk mirato a wscript.exe con argomento Launch_PHD_Prof.vbs, avvio silenzioso e directory di lavoro corretta.
+- **Bespoke Multi-Resolution Icon**: Generata icona ad alta risoluzione phd_prof.ico (256x256 fino a 16x16) con design accademico (tocco dorato, libro con nodi a grafo, container squircle blu notte/ciano) e trasparenza alfa. Salvata anche in src/adapters/inbound/web/static/favicon.ico e collegata al Web Cockpit in index.html.
+- **Prevenzione Regressioni Sintassi**: Integrato test automatico 	est_pdf_to_notion_syntax_valid() in 	ests/test_web_adapter.py. 119/119 test unitari superati al 100%.
+
 ### 2026-10-08 (Phase 7: Native Dark/Light Mode Toggle & High-Contrast WCAG 2.2 AA Polish)
 - **Topbar Theme Toggle**: Inserito pulsante reattivo `#btn-theme-toggle` nella Topbar con icona vettoriale dinamica (Sole/Luna in SVG), tooltip esplicito, label contestuale ("Chiaro" / "Scuro") e shortcut da tastiera (`Alt+T`).
 - **CSS Custom Properties & WCAG 2.2 AA**: Mappato il blocco `[data-theme="light"]` in `app.css` per tutti i token di elevazione, bordi, testi e stati semantici. Tutti i contrasti superano i criteri WCAG 2.2 AA (rapporto testo primario > 15:1 su canvas bianco/ardesia chiaro).
