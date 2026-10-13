@@ -1,24 +1,25 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PHD Prof — Cockpit Industriale ETL</title>
+  <title>PHD Prof — Academic Study Studio</title>
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-  <link rel="stylesheet" href="/static/app.css?v=2.4">
+  <link rel="stylesheet" href="/static/app.css?v=2.6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script>
-    /* Inibizione flash of unstyled theme (FOUT) all'avvio */
+    /* Inibizione flash of unstyled theme (FOUT) all'avvio: default light theme su richiesta utente */
     (function() {
       try {
         var saved = localStorage.getItem('phd_cockpit_theme');
-        var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-        if (saved === 'light' || (!saved && prefersLight)) {
+        if (saved === 'dark') {
+          document.documentElement.removeAttribute('data-theme');
+        } else {
           document.documentElement.setAttribute('data-theme', 'light');
         }
       } catch (e) {}
@@ -27,160 +28,190 @@
 </head>
 <body>
 
-  <!-- TOPBAR -->
+  <!-- TOPBAR: Clean Academic Navigation Header -->
   <header class="topbar">
     <div class="brand">
-      <img src="/static/phd_prof.ico" alt="PHD Prof" class="brand-icon" width="32" height="32">
-      <span class="brand-title">PHD Prof Cockpit</span>
+      <img src="/static/phd_prof.ico" alt="PHD Prof" class="brand-icon" width="28" height="28">
+      <div class="brand-info">
+        <span class="brand-title">PHD Prof Cockpit</span>
+        <span class="brand-badge">Academic Studio</span>
+      </div>
     </div>
 
-    <div class="topbar-telemetry">
-      <div class="telemetry-pill">
-        <span id="system-status-dot" class="pulse-dot"></span>
-        <span id="system-status-text">LOCAL HOST</span>
+    <div class="topbar-actions">
+      <div class="status-pill" title="Stato connessione Notion & Backend locale">
+        <span id="system-status-dot" class="status-dot"></span>
+        <span id="system-status-text">Notion Pronto</span>
       </div>
 
-      <div class="telemetry-pill quota-meter">
-        <span>GEMINI QUOTA:</span>
-        <span id="quota-display" class="quota-value" title="Richieste giornaliere rimanenti (Requests Per Day)">-- RPD</span>
+      <div class="quota-pill" title="Richieste giornaliere rimanenti per l'assistente didattico Gemini">
+        <span class="quota-label">Gemini AI</span>
+        <span id="quota-display" class="quota-value">-- RPD</span>
       </div>
 
-      <button id="btn-theme-toggle" class="btn-theme-toggle" type="button" title="Passa a tema chiaro (Alt+T)" aria-label="Passa a tema chiaro">
+      <button id="btn-theme-toggle" class="btn-theme-toggle" type="button" title="Cambia tema (Alt+T)" aria-label="Cambia tema chiaro/scuro">
         <svg id="theme-toggle-icon" class="theme-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
-        <span id="theme-toggle-label" class="theme-toggle-label">Chiaro</span>
+        <span id="theme-toggle-label" class="theme-toggle-label">Scuro</span>
       </button>
     </div>
   </header>
 
-  <!-- COCKPIT CONTAINER -->
+  <!-- APP CONTAINER -->
   <div class="cockpit-container">
     
-    <!-- CONTROL RAIL (Sidebar 320px) -->
+    <!-- SIDEBAR: Corsi & Scheda Docente -->
     <aside class="control-rail">
-      <div class="rail-section">
-        <div class="rail-header">
-          <span class="section-label">Corsi Memorizzati</span>
-          <button id="btn-add-profile" class="btn-secondary" style="padding: 2px 8px; font-size: 11px;">+ Nuovo</button>
-        </div>
+      <div class="rail-header">
+        <span class="section-label">I Tuoi Corsi</span>
+        <button id="btn-add-profile" class="btn-secondary btn-xs" type="button">+ Nuovo</button>
       </div>
 
       <div id="profile-list" class="profile-list">
         <!-- Rendered dynamically by app.js -->
       </div>
 
-      <!-- Spec Inspector -->
-      <div id="spec-inspector" class="spec-inspector">
-        <div class="rail-header" style="margin-bottom: 4px;">
-          <span class="section-label">Specifiche Corso</span>
-          <button id="btn-edit-profile" class="btn-icon" title="Modifica corso" style="padding: 0 4px; font-size: 11px;">Modifica</button>
+      <!-- Course Summary Card: Academic Metadata -->
+      <div id="spec-inspector" class="course-meta-card">
+        <div class="course-meta-header">
+          <span class="section-label">Dettagli Corso</span>
+          <button id="btn-edit-profile" class="btn-text-action" type="button" title="Modifica dettagli corso">Modifica</button>
         </div>
-        <div class="spec-row">
-          <span class="spec-key">Materia:</span>
-          <span id="spec-subject" class="spec-val">--</span>
+        <div class="meta-row">
+          <span class="meta-key">Docente:</span>
+          <span id="spec-prof" class="meta-val">--</span>
         </div>
-        <div class="spec-row">
-          <span class="spec-key">Professore:</span>
-          <span id="spec-prof" class="spec-val">--</span>
+        <div class="meta-row">
+          <span class="meta-key">Formato:</span>
+          <span id="spec-doctype" class="meta-val">--</span>
         </div>
-        <div class="spec-row">
-          <span class="spec-key">DocType:</span>
-          <span id="spec-doctype" class="spec-val">--</span>
+        <div class="meta-row">
+          <span class="meta-key">Notion DB:</span>
+          <span id="spec-notion" class="meta-val">--</span>
         </div>
-        <div class="spec-row">
-          <span class="spec-key">Notion DB:</span>
-          <span id="spec-notion" class="spec-val">--</span>
-        </div>
+        <!-- Hidden input to maintain JS DOM binding without layout pollution -->
+        <span id="spec-subject" style="display: none;">--</span>
       </div>
     </aside>
 
-    <!-- WORKSPACE VIEWPORT -->
+    <!-- WORKSPACE VIEWPORT: Integrated Academic Study Workspace -->
     <main class="workspace-viewport">
       
-      <!-- File Queue Deck -->
-      <section class="queue-deck">
+      <!-- INTEGRATED COURSE HEADER & STUDY TOOLBAR (No Giant Clunky Hero Box) -->
+      <section id="hero-study-card" class="study-workspace-header">
         <div class="deck-toolbar">
-          <div class="deck-title-group">
-            <h2 id="active-course-title" class="deck-title">Coda Documenti</h2>
-            <span id="active-course-path" class="deck-path">Seleziona un corso...</span>
+          <div class="course-info-group">
+            <div class="course-title-line">
+              <h1 id="active-course-title" class="active-course-title">Seleziona un corso</h1>
+              <span id="active-course-count" class="badge badge-count">0 lezioni</span>
+              <!-- Hidden elements for backward compatibility with app.js bindings -->
+              <span id="hero-course-title" style="display: none;"></span>
+              <span id="hero-doctype-badge" style="display: none;"></span>
+              <span id="hero-target-badge" style="display: none;"></span>
+              <span id="hero-quota-status" style="display: none;"></span>
+            </div>
+            <div class="course-sub-line">
+              <span id="hero-prof-desc" class="course-prof-desc">Ambiente di studio per sintesi accademiche rigorose e mappe concettuali</span>
+              <span class="meta-separator">•</span>
+              <span id="active-course-path" class="course-folder-path">--</span>
+            </div>
           </div>
 
           <div class="deck-actions">
             <div class="mode-segmented-control" role="group" aria-label="Modalità di generazione output" title="Modalità di generazione output">
-              <span class="mode-segment-label">Output:</span>
+              <span class="mode-segment-label">Genera:</span>
               <div class="mode-segment-group">
-                <button type="button" class="mode-segment-btn active" data-mode="both" title="Genera sia Note che Grafo">Entrambi</button>
-                <button type="button" class="mode-segment-btn" data-mode="notes_only" title="Genera solo Note analitiche">Note</button>
-                <button type="button" class="mode-segment-btn" data-mode="graphs_only" title="Genera solo Grafo concettuale">Grafo</button>
+                <button type="button" class="mode-segment-btn active" data-mode="both" title="Genera sia Note analitiche che Mappa concettuale">Note + Grafo</button>
+                <button type="button" class="mode-segment-btn" data-mode="notes_only" title="Genera solo Note analitiche">Solo Note</button>
+                <button type="button" class="mode-segment-btn" data-mode="graphs_only" title="Genera solo Schema concettuale">Solo Grafo</button>
               </div>
               <input type="hidden" id="select-generation-mode" value="both">
             </div>
-            <button id="btn-select-all" class="btn-secondary" title="Inverti selezione">Tutti / Nessuno</button>
-            <button id="btn-refresh-files" class="btn-secondary" title="Riscansiona disco">Aggiorna</button>
-            <button id="btn-run-batch" class="btn-primary" disabled title="Esegui ETL (Ctrl+Invio)">
+
+            <button id="btn-select-all" class="btn-secondary" type="button" title="Inverti selezione">Tutti</button>
+            <button id="btn-refresh-files" class="btn-secondary" type="button" title="Riscansiona file su disco">Aggiorna</button>
+            <button id="btn-run-batch" class="btn-primary" type="button" disabled title="Sincronizza file selezionati (Ctrl+Invio)">
               <span>Sincronizza Selezionati</span>
-              <span id="batch-selected-count" class="badge badge-count" style="margin-left: 4px;">0</span>
+              <span id="batch-selected-count" class="badge badge-primary-count">0</span>
             </button>
-            <button id="btn-stop-batch" class="btn-danger" style="display: none;" title="Arresta dopo il file corrente">
+            <button id="btn-stop-batch" class="btn-danger" type="button" style="display: none;" title="Arresta dopo il file corrente">
               Arresta
             </button>
           </div>
         </div>
 
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th style="width: 32px;"><input type="checkbox" id="master-checkbox" checked></th>
-                <th>Nome Documento</th>
-                <th style="width: 60px;">Tipo</th>
-                <th style="width: 80px;">Dimensione</th>
-                <th style="width: 110px;">Hash SHA-256</th>
-                <th style="width: 120px;">Stato Sync</th>
-                <th style="width: 240px; text-align: right;">Azioni</th>
-              </tr>
-            </thead>
-            <tbody id="file-table-body">
-              <!-- Rendered dynamically -->
-            </tbody>
-          </table>
-
-          <div id="empty-state" style="display: none; padding: 48px; text-align: center; color: var(--text-tertiary);">
-            <p style="font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px;">Nessun documento rilevato</p>
-            <p style="font-size: 12px;">La cartella configurata non contiene file accademici (.pdf, .pptx).</p>
+        <!-- Integrated Progress Bar (Slim, sleek 3px progress indicator) -->
+        <div class="study-progress-wrapper">
+          <div class="study-progress-meta">
+            <span class="study-progress-title">Avanzamento Studio & Sincronizzazione</span>
+            <span id="hero-progress-text" class="study-progress-value">0% completato (0/0)</span>
+          </div>
+          <div class="study-progress-track" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+            <div id="hero-progress-bar" class="study-progress-fill" style="width: 0%;"></div>
           </div>
         </div>
       </section>
 
-      <!-- Live Telemetry Console -->
-      <section class="telemetry-deck">
-        <div class="telemetry-toolbar">
-          <div class="telemetry-title">
-            <span class="pulse-dot" style="width: 6px; height: 6px;"></span>
-            <span>Console Telemetrica ETL in Tempo Reale</span>
+      <!-- SYLLABUS DECK: Document Island Cards -->
+      <section class="syllabus-deck">
+        <div class="syllabus-container">
+          <!-- Guide Header Columns (Clean Academic Columns: No SHA-256 prominent column) -->
+          <div class="syllabus-columns-guide">
+            <div class="col-check"><input type="checkbox" id="master-checkbox" checked title="Seleziona / Deseleziona tutti"></div>
+            <div class="col-name">Materiale Didattico</div>
+            <div class="col-type">Formato</div>
+            <div class="col-size">Dimensione</div>
+            <div class="col-status">Stato Studio</div>
+            <div class="col-actions">Azioni Disponibili</div>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary); cursor: pointer;">
+
+          <!-- Island Cards Render Target -->
+          <div id="file-table-body" class="syllabus-cards-list">
+            <!-- Rendered dynamically as island card rows by app.js -->
+          </div>
+
+          <!-- Empty State -->
+          <div id="empty-state" class="syllabus-empty-state" style="display: none;">
+            <div class="empty-state-icon">📖</div>
+            <p class="empty-state-title">Nessun materiale didattico rilevato</p>
+            <p class="empty-state-desc">La cartella configurata per questo corso non contiene documenti accademici (.pdf, .pptx).</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- STUDY ACTIVITY DRAWER: Collapsible Bottom Console -->
+      <footer id="activity-drawer" class="activity-drawer collapsed">
+        <div id="drawer-header" class="drawer-header" title="Clicca per aprire o chiudere il registro attività">
+          <div class="drawer-header-left">
+            <svg class="drawer-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+            <span class="drawer-title">Registro Attività</span>
+            <span id="drawer-teaser" class="drawer-teaser">Pronto per lo studio</span>
+          </div>
+
+          <div class="drawer-header-right">
+            <label class="drawer-toggle-label">
               <input type="checkbox" id="autoscroll-toggle" checked> Auto-scroll
             </label>
-            <button id="btn-copy-log" class="btn-secondary" style="padding: 2px 8px; font-size: 10px;">Copia Log</button>
-            <button id="btn-clear-log" class="btn-secondary" style="padding: 2px 8px; font-size: 10px;">Pulisci</button>
+            <button id="btn-copy-log" class="btn-secondary btn-xs" type="button">Copia</button>
+            <button id="btn-clear-log" class="btn-secondary btn-xs" type="button">Pulisci</button>
+            <button id="btn-toggle-drawer" class="btn-icon btn-drawer-toggle" type="button" aria-label="Espandi/Collassa registro attività">
+              <svg id="drawer-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+              </svg>
+            </button>
           </div>
         </div>
 
-        <div id="log-pane" class="log-scroll-pane">
-          <!-- Live streaming logs dynamically appended -->
+        <div id="drawer-body" class="drawer-body">
+          <div id="log-pane" class="log-scroll-pane">
+            <!-- Live streaming logs dynamically appended -->
+          </div>
         </div>
-      </section>
+      </footer>
 
     </main>
   </div>
@@ -189,7 +220,7 @@
   <div id="profile-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-title" class="modal-title">Configura Profilo Corso</h3>
+        <h3 id="modal-title" class="modal-title">Configura Corso</h3>
         <button id="modal-close" class="btn-icon" aria-label="Chiudi">&times;</button>
       </div>
 
@@ -197,46 +228,46 @@
         <div class="modal-body">
           <div class="form-group">
             <label class="form-label" for="form-subject">Materia / Corso</label>
-            <input type="text" id="form-subject" class="form-input" required placeholder="Es. Enterprise Architecture">
+            <input type="text" id="form-subject" class="form-input" required placeholder="Es. Big Data Analytics">
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="form-prof">Ruolo Professorale (Prompt)</label>
-            <input type="text" id="form-prof" class="form-input" placeholder="Es. PhD Professor in Enterprise Architecture">
+            <label class="form-label" for="form-prof">Docente / Ruolo Professorale</label>
+            <input type="text" id="form-prof" class="form-input" placeholder="Es. PhD Professor in Data Engineering">
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="form-doctype">Natura del Documento</label>
+            <label class="form-label" for="form-doctype">Formato Documenti Prevalente</label>
             <select id="form-doctype" class="form-select">
-              <option value="slides">Slides (Multimodale, grafici, note relatore)</option>
-              <option value="paper_or_book">Paper or Book (Testuale denso, formule, paper scientifici)</option>
+              <option value="slides">Slides (Presentazioni, schemi visivi)</option>
+              <option value="paper_or_book">Paper or Book (Testi densi, paper scientifici, libri)</option>
             </select>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="form-folder">Cartella Locale Slide/Paper</label>
-            <input type="text" id="form-folder" class="form-input" required placeholder="C:\Documenti\UNIMIB\...">
+            <label class="form-label" for="form-folder">Cartella Locale Materiali</label>
+            <input type="text" id="form-folder" class="form-input" required placeholder="C:\Documenti\Universita\...">
           </div>
 
           <div class="form-group">
             <label class="form-label" for="form-db-id">Notion Database ID</label>
-            <input type="text" id="form-db-id" class="form-input" required placeholder="UUID database Notion o seleziona">
+            <input type="text" id="form-db-id" class="form-input" required placeholder="UUID database Notion">
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="form-course-name">Notion Course Name</label>
-            <input type="text" id="form-course-name" class="form-input" placeholder="Es. Enterprise Architecture">
+            <label class="form-label" for="form-course-name">Nome Corso in Notion</label>
+            <input type="text" id="form-course-name" class="form-input" placeholder="Es. Big Data Analytics">
           </div>
         </div>
 
         <div class="modal-footer">
           <button type="button" id="modal-cancel" class="btn-secondary">Annulla</button>
-          <button type="submit" class="btn-primary">Salva Profilo</button>
+          <button type="submit" class="btn-primary">Salva Corso</button>
         </div>
       </form>
     </div>
   </div>
 
-  <script src="/static/app.js?v=2.4"></script>
+  <script src="/static/app.js?v=2.6"></script>
 </body>
 </html>

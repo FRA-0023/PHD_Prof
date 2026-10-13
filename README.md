@@ -76,47 +76,53 @@ PHD Prof Industrial Pipeline (30 Seconds / Lecture)
 
 ---
 
-## 🖥️ The Web Cockpit (Industrial Local Dashboard)
+## 🖥️ The Web Cockpit (Academic Studio Redesign)
 
-PHD Prof features a zero-build, local-first single-page cockpit accessible by default on standard HTTP port `80` at `http://127.0.0.1` (with automatic port conflict fallback to `8000`). Once configured via our 1-click local domain script, it automatically upgrades to zero-warning trusted HTTPS on port `443` at `https://phdprof.test` (see [Local Domain Setup](docs/LOCAL_DOMAIN_SETUP.md)). Built according to the *Operate* visitor mode and WCAG 2.2 AA accessibility standards:
+PHD Prof features a zero-build, local-first single-page study cockpit accessible by default on standard HTTP port `80` at `http://127.0.0.1` (with automatic port conflict fallback to `8000`). Once configured via our 1-click local domain script, it automatically upgrades to zero-warning trusted HTTPS on port `443` at `https://phdprof.test` (see [Local Domain Setup](docs/LOCAL_DOMAIN_SETUP.md)). Built according to the *Academic Studio* design framework and WCAG 2.2 AA accessibility standards:
 
 ```
-+---------------------------------------------------------------------------------------+
-| TOPBAR : PHD Prof Cockpit | LOCAL HOST | GEMINI QUOTA: [ 18 RPD ]                    |
-+------------------------------------+--------------------------------------------------+
-| CONTROL RAIL (Sidebar 320px)       | WORKSPACE VIEWPORT                               |
-|                                    |                                                  |
-| Registered Course Profiles:        | Document Queue: C:\Courses\Enterprise Arch       |
-|  [1] Enterprise Architectures      | [All / None] [Refresh] [Sync Selected (3)]       |
-|  [2] Machine Learning              |                                                  |
-|  [3] Text Mining and Search        | Document Data Table:                             |
-|  [+ New Course Profile]            |  [x] Week_01_Intro.pdf | 4.2 MB | SYNCED [Notion]|
-|                                    |  [x] Week_02_Arch.pptx | 8.6 MB | IDLE           |
-| Active Course Specification:       |  [ ] Paper_KDD.pdf     | 2.1 MB | IDLE           |
-|  - DocType: Slides                 |                                                  |
-|  - Role: PhD Professor in EA       | Real-Time Streaming Telemetry Console:           |
-|  - Notion DB: Notes                |  [14:10:02] SHA-256: 65081123... (Computed)      |
-|                                    |  [14:10:05] Gemini File API: Upload OK           |
-|                                    |  [14:10:12] Notion: Writing 184 blocks...        |
-+------------------------------------+--------------------------------------------------+
++---------------------------------------------------------------------------------------------------------+
+| TOPBAR : [Icon] PHD Prof Cockpit | Academic Studio | [●] Notion Ready | Gemini AI: 750 RPD | [☼] Dark   |
++------------------------------------+--------------------------------------------------------------------+
+| SIDEBAR (Course List & Metadata)   | ACADEMIC STUDY WORKSPACE                                           |
+|                                    |                                                                    |
+| Your Courses:                      | +── COURSE STUDY HEADER & TOOLBAR ───────────────────────────────+ |
+|  • Enterprise Architectures        | | Enterprise Architectures              [ 12 lectures ]          | |
+|  • Big Data Analytics              | | Prof. PhD in Data Engineering • C:\Courses\BigData               | |
+|  • Deep Learning                   | | Output: [Note + Grafo | Solo Note | Solo Grafo]                | |
+|  [+ New Course]                    | | [All] [Refresh] [Sync Selected (2)]                            | |
+|                                    | | ── Study Progress: 66% Completed (8/12 synced) ──────────────── | |
+| Course Details:                    | | [████████████████████████████░░░░░░░░░░░░]                       | |
+|  - Instructor: Prof. Rossi         | +────────────────────────────────────────────────────────────────+ |
+|  - Format: SLIDES                  |                                                                    |
+|  - Notion DB: Notes                | SYLLABUS MATERIAL (Tactile Island Cards)                           |
+|                                    | ┌── Island Card 1 ───────────────────────────────────────────────┐ |
+|                                    | │ [x] [PDF] Lecture_01.pdf │ 4.2 MB │ Sincronizzato │ [OPML] [Notion]│ |
+|                                    | └── (Level 2 Elevation with Specular Top Highlight) ─────────────┘ |
+|                                    | ┌── Island Card 2 ───────────────────────────────────────────────┐ |
+|                                    | │ [ ] [PPTX] Lecture_02.pptx │ 8.6 MB │ In corso... │ [Sync]        │ |
+|                                    | └── (Interactive Hover-Lift to Level 3 Elevation) ───────────────┘ |
+|                                    |                                                                    |
+|                                    | +── STUDY ACTIVITY DRAWER (Collapsible 38px <-> 220px) ──────────+ |
+|                                    | | [📖] REGISTRO ATTIVITÀ | [Teaser: Notion sync completed...]     | |
+|                                    | |                                  [Auto-scroll] [Copy] [Clear]  | |
+|                                    | +────────────────────────────────────────────────────────────────+ |
++------------------------------------+--------------------------------------------------------------------+
 ```
 
 ### Dashboard Operational Capabilities
-- **Control Rail (Course Profile Selector)**: Displays all courses saved in `course_profiles.json`. Switch courses instantly via keyboard shortcuts (`1` to `9`) or mouse click. Inspects subject, professor persona prompt, document ingestion mode, and target Notion database ID. Click `+ New` to open the configuration modal and register a new course on the fly.
-- **Document Queue Table**: Scans the configured local directory in real time. Shows:
-  - Checkbox selection for granular batch execution.
-  - File name, extension, and file size.
-  - Content SHA-256 hash (truncated with one-click copy).
-  - Status badges: `SYNCED` (emerald green, verified on Notion), `IDLE` (slate gray, pending extraction), `SYNCING` (pulsing blue, active pipeline), `FAILED` (red, diagnostic error).
-  - **Direct Notion Deep-Link**: Synced documents display an inline `[Notion]` button opening the generated page directly inside your Notion workspace.
-- **Batch Controls**:
-  - `All / None`: Toggles table selection.
-  - `Refresh`: Re-scans disk for newly dropped files.
-  - `Sync Selected` (or `Ctrl + Enter`): Executes the ETL pipeline over selected documents.
-  - `Stop` (or `Esc`): Appears during execution to gracefully stop the batch after completing the active document without state corruption.
-- **Real-Time Telemetry Console (SSE Streaming)**: Live console duplicating internal server logs over Server-Sent Events (`/api/events`). Emits step-by-step progress: hashing, headless PPTX rendering, Gemini File API upload, pedagogical synthesis, 1900-character chunking, and Notion block writes. Features `Auto-scroll` toggle, `Copy Log`, and `Clear`.
+- **Academic Studio 3-Layer Elevation System**: Replaces flat surfaces with multi-stop drop shadows (`--elevation-1`, `--elevation-2`, `--elevation-3`), specular zenithal highlight borders (`--zenithal-border`), and tactile button press mechanics (`translateY(1px)` with inset shadow) for physical feel and spatial depth.
+- **Integrated Course Header & Study Progress**: Dynamic header displaying active course title, instructor persona, local folder path, and real-time completion progress tracking with a slim gradient bar (`X% completed (M/N)`).
+- **Syllabus Island Cards (with Hover-Lift)**: Displays course materials as individual, floating three-dimensional card rows. Features smooth hover-lift transition to Level 3 elevation, selection indicator, format badge, size indicator, and contextual action buttons:
+  - `Mappa OPML`: 1-click download of hierarchical mindmaps for EdrawMind, XMind, and MindNode.
+  - `+ Grafo`: On-demand sequential appending of Mermaid conceptual architectures directly into Notion.
+  - `Notion`: Direct deep-link opening the generated study chapter in Notion.
+  - `Sync`: One-click re-processing of individual lectures.
+- **Segmented Output Mode Selector**: Compact segmented control (`Note + Grafo` / `Solo Note` / `Solo Grafo`) to selectively control artifact generation directly from the syllabus toolbar.
+- **Study Activity Drawer (Collapsible Fixed-Bottom)**: Collapsible activity console anchored at the bottom of the viewport. Folds down to a 38px slim bar with a live streaming teaser displaying real-time events, and smoothly expands to 220px with a single click. Features `Auto-scroll` lock, `Copy Log`, and `Clear`.
+- **Course Selector & Metadata Card**: Clean sidebar displaying all courses saved in `course_profiles.json`. Switch courses instantly via keyboard shortcuts (`1` to `9`) or mouse click. Inspects subject, professor persona prompt, document ingestion mode, and target Notion database ID. Click `+ New` to open the configuration modal and register a new course on the fly.
 - **Topbar LLM Quota Meter**: Tracks remaining daily requests (RPD - *Requests Per Day*) persisted in `gemini_usage.json`. If the daily quota reaches zero, batch execution halts fast before triggering consecutive API errors.
-- **Dark / Light Mode Toggle**: Seamlessly switch between dark and light themes via the topbar button (Sun/Moon icon) or keyboard shortcut (`Alt + T`). User preference is persisted in `localStorage` with native fallback to OS `prefers-color-scheme`. Both modes maintain rigorous WCAG 2.2 AA contrast compliance, with a high-contrast industrial dark terminal deck preserved for live telemetry streaming.
+- **Dark / Light Mode Toggle**: Seamlessly switch between dark and light themes via the topbar button (Sun/Moon icon) or keyboard shortcut (`Alt + T`). User preference is persisted in `localStorage` with default Light mode. Both modes maintain rigorous WCAG 2.2 AA contrast compliance.
 - **Automatic Lifecycle Watchdog**: Client tabs emit a heartbeat every 3 seconds and an unload beacon. When the browser tab or window is closed, a background daemon terminates the Python server after 10 seconds. No dangling Python processes, terminal windows, or occupied ports remain. The watchdog automatically freezes during active batch runs to prevent accidental interrupts.
 
 ---
@@ -560,7 +566,7 @@ The codebase includes comprehensive unit tests with full offline mocks covering 
 ```bash
 python -m pytest
 ```
-*All 99/99 unit tests execute in under 3 seconds with zero external network dependencies.*
+*All 129/129 unit tests execute in under 6 seconds with zero external network dependencies.*
 
 ---
 

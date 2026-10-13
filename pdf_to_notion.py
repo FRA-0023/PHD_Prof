@@ -200,10 +200,14 @@ def main() -> None:
             web_port = 8000
 
         # Check local domain resolution
+        # ARCHITETTURA: Validazione rigorosa dell'indirizzo loopback locale.
+        # Previene che DNS wildcard hijacking da router o ISP esterni (che rispondono
+        # con IP pubblici per domini non registrati come phdprof.test) aprano il browser
+        # su server esterni invece che su 127.0.0.1.
         resolves_domain = False
         try:
-            socket.gethostbyname(web_domain)
-            resolves_domain = True
+            resolved_ip = socket.gethostbyname(web_domain)
+            resolves_domain = resolved_ip in ("127.0.0.1", "::1", "0.0.0.0")
         except socket.error:
             resolves_domain = False
 

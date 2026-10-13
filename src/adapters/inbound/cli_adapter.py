@@ -20,14 +20,17 @@ SUPPORTED_EXTENSIONS = {".pdf", ".pptx"}
 def scan_documents(folder: pathlib.Path) -> List[pathlib.Path]:
     """
     Scans for supported academic documents (.pdf, .pptx) sorted deterministically.
-    Returns an empty list if directory is missing, preventing unhandled filesystem exceptions.
+    Returns an empty list if directory is missing or unreadable, preventing unhandled filesystem exceptions.
     """
-    if not folder.is_dir():
+    try:
+        if not folder or not folder.is_dir():
+            return []
+        return sorted([
+            p for p in folder.iterdir()
+            if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+        ])
+    except (OSError, PermissionError, Exception):
         return []
-    return sorted([
-        p for p in folder.iterdir()
-        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
-    ])
 
 class CLIAdapter:
     """
@@ -278,7 +281,13 @@ class CLIAdapter:
             print(f"\n  {self.i18n.t('saved_profiles_title')}")
             for i, p in enumerate(profiles, 1):
                 status_str = f"{p.doc_type.value.upper()}"
-                if p.folder_path.is_dir():
+                folder_exists = False
+                try:
+                    folder_exists = bool(p.folder_path and p.folder_path.is_dir())
+                except (OSError, PermissionError, Exception):
+                    folder_exists = False
+
+                if folder_exists:
                     count = len(scan_documents(p.folder_path))
                     status_str += f" | {self.i18n.t('file_count', count=count)}"
                 else:

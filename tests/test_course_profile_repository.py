@@ -86,3 +86,27 @@ def test_repo_delete_profile(repo_file, sample_profile):
     assert deleted is True
     assert repo.get_profile("Statistical Modelling") is None
     assert repo.list_profiles() == []
+
+def test_repo_handles_malformed_json_gracefully(repo_file):
+    # ARCHITETTURA: Verifica che file JSON contenenti liste [] o testo non valido
+    # non sollevino eccezioni bloccanti ma restituiscano una collezione vuota.
+    repo_file.write_text("['not', 'a', 'dict']", encoding="utf-8")
+    repo = JsonCourseProfileRepository(file_path=repo_file)
+    assert repo.list_profiles() == []
+    assert repo.get_profile("any") is None
+
+def test_repo_skips_invalid_entries_cleanly(repo_file, sample_profile):
+    # ARCHITETTURA: Verifica che la presenza di chiavi corrotte non impedisca
+    # il recupero dei profili corretti (Fault Isolation a livello di record).
+    data = {
+        "corrupted_profile": {"bad_field": 123},  # Manca subject e target validi
+        "valid_profile": sample_profile.to_dict(),
+    }
+    repo_file.write_text(json.dumps(data), encoding="utf-8")
+    repo = JsonCourseProfileRepository(file_path=repo_file)
+
+    profiles = repo.list_profiles()
+    # Entrambi o solo quello valido vengono gestiti senza eccezioni
+    assert any(p.subject == "Statistical Modelling" for p in profiles)
+    assert repo.get_profile("Statistical Modelling") is not None
+

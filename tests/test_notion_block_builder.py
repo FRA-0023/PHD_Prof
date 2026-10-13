@@ -6,7 +6,9 @@ from src.adapters.outbound.notion_block_builder import (
     normalize_sentence_spacing,
     sanitize_mermaid_mindmap,
     sanitize_mermaid_flowchart,
+    convert_mindmap_to_flowchart,
 )
+
 
 def test_parse_rich_text_plain():
     parts = parse_rich_text("Hello world")
@@ -335,17 +337,12 @@ def test_sanitize_mermaid_mindmap_escapes_parentheses_and_operators():
         '      ["Already Quoted Node"]\n'
     )
     sanitized = sanitize_mermaid_mindmap(raw_mermaid)
-    lines = sanitized.splitlines()
-
-    assert lines[0] == "mindmap"
-    assert lines[1] == '  root(("Big Data Systems"))'
-    assert lines[2] == "    Architecture"
-    assert lines[3] == '      ["Scale (KB to YB)"]'
-    assert lines[4] == '      ["Moore\'s Law: N_T(t) proportional to 2^(t/tau)"]'
-    assert lines[5] == '      ["Consistency (C)"]'
-    assert lines[6] == '      ["LLM Wall (m=1) - Bandwidth Bound"]'
-    assert lines[7] == "      Clean Leaf Node"
-    assert lines[8] == '      ["Already Quoted Node"]'
+    assert "graph TD" in sanitized
+    assert "htmlLabels" in sanitized
+    assert 'ROOT["Big Data Systems"]:::rootNode' in sanitized
+    assert 'subgraph SG_1 ["1. Architecture"]' in sanitized
+    assert 'N3["Scale (KB to YB)"]:::theoryNode' in sanitized
+    assert "ROOT --> N3" in sanitized
 
 
 def test_sanitize_mermaid_flowchart_escapes_nested_brackets_and_colons():
@@ -365,7 +362,7 @@ def test_sanitize_mermaid_flowchart_escapes_nested_brackets_and_colons():
     assert 'C["Map Function (per chunk)"]' in sanitized
     assert 'subgraph sg_MapReduce_Word_Count ["MapReduce Word Count"]' in sanitized
     assert 'I["Deer Bear River, Car Car River"]' in sanitized
-    assert 'K["Shuffle & Sort: Bear:(1,1), Car:(1,1,1)"]' in sanitized
+    assert 'K["Shuffle and Sort: Bear:(1,1), Car:(1,1,1)"]' in sanitized
     assert 'L["Reduce: Bear:2, Car:3"]' in sanitized
 
 
@@ -394,7 +391,7 @@ def test_build_notion_blocks_sanitizes_flowchart_in_code_block():
     assert len(blocks) == 1
     assert blocks[0]["type"] == "code"
     content = blocks[0]["code"]["rich_text"][0]["text"]["content"]
-    assert 'K["Shuffle & Sort: Bear:(1,1), Car:(1,1,1)"]' in content
+    assert 'K["Shuffle and Sort: Bear:(1,1), Car:(1,1,1)"]' in content
 
 
 def test_build_notion_blocks_large_code_block_preserves_single_block_integrity():
@@ -504,7 +501,7 @@ def test_sanitize_mermaid_flowchart_normalizes_all_node_shapes_and_quotes():
     assert 'N1("Rounded Node: 10ms")' in sanitized
     assert 'N2(("Double Circle: Target"))' in sanitized
     assert 'N3(["Stadium Shape: Batch processing"])' in sanitized
-    assert 'N4{"Rhombus Condition: x > 0"}' in sanitized
+    assert 'N4{"Rhombus Condition: x gt 0"}' in sanitized
     assert 'N5{"Hexagon Prep: init()"}' in sanitized
 
 
@@ -518,14 +515,14 @@ def test_sanitize_mermaid_flowchart_normalizes_edge_labels():
         "  C -.->|Standard Label| D\n"
     )
     sanitized = sanitize_mermaid_flowchart(raw_flowchart)
-    assert "A -->|HTTP Post (JSON)| B" in sanitized
+    assert "A -->|HTTP Post - JSON| B" in sanitized
     assert "B -->|Event Stream| C" in sanitized
     assert "C -.->|Standard Label| D" in sanitized
 
 
-def test_sanitize_mermaid_mindmap_deep_html_and_punctuation_cleaning():
-    # ARCHITETTURA: In mindmap, tag HTML o formule con parentesi e virgolette
-    # devono essere bonificati per evitare parsing errors.
+def test_sanitize_mermaid_mindmap_converts_to_flowchart_taxonomy():
+    # ARCHITETTURA: Notion non supporta la sintassi mindmap di Mermaid;
+    # essa viene convertita deterministicamente in un albero tassonomico 'graph TD' con classi di stile.
     raw_mindmap = (
         "mindmap\n"
         "  root((<b>Academic Core</b><br/>Syllabus))\n"
@@ -534,12 +531,70 @@ def test_sanitize_mermaid_mindmap_deep_html_and_punctuation_cleaning():
         '      ["`Complex Feature` (O(N^2))"]\n'
     )
     sanitized = sanitize_mermaid_mindmap(raw_mindmap)
+    assert "graph TD" in sanitized
+    assert "htmlLabels" in sanitized
     assert "<b" not in sanitized
     assert "<span" not in sanitized
     assert "`" not in sanitized
-    assert 'root(("Academic Core - Syllabus"))' in sanitized
-    assert '["Optimization Problem (min f(x))"]' in sanitized
-    assert '["Complex Feature (O(N^2))"]' in sanitized
+    assert 'ROOT["Academic Core - Syllabus"]:::rootNode' in sanitized
+    assert 'subgraph SG_1 ["1. Pillars"]' in sanitized
+    assert 'N3["Optimization Problem (min f(x))"]:::theoryNode' in sanitized
+    assert 'N4["Complex Feature (O(N^2))"]:::theoryNode' in sanitized
+    assert "ROOT --> N3" in sanitized
+
+
+def test_sanitize_mermaid_flowchart_filters_invalid_style_props():
+    # ARCHITETTURA: Proprietà CSS non valide per SVG in Mermaid (es. font-weight:bold)
+    # vengono rimosse per evitare errori di parsing in Notion.
+    raw_flowchart = (
+        "graph TD\n"
+        "  ROOT[SQL Execution Flow]\n"
+        "  style ROOT fill:#DA70D6,stroke:#333,stroke-width:2px,font-weight:bold\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert "style ROOT fill:#DA70D6,stroke:#333,stroke-width:2px" in sanitized
+    assert "font-weight:bold" not in sanitized
+
+
+def test_sanitize_mermaid_flowchart_escapes_problematic_edge_labels():
+    # ARCHITETTURA: Caratteri come `&`, `>`, parentesi in etichette arco (|...|)
+    # causano crash del tokenizer Mermaid e vengono sanitizzati.
+    raw_flowchart = (
+        "graph TD\n"
+        "  A[Start] -->|Scalar & >1 Row| B[Error]\n"
+        "  A -->|Yes (Scalar)| C[Process]\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert 'A["Start"] -->|Scalar and gt 1 Row| B["Error"]' in sanitized
+    assert 'A -->|Yes - Scalar| C["Process"]' in sanitized
+
+
+def test_sanitize_mermaid_flowchart_injects_dark_mode_contrast_color():
+    # ARCHITETTURA: Se una direttiva 'style' definisce uno sfondo chiaro ma omette 'color:',
+    # viene iniettato 'color:#0f172a' per evitare testo bianco invisibile in Notion Dark Mode.
+    raw_flowchart = (
+        "graph TD\n"
+        "  BA[Customer Actor]\n"
+        "  style BA fill:#add8e6,stroke:#336699,stroke-width:1.5px\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert "color:#0f172a" in sanitized
+
+
+def test_convert_mindmap_to_flowchart_preserves_whole_words_without_truncation():
+    # ARCHITETTURA: Previene troncamenti distruttivi con '...' a metà parola (es. 'Reali...', 'Orga...')
+    raw_mindmap = (
+        "mindmap\n"
+        "  root((Enterprise Architecture))\n"
+        "    Core Concepts\n"
+        "      Layered Models\n"
+        "        Serving Relationships\n"
+    )
+    sanitized = convert_mindmap_to_flowchart(raw_mindmap)
+    assert "..." not in sanitized
+    assert "Serving Relationships" in sanitized
+
+
 
 
 

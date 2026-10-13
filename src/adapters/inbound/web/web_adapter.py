@@ -35,13 +35,20 @@ SUPPORTED_EXTENSIONS = {".pdf", ".pptx"}
 SLEEP_BETWEEN_FILES = 5
 
 def scan_documents(folder: pathlib.Path) -> List[pathlib.Path]:
-    """Scans for supported academic documents (.pdf, .pptx) sorted deterministically."""
-    if not folder.is_dir():
+    """
+    Scans for supported academic documents (.pdf, .pptx) sorted deterministically.
+    # ARCHITETTURA: Fault isolation a livello di filesystem. Previene crash HTTP 500
+    # in caso di percorsi non mappati, permessi negati o dischi rimovibili disconnessi.
+    """
+    try:
+        if not folder or not folder.is_dir():
+            return []
+        return sorted([
+            p for p in folder.iterdir()
+            if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
+        ])
+    except (OSError, PermissionError, Exception):
         return []
-    return sorted([
-        p for p in folder.iterdir()
-        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
-    ])
 
 def format_size(bytes_num: int) -> str:
     """Format byte count into human-readable industrial units."""
@@ -165,14 +172,38 @@ class WebAdapter:
 
         @app.get("/api/profiles")
         async def get_profiles():
-            profiles = self.course_profile_repo.list_profiles() if self.course_profile_repo else []
+            # ARCHITETTURA: Fault isolation a livello di singolo profilo.
+            # Se un profilo ha dati parziali, percorsi non validi su questo PC o problemi di permessi,
+            # viene schermato individualmente affinché i domini corretti restino sempre visibili nel cockpit.
+            profiles = []
+            if self.course_profile_repo:
+                try:
+                    profiles = self.course_profile_repo.list_profiles()
+                except Exception as exc:
+                    self.streamer.log(f"Errore lettura profili: {exc}", level="error")
+                    profiles = []
+
             result = []
             for p in profiles:
-                d = p.to_dict()
-                d["key"] = p.key
-                d["files_count"] = len(scan_documents(p.folder_path)) if p.folder_path.is_dir() else 0
-                d["folder_exists"] = p.folder_path.is_dir()
-                result.append(d)
+                try:
+                    folder_exists = False
+                    files_count = 0
+                    try:
+                        folder_exists = bool(p.folder_path and p.folder_path.is_dir())
+                        if folder_exists:
+                            files_count = len(scan_documents(p.folder_path))
+                    except (OSError, PermissionError, Exception):
+                        folder_exists = False
+                        files_count = 0
+
+                    d = p.to_dict()
+                    d["key"] = p.key
+                    d["files_count"] = files_count
+                    d["folder_exists"] = folder_exists
+                    result.append(d)
+                except Exception:
+                    # Fault isolation: non interrompe la lista se un record è corrotto
+                    continue
             return result
 
         @app.post("/api/profiles")
@@ -212,7 +243,13 @@ class WebAdapter:
             if not profile:
                 raise HTTPException(status_code=404, detail=f"Profile '{key}' not found")
 
-            if not profile.folder_path.is_dir():
+            folder_exists = False
+            try:
+                folder_exists = bool(profile.folder_path and profile.folder_path.is_dir())
+            except (OSError, PermissionError, Exception):
+                folder_exists = False
+
+            if not folder_exists:
                 return {"files": [], "error": f"Cartella non trovata: {profile.folder_path}"}
 
             raw_files = scan_documents(profile.folder_path)

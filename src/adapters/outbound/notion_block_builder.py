@@ -148,117 +148,268 @@ def is_table_separator(line: str) -> bool:
     )
 
 
-def sanitize_mermaid_mindmap(content: str) -> str:
-    """
-    Sanitizza il codice Mermaid mindmap per evitare errori di parsing in Notion e client web.
-    # ARCHITETTURA: La grammatica Mermaid mindmap interpreta le parentesi (), quadre [],
-    # apici e operatori (->, :) come token di forma o transizione. Se presenti nel testo dei nodi
-    # senza racchiuderli in ["..."], il tokenizer di Mermaid solleva eccezioni sintattiche
-    # e Notion disabilita il rendering grafico visualizzando un blocco d'errore o testo grezzo.
-    # PERFORMANCE: Normalizziamo caratteri speciali e sequenze non-ASCII (es. \\ufffd o em-dash)
-    # a trattini ASCII canonici (' - ') per evitare mismatch di codifica UTF-8/CP1252 tra OS.
-    """
-    # TRADE-OFF: Sostituzione preventiva di caratteri di rimpiazzo e spazi non separabili
-    content = content.replace("\ufffd", " - ").replace("\u00a0", " ")
-    lines = content.splitlines()
-    sanitized_lines = []
-
-    for line in lines:
-        stripped = line.strip()
-        if not stripped:
-            sanitized_lines.append(line)
 def _clean_mermaid_label(inner_text: str) -> str:
     """
-    Rimuove tag HTML, backticks e normalizza virgolette e parentesi per la compatibilità con Notion ed ELK.
+    Rimuove tag HTML, backticks e normalizza virgolette, parentesi e simboli di confronto
+    per la compatibilità con Notion, Mermaid ed ELK/Dagre.
     # ARCHITETTURA: Notion e i renderer web sanitizzano o isolano i nodi SVG; la presenza di tag
-    # inline (es. <span style='...'>, <br/>, <b>) o backticks genera errori di calcolo bounding-box
-    # o manda in crash l'engine di layout con 'TypeError: Cannot read properties of null (reading re)'.
+    # inline o caratteri XML non escapati manda in crash l'engine di layout.
     """
-    # 1. Rimozione tag HTML
+    # 1. Rimozione tag HTML specifici senza corrompere disuguaglianze matematiche
     inner_text = re.sub(r'<span[^>]*>', '', inner_text, flags=re.IGNORECASE)
     inner_text = re.sub(r'</span>', '', inner_text, flags=re.IGNORECASE)
     inner_text = re.sub(r'</?[bi]>', '', inner_text, flags=re.IGNORECASE)
     inner_text = re.sub(r'<br\s*/?>', ' - ', inner_text, flags=re.IGNORECASE)
-    inner_text = re.sub(r'<[^>]+>', '', inner_text)
+    inner_text = re.sub(r'</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^>]*)?>', '', inner_text)
 
     # 2. Rimozione backticks
     inner_text = inner_text.replace('`', "'")
 
-    # 3. Rimozione virgolette delimitatrici esterne
+    # 3. Rimozione delimitatori di forma e virgolette esterne
     inner_text = inner_text.strip()
-    if (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
+    while (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
         inner_text = inner_text[1:-1].strip()
 
-    # 4. Eliminazione virgolette doppie interne e apici spaiati isolati
+    if inner_text.startswith('((') and inner_text.endswith('))'):
+        inner_text = inner_text[2:-2].strip()
+    if (inner_text.startswith('["') and inner_text.endswith('"]')) or (inner_text.startswith('("') and inner_text.endswith('")')):
+        inner_text = inner_text[2:-2].strip()
+    if (inner_text.startswith('[') and inner_text.endswith(']')) or (inner_text.startswith('(') and inner_text.endswith(')')):
+        inner_text = inner_text[1:-1].strip()
+
+    while (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
+        inner_text = inner_text[1:-1].strip()
+
+    # 4. Eliminazione virgolette doppie interne e normalizzazione apici singoli
     inner_text = inner_text.replace('"', "")
     inner_text = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", inner_text)
 
-    # 5. Conversione quadre annidate a parentesi tonde (es. Bear:[1,1] -> Bear:(1,1))
-    inner_text = re.sub(r'\[([^\]]*)\]', r'(\1)', inner_text)
+    # 5. Normalizzazione operatori matematici e caratteri XML problematici in Mermaid
+    inner_text = inner_text.replace('&', ' and ')
+    inner_text = inner_text.replace('<=', '≤').replace('>=', '≥')
+    inner_text = inner_text.replace('<>', '≠')
+    inner_text = inner_text.replace('<', 'lt ').replace('>', 'gt ')
 
-    # 6. Conversione frecce interne a trattino
+    # 6. Conversione quadre e graffe annidate a parentesi tonde
+    inner_text = re.sub(r'\[([^\]]*)\]', r'(\1)', inner_text)
+    inner_text = re.sub(r'\{([^\}]*)\}', r'(\1)', inner_text)
+
+    # 7. Conversione frecce interne a trattino
     inner_text = re.sub(r'\s*(?:->|—)\s*', ' - ', inner_text)
 
-    # 7. Normalizzazione whitespace
+    # 8. Normalizzazione whitespace
     inner_text = re.sub(r'\s+', ' ', inner_text).strip()
     return inner_text
 
 
-def sanitize_mermaid_mindmap(content: str) -> str:
+def _clean_edge_label(edge_label: str) -> str:
     """
-    Sanitizza diagrammi mindmap Mermaid per compatibilità con l'anteprima nativa Notion.
+    Pulisce specificamente le etichette degli archi Mermaid (|label|),
+    rimuovendo parentesi, operatori di confronto e caratteri che corrompono il lexer.
+    """
+    lbl = _clean_mermaid_label(edge_label)
+    # Rimuove parentesi tonde che mandano in crash il parser delle etichette degli archi
+    lbl = lbl.replace('(', '- ').replace(')', '')
+    lbl = lbl.replace('|', '/')
+    lbl = re.sub(r'\s+', ' ', lbl).strip()
+    return lbl
+
+
+def is_light_hex(hex_str: str) -> bool:
+    """
+    Determina se un valore di colore rappresenta uno sfondo chiaro,
+    richiedendo testo scuro (color:#0f172a) per garantire il contrasto WCAG AA sia in Light che in Dark Mode.
+    """
+    clean_hex = hex_str.strip().lstrip('#')
+    if len(clean_hex) == 3:
+        clean_hex = ''.join([c * 2 for c in clean_hex])
+    if len(clean_hex) == 6:
+        try:
+            r = int(clean_hex[0:2], 16)
+            g = int(clean_hex[2:4], 16)
+            b = int(clean_hex[4:6], 16)
+            lum = 0.299 * r + 0.587 * g + 0.114 * b
+            return lum > 140
+        except ValueError:
+            pass
+    dark_names = {'black', 'navy', 'darkblue', 'maroon', 'indigo', 'midnightblue', 'darkslategray', 'darkslategrey'}
+    if hex_str.strip().lower() in dark_names:
+        return False
+    return True
+
+
+def convert_mindmap_to_flowchart(content: str) -> str:
+
+    """
+    Converte deterministicamente un diagramma Mermaid 'mindmap' in un albero tassonomico 'graph TD'
+    ad alta leggibilità e densità concettuale ottimale per Notion.
+    # ARCHITETTURA: Un mindmap non strutturato può contenere decine di micro-nodi a 4-5 livelli di
+    # profondità che, renderizzati in un unico grafo piatto, espandono l'SVG oltre 3000px di larghezza.
+    # Scalato da Notion al container di lettura (700-900px), il testo si rimpicciolisce a 2-3px risultando illeggibile.
+    # Raggruppiamo i rami di livello 1 in 'subgraph' modulari e limitiamo la profondità dei nodi atomici
+    # a massimo 2 livelli, condensando i micro-dettagli di livello 3+ nei nodi padre per garantire font grandi e nitidi.
     """
     lines = content.splitlines()
-    sanitized_lines = []
 
+    classes = [
+        'classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2px,color:#fff;',
+        'classDef theoryNode fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;',
+        'classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1.5px,color:#4c1d95;',
+        'classDef computeNode fill:#fef3c7,stroke:#f59e0b,stroke-width:1.5px,color:#78350f;',
+        'classDef devopsNode fill:#f0fdf4,stroke:#10b981,stroke-width:1.5px,color:#064e3b;',
+    ]
+    color_cycle = ['theoryNode', 'pipelineNode', 'computeNode', 'devopsNode']
+
+    raw_items = []
     for line in lines:
         stripped = line.strip()
-        if not stripped:
-            sanitized_lines.append(line)
+        if not stripped or stripped.lower() == 'mindmap':
             continue
-
-        if stripped.lower() == "mindmap":
-            sanitized_lines.append(line)
-            continue
-
         indent = len(line) - len(line.lstrip(" "))
-        indent_str = " " * indent
+        raw_text = stripped
+        if raw_text.startswith('root((') and raw_text.endswith('))'):
+            raw_text = raw_text[6:-2]
+        elif (raw_text.startswith('["') and raw_text.endswith('"]')) or (raw_text.startswith('("') and raw_text.endswith('")')):
+            raw_text = raw_text[2:-2]
+        elif (raw_text.startswith('[') and raw_text.endswith(']')) or (raw_text.startswith('(') and raw_text.endswith(')')):
+            raw_text = raw_text[1:-1]
+        label = _clean_mermaid_label(raw_text)
+        if label:
+            raw_items.append((indent, label))
 
-        # Nodo radice: root((...)) senza apici annidati
-        if stripped.startswith("root((") and stripped.endswith("))"):
-            raw_inner = stripped[6:-2].strip().strip("\"'").replace('"', "").replace("'", "")
-            clean_root = _clean_mermaid_label(raw_inner)
-            sanitized_lines.append(f'{indent_str}root(("{clean_root}"))')
-            continue
+    if not raw_items:
+        return "graph TD\n  N1[\"Empty Concept\"]\n"
 
-        # Già formattato con delimitatori espliciti sicuri racchiusi da apici
-        is_bracketed = (
-            (stripped.startswith('["') and stripped.endswith('"]')) or
-            (stripped.startswith('("') and stripped.endswith('")')) or
-            (stripped.startswith('(("') and stripped.endswith('"))'))
-        )
-        if is_bracketed:
-            raw_inner = stripped[2:-2]
-            clean_text = _clean_mermaid_label(raw_inner)
-            sanitized_lines.append(f'{indent_str}["{clean_text}"]')
-            continue
+    # Ricostruzione albero logico con livelli
+    tree_nodes = []
+    stack = []
+    for idx, (indent, label) in enumerate(raw_items):
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+        parent_idx = stack[-1][1] if stack else None
+        level = 0 if not stack else tree_nodes[parent_idx]['level'] + 1
+        node_info = {
+            'id': f"N{idx+1}",
+            'label': label,
+            'level': level,
+            'parent_idx': parent_idx,
+            'children': [],
+        }
+        tree_nodes.append(node_info)
+        if parent_idx is not None:
+            tree_nodes[parent_idx]['children'].append(idx)
+        stack.append((indent, idx))
 
-        # Forme composte con testo prefisso: es. Moore's Law((N_T(t) ...))
-        m_shape = re.match(r"^(.*?)\(\((.*?)\)\)$", stripped)
-        if m_shape:
-            prefix, inner = m_shape.group(1).strip(), m_shape.group(2).strip()
-            clean_text = _clean_mermaid_label(f"{prefix}: {inner}" if prefix else inner)
-            sanitized_lines.append(f'{indent_str}["{clean_text}"]')
-            continue
+    root = tree_nodes[0]
+    root_label = root['label']
 
-        # Se il nodo contiene parentesi, operatori o punteggiatura, racchiudi in ["..."]
-        if any(c in stripped for c in "()[]:\"->,;"):
-            clean_text = _clean_mermaid_label(stripped)
-            sanitized_lines.append(f'{indent_str}["{clean_text}"]')
+    result = [
+        "%%{init: {'flowchart': {'htmlLabels': false}}}%%",
+        "graph TD"
+    ]
+    result.extend([f"  {c}" for c in classes])
+    result.append("")
+    result.append(f'  ROOT["{root_label}"]:::rootNode')
+    result.append("")
+
+    lvl1_indices = root['children']
+    root_links = []
+    inter_sg_links = []
+    prev_sg_last_node = None
+
+    for p_i, p_idx in enumerate(lvl1_indices):
+        pillar = tree_nodes[p_idx]
+        cls = color_cycle[p_i % len(color_cycle)]
+        sg_slug = f"SG_{p_i+1}"
+        p_label = pillar['label']
+        sg_title = f"{p_i+1}. {p_label}"
+
+        result.append(f'  subgraph {sg_slug} ["{sg_title}"]')
+
+        l2_indices = pillar['children']
+        sg_nodes = []
+        if not l2_indices:
+            nid = pillar['id']
+            result.append(f'    {nid}["{p_label}"]:::{cls}')
+            sg_nodes.append(nid)
         else:
-            sanitized_lines.append(line)
+            for c_idx in l2_indices:
+                child = tree_nodes[c_idx]
+                cid = child['id']
+                sg_nodes.append(cid)
 
-    return "\n".join(sanitized_lines)
+                # ARCHITETTURA: Prevenzione del text-clipping SVG nei box a larghezza fissa di Notion.
+                # Nei blocchi Notion, etichette superiori a 28-30 caratteri su singola riga causano lo straripamento
+                # (overflow) del testo rispetto al rettangolo SVG calcolato, con troncamento visivo delle ultime parole
+                # contro il bordo destro del rettangolo.
+                # Imponiamo un budget stringente di massimo 28 caratteri per nodo a confine di parola intera.
+                clean_child = child['label'].strip()
+                detail_strs = [tree_nodes[sub_idx]['label'].strip() for sub_idx in child['children']]
+                if detail_strs and len(clean_child) <= 25:
+                    first_det = detail_strs[0]
+                    candidate = f"{clean_child} - {first_det}"
+                    if len(candidate) <= 40:
+                        full_label = candidate
+                    else:
+                        full_label = clean_child
+                else:
+                    full_label = clean_child
+
+                # Se supera 40 caratteri, tronca a confine di parola intera senza '...'
+                if len(full_label) > 40:
+                    words = full_label.split()
+                    kept = []
+                    cur = 0
+                    for w in words:
+                        if cur + len(w) + (1 if kept else 0) > 38:
+                            break
+                        kept.append(w)
+                        cur += len(w) + (1 if len(kept) > 1 else 0)
+                    full_label = " ".join(kept) if kept else clean_child[:38]
+
+                result.append(f'    {cid}["{full_label}"]:::{cls}')
+
+
+            # PERFORMANCE/LAYOUT: Catena sequenziale top-down dei nodi interni per evitare
+            # allineamento orizzontale su un'unica riga larga migliaia di pixel.
+            if len(sg_nodes) > 1:
+                result.append(f"    {' --> '.join(sg_nodes)}")
+
+        result.append("  end\n")
+
+        # ARCHITETTURA: Impilamento rigorosamente verticale (Top-Down) a colonna singola.
+        # Notion inserisce i grafi SVG in una colonna a larghezza fissa (700-900px).
+        # Se i subgraph sono disposti in parallelo dal ROOT ('l'uno accanto all'altro'),
+        # l'SVG complessivo supera i 2000px e viene scalato del 60-70%, rendendo i caratteri microscopici.
+        # Concatenando i cluster in cascata verticale progressiva (ROOT -> SG1 -> SG2 -> SG3),
+        # la larghezza massima resta ≤ 400px e i font vengono renderizzati a dimensione nativa (100% leggibile).
+        first_node = sg_nodes[0] if sg_nodes else None
+        last_node = sg_nodes[-1] if sg_nodes else None
+
+        if p_i == 0:
+            if first_node:
+                root_links.append(('ROOT', first_node))
+        else:
+            if prev_sg_last_node and first_node:
+                inter_sg_links.append((prev_sg_last_node, first_node))
+
+        if last_node:
+            prev_sg_last_node = last_node
+
+    for r_from, r_to in root_links:
+        result.append(f"  {r_from} --> {r_to}")
+    for s_from, s_to in inter_sg_links:
+        result.append(f"  {s_from} --> {s_to}")
+
+    return "\n".join(result)
+
+
+def sanitize_mermaid_mindmap(content: str) -> str:
+    """
+    Funzione retrocompatibile per sanitizzare diagrammi mindmap Mermaid.
+    Delega direttamente a convert_mindmap_to_flowchart per garantire il rendering in Notion.
+    """
+    return convert_mindmap_to_flowchart(content)
 
 
 def sanitize_mermaid_flowchart(content: str) -> str:
@@ -274,6 +425,7 @@ def sanitize_mermaid_flowchart(content: str) -> str:
     # 4. Forme di nodo non standard (tonde, doppie tonde, rombi, stadi) non quotate: vengono normalizzate.
     # 5. Sintassi frecce con etichetta non standard (`-- "label" -->`): normalizzate a `-->|label|`.
     # 6. Archi puntati a ID di subgraph: re-indirizzati al primo nodo concreto del subgraph.
+    # 7. Pulizia proprietà style: rimozione proprietà non SVG (es. font-weight) che causano parse error.
     """
     content = content.replace("\ufffd", " - ").replace("\u00a0", " ")
     lines = content.splitlines()
@@ -322,7 +474,14 @@ def sanitize_mermaid_flowchart(content: str) -> str:
         # Rimuove punto e virgola finale ridondante a fine riga
         line_clean = re.sub(r';\s*$', '', stripped)
 
+        # ARCHITETTURA: Normalizzazione layout orizzontale in Top-Down verticale.
+        # Grafi 'graph LR' o 'flowchart LR' esplodono in larghezza e causano il downscaling
+        # aggressivo dell'SVG in Notion, rendendo i caratteri microscopici.
+        if re.match(r'^(graph|flowchart)\s+LR\b', line_clean, re.IGNORECASE):
+            line_clean = re.sub(r'^(graph|flowchart)\s+LR\b', r'\1 TD', line_clean, flags=re.IGNORECASE)
+
         # 1. Normalizzazione Subgraph Header
+
         m_sub = re.match(r'^subgraph\s+(.+)$', line_clean, re.IGNORECASE)
         if m_sub:
             in_subgraph = True
@@ -361,21 +520,51 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             sanitized_lines.append(f"{indent_str}end")
             continue
 
-        # 2. Direttiva style: scarta deterministiche style directives sui subgraph per evitare crash ELK
+        # 2. Direttiva style: sanitizza le proprietà SVG valide e scarta style sui subgraph
         m_style = re.match(r'^style\s+([A-Za-z0-9_]+)\s+(.+)$', line_clean, re.IGNORECASE)
         if m_style:
             target_id = m_style.group(1)
             if target_id in subgraph_map:
                 continue
-            sanitized_lines.append(f"{indent_str}{line_clean}")
+            raw_props = m_style.group(2).strip()
+            valid_props = []
+            has_color = False
+            fill_val = None
+            for p in raw_props.split(','):
+                p = p.strip()
+                if not p:
+                    continue
+                k = p.split(':')[0].strip().lower() if ':' in p else ''
+                v = p.split(':')[1].strip() if ':' in p else ''
+                if k == 'color':
+                    has_color = True
+                if k == 'fill':
+                    fill_val = v
+                if k in ('fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'color', 'rx', 'ry'):
+                    valid_props.append(p)
+
+            # ARCHITETTURA: Risoluzione del contrasto per Notion Dark Mode.
+            # Se la direttiva 'style' definisce uno sfondo 'fill' ma omette 'color:',
+            # Notion Dark Mode applica il font bianco (#ffffff) di default del tema scuro,
+            # rendendo il testo invisibile su sfondi pastello chiari (#add8e6, #c8e6c9, etc.).
+            # Iniettiamo deterministicamente color:#0f172a per sfondi chiari e color:#ffffff per sfondi scuri.
+            if fill_val and not has_color and fill_val.lower() not in ('none', 'transparent'):
+                if is_light_hex(fill_val):
+                    valid_props.append("color:#0f172a")
+                else:
+                    valid_props.append("color:#ffffff")
+
+            if valid_props:
+                sanitized_lines.append(f"{indent_str}style {target_id} {','.join(valid_props)}")
             continue
+
 
         # 3. Normalizzazione frecce con label:
         # Trasforma `A -- "label" --> B` o `A -- label --> B` in standard universale `A -->|label| B`
         def _normalize_edge_labels(l: str) -> str:
             p_labeled = r'--\s*(?:\||"|)?(.*?)(?:\||"|)?\s*(-->|---|-.->|==>)'
             def rep_edge(m):
-                lbl = _clean_mermaid_label(m.group(1))
+                lbl = _clean_edge_label(m.group(1))
                 arr = m.group(2)
                 return f'{arr}|{lbl}|'
             return re.sub(p_labeled, rep_edge, l)
@@ -392,7 +581,7 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             if re.match(r'^\s*(?:-->|---|-.->|-.-|==>|==)', part):
                 m_edge_lbl = re.match(r'^(\s*(?:-->|---|-.->|-.-|==>|==)\|)([^|\n]+)(\|\s*)$', part)
                 if m_edge_lbl:
-                    clean_elbl = _clean_mermaid_label(m_edge_lbl.group(2))
+                    clean_elbl = _clean_edge_label(m_edge_lbl.group(2))
                     part = f'{m_edge_lbl.group(1)}{clean_elbl}{m_edge_lbl.group(3)}'
                 cleaned_parts.append(part)
                 continue
@@ -481,7 +670,13 @@ def sanitize_mermaid_flowchart(content: str) -> str:
         for edge in cross_sg_edges:
             sanitized_lines.append(f"  {edge}")
 
-    return "\n".join(sanitized_lines)
+    res = "\n".join(sanitized_lines)
+    # ARCHITETTURA: Risoluzione del clipping del testo in Notion (SVG foreignObject bug).
+    # Disabilitando htmlLabels, Mermaid genera elementi nativi SVG <text> e <tspan>
+    # anziché box <foreignObject> a larghezza fissa che tagliano le parole a ~16 caratteri.
+    if not res.strip().startswith("%%{init:"):
+        res = f"%%{{init: {{'flowchart': {{'htmlLabels': false}}}}}}%%\n{res}"
+    return res
 
 
 def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:

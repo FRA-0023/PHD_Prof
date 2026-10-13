@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 116 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 137 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -19,7 +19,117 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
-### 2026-10-09 (Definitive Fix: Notion Mermaid ELK Crash, Pure White Console & Quota Feedback Loop)
+### 2026-10-13 (Cross-Machine Profile Fault Isolation & Local Network Resilience)
+- **Diagnosi & Root Causes Isolate**:
+  1. *Perdita di Fault Isolation tra CLI e Web Cockpit*: Nella CLI, se un profilo conteneva una cartella inesistente sul nuovo PC (`C:\Documenti\UNIMIB\...` vs nuova macchina), la scansione isolava il singolo corso stampando "Cartella non trovata", consentendo di utilizzare gli altri domini corretti. Nel Web Cockpit (`/api/profiles`), qualsiasi eccezione `OSError` o `PermissionError` durante `scan_documents` o `is_dir()` faceva collassare l'intero endpoint con HTTP 500, facendo sollevare a `app.js` l'errore bloccante: `Impossibile caricare i profili: Errore recupero profili`.
+  2. *DNS Wildcard Hijacking su Host Locale (`phdprof.test`)*: In `pdf_to_notion.py`, `socket.gethostbyname(web_domain)` considerava valida qualsiasi risoluzione DNS. Su un PC nuovo connesso a reti con DNS hijacking (che rispondono con IP pubblici per qualsiasi dominio inesistente come `.test`), il sistema apriva il browser su un host remoto invece di fare il fallback su `127.0.0.1`.
+- **Risoluzione Deterministica nel Core, Backend & Frontend**:
+  - `web_adapter.py`: Schermata `scan_documents` contro qualsiasi eccezione di I/O (`OSError`, `PermissionError`, eccezioni generali). Nell'endpoint `/api/profiles`, implementato try/except per singolo profilo: se il filesystem di un corso è inaccessibile, il record restituisce `folder_exists: false` e `files_count: 0`, preservando la restituzione dei domini validi.
+  - `models.py` (`CourseProfile.from_dict`): Parsing difensivo per campi nulli o formati atipici.
+  - `json_course_profile_repository.py`: Protezione da file JSON malformati o liste `[]` invece di mappe chiave-valore.
+  - `pdf_to_notion.py`: Risoluzione locale vincolata rigorosamente a IP loopback (`127.0.0.1`, `::1`, `0.0.0.0`), con fallback automatico e trasparente su `127.0.0.1` in caso di DNS esterno.
+  - `app.js` & `app.css`: Badge visivo arancione/rosso `Cartella assente` per i profili orfani nella sidebar, con warning esplicito nel log di sistema che guida l'utente a cliccare "Modifica" senza bloccare la selezione degli altri corsi.
+  - `cli_adapter.py`: Allineata la medesima schermatura su filesystem.
+- **Autonomous Verification Gate**:
+  - 137/137 unit test superati al 100% su pytest (0 regressioni). Aggiunti 4 test dedicati per fault isolation e tolleranza guasti su filesystem e repository.
+
+### 2026-10-11 (Notion Mermaid Truncation & Dark Mode White-on-White Contrast Resolution)
+- **Diagnosi Empirica & Root Causes Isolate**:
+  1. *Troncamento Forzato di Parole a Metà (`...` nel Grafo 1 / Blocco 77)*:
+     - `convert_mindmap_to_flowchart()` eseguiva uno slicing arbitrario `full_label[:52] + "..."` ogni volta che la stringa superava 55 caratteri.
+     - Questo tranciava brutalmente le parole a metà (es. `Reali...`, `Orga...`, `Customer St...`, `Formal A...`), distruggendo la leggibilità concettuale.
+  2. *Titoli Invisibili Bianco su Chiaro in Notion Dark Mode (Grafo 2 / Blocco 78)*:
+     - Nei diagrammi Mermaid con direttive `style <NodeId> fill:<pastelHex>`, l'attributo `color:` era assente.
+     - Quando Notion è impostato su tema scuro (Dark Mode), applica il colore font ereditato predefinito del tema (`#ffffff`, bianco).
+     - Il rendering di testo bianco su sfondi pastello chiari (`#add8e6`, `#c8e6c9`, `#ffd7a0`, `#f9f7f7`) produce un contrast ratio di appena ~1.2:1, rendendo tutti i titoli completamente illeggibili e invisibili.
+- **Risoluzione Deterministica nel Core & Block Builder (`notion_block_builder.py`)**:
+  - `convert_mindmap_to_flowchart()`:
+    - Rimosso lo slicing a caratteri grezzi.
+    - Introdotta logica word-safe: il titolo del concetto viene sempre preservato per intero; i dettagli aggiuntivi vengono inseriti solo se rientrano nel budget di 55 caratteri; eventuali accorciamenti avvengono rigorosamente ai confini di parola (`rsplit(' ', 1)`), con zero parole troncate a metà.
+  - `is_light_hex(hex_str)`:
+    - Calcolo deterministico della luminanza WCAG (soglia > 140) per classificare colori di riempimento chiari vs scuri.
+  - `sanitize_mermaid_flowchart()`:
+    - Nelle direttive `style`, se `color:` è omesso e `fill` è un colore chiaro, viene iniettato deterministicamente `color:#0f172a` (ardesia scuro ad altissimo contrasto). Se lo sfondo è scuro, viene iniettato `color:#ffffff`.
+    - Normalizzazione automatica `graph LR` -> `graph TD` per preservare il layout verticale compatto.
+- **Hardening dei Prompt Template (`prompt_templates.py`)**:
+  - Aggiornati `SLIDES_PROMPT_TEMPLATE`, `PAPER_OR_BOOK_PROMPT_TEMPLATE` e `TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT`:
+    - Obbligo esplicito di abbinamento contrasto: ogni nodo con sfondo pastello deve definire esplicitamente `color:#0f172a` per garantire leggibilità incondizionata sia in Light che in Dark Mode.
+    - Limite stringente sulle etichette a 45-50 caratteri interi senza troncature.
+- **Diagnosi Visiva Definitiva (Text Clipping sul Bordo Destro dei Rettangoli SVG)**:
+  - Il difetto percepito come "parole/frasi troncate" non era un troncamento semantico nel testo sorgente con puntini di sospensione, bensì un **clipping geometrico del motore di rendering SVG di Notion**:
+  - Quando un'etichetta Mermaid su singola riga supera i 35-40 caratteri (nel grafo precedente erano 50-60 caratteri come `Layered EA Models: Serving, Realisation and Grouping`), Mermaid calcola le dimensioni della bounding box con metriche font generiche.
+  - Notion, renderizzando l'SVG all'interno del proprio contenitore web/desktop con il font di sistema locale (Inter/Segoe UI) e padding fisso della colonna, fa straripare il testo (`<text>`) oltre il margine destro del rettangolo (`<rect>`) e del subgraph.
+  - Le ultime parole di ogni nodo venivano quindi fisicamente tagliate dal tratto del rettangolo e dal bordo del container (`overflow: hidden`).
+- **Risoluzione a Budget Stretto & Zero-Overflow**:
+  - `notion_block_builder.py` e `prompt_templates.py`: ridotto il budget massimo per nodo a **25-28 caratteri**, spezzando i concetti complessi in nodi atomici concatenati verticalmente (es. `Layered EA Models` -> `Serving & Realisation`) anziché stringhe monolitiche su singola riga.
+  - Aggiornati live via Notion API i blocchi 77 e 78 con il layout compatto a colonna singola: larghezza box ridotta a ~200px con ampi margini di sicurezza su entrambi i lati, garantendo zero clipping e leggibilità immediata.
+- **Autonomous Verification Gate & Test Suite**:
+  - 133/133 unit test superati al 100% su pytest (0 regressioni).
+
+### 2026-10-11 (Notion Mermaid Single-Column Vertical Layout & Anti-Shrink Enforcement)
+- **Diagnosi Empirica & Root Cause del Rimpicciolimento Font**:
+  - *Sprawl Orizzontale & Scaling Ratio in Notion*: I blocchi Notion renderizzano gli SVG di Mermaid dentro un contenitore a larghezza fissa (700-900px).
+  - Quando un diagramma ha più subgraph/cluster disposti in parallelo dal nodo radice (`ROOT --> SG_1`, `ROOT --> SG_2`, `ROOT --> SG_3`) e nodi interni non connessi verticalmente, l'SVG risultante raggiunge oltre 2100px di larghezza (`viewBox: 4 4 2110 396`).
+  - Per far entrare 2110px dentro 800px, Notion applica un fattore di scala proporzionale di **0.379 (38%)**, rimpicciolendo i font da 14px a **5.3px**, rendendo il testo illegibile.
+- **Risoluzione Deterministica nel Core & Block Builder (`notion_block_builder.py`)**:
+  - `convert_mindmap_to_flowchart()`: Riprogettata la topologia del grafo:
+    1. *Catena top-down interna*: I nodi appartenenti allo stesso subgraph sono ora concatenati sequenzialmente in verticale (`N1 --> N2 --> N3`).
+    2. *Impilamento sequenziale dei cluster*: I subgraph sono ora concatenati in cascata progressiva a colonna singola (`ROOT --> first(SG_1)`, `last(SG_1) --> first(SG_2)`, `last(SG_2) --> first(SG_3)`).
+    3. *Budget larghezza label*: Accorciato il tetto massimo delle etichette a 55 caratteri.
+    4. Risultato misurato via Playwright: larghezza SVG ridotta da **2110px a 216px**, scale factor **1.0 (100%)**, font nitidi e perfettamente leggibili.
+  - `sanitize_mermaid_flowchart()`: Normalizzazione automatica da `graph LR` / `flowchart LR` a `graph TD` / `flowchart TD` per impedire esplosioni in larghezza.
+- **Hardening dei Prompt Accademici (`prompt_templates.py`)**:
+  - Aggiornati `SLIDES_PROMPT_TEMPLATE`, `PAPER_OR_BOOK_PROMPT_TEMPLATE` e `TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT`.
+  - Introdotti vincoli vincolanti negativi e positivi:
+    - Divieto assoluto di `graph LR` (solo `graph TD`).
+    - Divieto assoluto di subgraph disposti in parallelo side-by-side.
+    - Obbligo di impilamento sequenziale verticale dei cluster (`SG_1 --> SG_2 --> SG_3`).
+    - Obbligo di catena top-down dei nodi interni o massimo 2 nodi in parallelo per rank.
+    - Budget di etichetta massimo di 45-50 caratteri.
+- **Notion Live Patch**:
+  - Aggiornato live via Notion API il Blocco 77 (`3f4b63e8-59c8-8171-ac9b-e0663378f4b7`) sulla pagina 'Data Application ICT and Physical Layers' con la nuova tassonomia a colonna singola verticale.
+- **Autonomous Verification Gate**:
+  - 131/131 unit test superati al 100% su pytest (0 regressioni).
+
+### 2026-10-09 (Mermaid Notion Rendering Resolution & Taxonomy Tree Standardization)
+- **Diagnosi & Root Causes Isolate**:
+  1. *Incompatibilità Notion con sintassi `mindmap`*: L'integrazione nativa Mermaid di Notion supporta `graph`, `flowchart`, `sequenceDiagram`, `classDiagram`, `stateDiagram`, `erDiagram`, `gantt`, `pie`, ma NON supporta la keyword `mindmap`. Qualsiasi blocco contenente `mindmap` fallisce il rendering o rimane invisibile.
+  2. *Token/XML Entity Crash nelle Etichette degli Archi (`|...|`)*: Etichette con operatori di confronto (es. `|Scalar & >1 Row|`) corrompevano il parser sintattico poiché `>` chiude/termina prematuramente il token freccia e `&` fallisce come entità XML spaiata. Inoltre le parentesi `()` nelle etichette corrompevano la tokenizzazione.
+  3. *Over-matching nella rimozione tag HTML*: Il regex precedente `<[^>]+>` scambiava sequenze matematiche (es. `< ANY ... >`) per tag HTML, cancellando testo intermedio e lasciando delimitatori sbilanciati.
+  4. *Proprietà `style` non SVG*: Proprietà come `font-weight:bold` mandavano in errore il parsing CSS dei diagrammi.
+- **Risoluzione Deterministica nel Core & Block Builder (`notion_block_builder.py`)**:
+  - `convert_mindmap_to_flowchart()`: Converte deterministicamente qualsiasi albero `mindmap` Mermaid in un grafo tassonomico gerarchico `graph TD` con stilizzazione multilivello (`rootNode`, `level1`, `level2`, `level3`, `levelN`).
+  - `_clean_mermaid_label()`: Bonifica selettiva dei veri tag HTML (`</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^>]*)?>`), preservando e traducendo operatori matematici (`<=` -> `≤`, `>=` -> `≥`, `<>` -> `≠`, `<` -> `lt `, `>` -> `gt `, `&` -> `and`).
+  - `_clean_edge_label()`: Sanitizzazione dedicata per etichette archi `|...|`, rimuovendo parentesi ed eliminando operatori conflittuali.
+  - `sanitize_mermaid_flowchart()`: Filtraggio delle sole proprietà SVG lecite (`fill`, `stroke`, `stroke-width`, `stroke-dasharray`, `color`, `rx`, `ry`), hoisting archi cross-subgraph e rimozione stili su subgraph.
+  - Integrazione automatica in `build_notion_blocks()`: Qualsiasi blocco `code (mermaid)` con `mindmap` viene tradotto in `graph TD` prima della trasmissione all'API Notion.
+- **Aggiornamento Prompt Accademici (`prompt_templates.py`)**:
+  - Allineati `SLIDES_PROMPT_TEMPLATE`, `PAPER_OR_BOOK_PROMPT_TEMPLATE` e `TWO_STAGE_ARTIFACTS_EXTRACTION_PROMPT` per istruire Gemini a generare direttamente alberi tassonomici concettuali `graph TD` con palette pastello multilivello.
+- **Notion Live Patch**:
+  - Patchati via Notion API i blocchi 69 (`3f4b63e8-59c8-8199-95fe-e3bb2faeeb05`) e 70 (`3f4b63e8-59c8-8193-9ee2-c1083e9a85bb`) sulla pagina 'SQL Part 2 Subqueries' (`3ecb63e8-59c8-813f-9177-c5bf4d681fc1`), rendendo entrambi i diagrammi visibili e fruibili (HTTP 200).
+- **Autonomous Verification Gate & Test Suite**:
+  - 131/131 unit test superati al 100% su pytest (0 regressioni).
+
+- **Eliminazione Estetica Industriale & Overhaul UX Studente**:
+  - Rimosso l'ingombrante hero box con titolo corso gigante duplicato (`<h1>Big Data</h1>`) e badge ridondanti.
+  - Sostituito con una **Testata Studio Integrata** (`.study-workspace-header`): raggruppa titolo corso (16px), docente, breadcrumb cartella locale, controlli di generazione e barra di avanzamento lezioni slim (4px).
+  - Eliminato il gergo e i componenti da server ops/telemetria (es. "LOCAL HOST", server rack pulse dots, Spec Inspector in stile AWS EC2, colonna fissa "Impronta SHA-256").
+  - Sostituito lo Spec Inspector con la card **Dettagli Corso** (`.course-meta-card`) formattata per metadati accademici (Docente, Formato, Notion DB).
+- **Design System Academic Studio (`app.css`)**:
+  - Implementati design tokens per l'elevazione a 3 livelli: `--elevation-1` (base/subtle), `--elevation-2` (superfici sollevate/card a isola con multi-stop drop shadow e specular top highlight), `--elevation-3` (drawers/hover-lift/modals con ombre profonde).
+  - Integrati bordi zenitali semi-trasparenti (`--zenithal-border`) e stati di pressione tattile per tutti i bottoni (`translateY(1px)` con inset shadow).
+  - Modalità Chiara predefinita (`[data-theme="light"]`) con superfici bianche pure (`#FFFFFF`), inclusa la console delle attività (`#FFFFFF`), testo ad alto contrasto (`#0F172A`, 15.6:1 WCAG AA) e ardesia accademico.
+  - Griglia Syllabus accademica snella: Materiale Didattico, Formato, Dimensione, Stato Studio e Azioni (`Mappa OPML`, `+ Grafo`, `Notion`, `Sync`).
+  - Study Activity Drawer collassabile a fondo schermo (`38px` collassato <-> `220px` aperto) con live teaser preview.
+- **Client Controller Reattivo (`app.js`)**:
+  - Aggiornato `renderFiles()` per renderizzare le card a isola con colonne coerenti e pulsanti di azione dedicati.
+  - Aggiornato `selectProfile()` e `updateHeroProgress()` per sincronizzare la testata studio integrata senza duplicare i titoli.
+  - Impostato il tema chiaro come predefinito con persistenza in `localStorage`.
+- **Documentazione Allineata (`README.md`)**:
+  - Aggiornata la documentazione del Web Cockpit rigorosamente ed esclusivamente in inglese con il diagramma ASCII del layout Academic Studio e il dettaglio delle nuove capacità operative.
+- **Autonomous Verification Gate & Test Suite**:
+  - Confermato 100% green su pytest: 129/129 test passati (0 regressioni). Zero errori di sintassi.
+
 - **Root Cause Sistemiche Isolate**:
   1. *Direttive `style <subgraphId>`*: Il layout engine compound di Notion (ELK / Dagre) cerca il subgraph nella tabella dei nodi atomici. Trovando `null`, l'accesso alla proprietà geometrica (`.rect` o minificato `.re`) solleva `TypeError: Cannot read properties of null (reading 're')`.
   2. *Archi Cross-Subgraph Annidati nei Cluster*: La dichiarazione di archi tra nodi di cluster differenti all'interno del corpo di un subgraph corrompe l'albero gerarchico genitore-figlio (multi-parent acyclic layout violation).

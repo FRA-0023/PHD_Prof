@@ -18,7 +18,9 @@ class JsonCourseProfileRepository(ICourseProfileRepository):
                 with open(self.file_path, "r", encoding="utf-8") as f:
                     content = f.read().strip()
                     if content:
-                        return json.loads(content)
+                        parsed = json.loads(content)
+                        if isinstance(parsed, dict):
+                            return parsed
             except Exception:
                 pass
         return {}
@@ -35,13 +37,15 @@ class JsonCourseProfileRepository(ICourseProfileRepository):
     def list_profiles(self) -> List[CourseProfile]:
         data = self._load_data()
         profiles = []
-        for key, item in data.items():
-            try:
-                profiles.append(CourseProfile.from_dict(item))
-            except Exception:
-                # Fault isolation: an invalid record does not crash the entire list
-                continue
-        return sorted(profiles, key=lambda p: p.subject.lower())
+        if isinstance(data, dict):
+            for key, item in data.items():
+                try:
+                    if isinstance(item, dict):
+                        profiles.append(CourseProfile.from_dict(item))
+                except Exception:
+                    # Fault isolation: an invalid record does not crash the entire list
+                    continue
+        return sorted(profiles, key=lambda p: (p.subject or "").lower())
 
     def get_profile(self, subject_or_key: str) -> Optional[CourseProfile]:
         data = self._load_data()

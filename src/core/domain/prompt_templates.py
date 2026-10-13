@@ -66,18 +66,30 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Conclude the notes with the following three high-signal study sections:
     ---
     ## 🧠 Conceptual Architecture & Relational Graphs
-    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the chapter (CRITICAL: wrap node labels containing parentheses, formulas, colons, or arrows in double quotes, e.g. `["Consistency (C)"]`, `["Scale (KB to YB)"]`, never leave unquoted parentheses inside node text):
+    * Provide a Mermaid Conceptual Taxonomy Tree (`graph TD`) mapping the chapter's conceptual taxonomy with hierarchical pastel levels:
     ```mermaid
-    mindmap
-      root((Lecture Core))
-        Theoretical Pillars
-          Key Model A
-          Key Model B
-        Empirical Channels
-          Identification Strategy
-          Estimation Mechanics
+    graph TD
+      classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2px,color:#fff;
+      classDef level1 fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+      classDef level2 fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1.2px,color:#4c1d95;
+      classDef level3 fill:#f0fdf4,stroke:#10b981,stroke-width:1px,color:#064e3b;
+
+      ROOT(["Lecture Core"]):::rootNode
+      P1["Theoretical Pillars"]:::level1
+      P2["Empirical Channels"]:::level1
+      M1["Key Model A"]:::level2
+      M2["Key Model B"]:::level2
+      S1["Identification Strategy"]:::level2
+      S2["Estimation Mechanics"]:::level2
+
+      ROOT --> P1
+      ROOT --> P2
+      P1 --> M1
+      P1 --> M2
+      P2 --> S1
+      P2 --> S2
     ```
-    * Provide a Mermaid flowchart (`graph TD` or `graph LR`) mapping the primary causal chain, transmission mechanism, or algorithmic architecture. Follow these VISUAL & MATHEMATICAL standards:
+    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain, transmission mechanism, or algorithmic architecture. Follow these VISUAL & MATHEMATICAL standards:
       1. **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire architecture, NOT monochromatic by subgraph box. Use semantic pastel fills with distinct border strokes:
          - **Theory & Definitions**: `classDef theoryNode fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a;` (definitions, theorems, axioms, principles).
          - **Compute & Architecture**: `classDef computeNode fill:#fef3c7,stroke:#f59e0b,color:#78350f;` (hardware models, engines, mathematical operations).
@@ -88,6 +100,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
          - NEVER use HTML tags (`<span>`, `<b>`, `<i>`, `<br/>`, `<br>`, etc.) inside Mermaid nodes or subgraph titles. Notion and ELK layout engines fail on HTML tags with layout null pointer exceptions.
          - For multi-line labels, separate concepts with hyphens (` - `) or concise phrases entirely wrapped in double quotes: `NodeID["Clean Descriptive Title - Secondary Detail"]`.
          - ALWAYS wrap ALL node labels in double quotes (e.g. `NodeID["Label Text"]`, `NodeID("Rounded Label")`, `NodeID{{"Condition"}}`).
+         - In edge labels (`|label|`), use concise words without parentheses or angle brackets (`<`, `>`).
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
       4. **Topology & Subgraph Rules**:
          - Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly.
@@ -95,6 +108,12 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
          - NEVER apply `style` directly to subgraph IDs (e.g. `style SG_ID ...` is forbidden as it causes Notion layout crashes).
          - Cross-subgraph edges MUST be declared outside/after the subgraph blocks at root level, never nested inside individual subgraphs.
          - Use standard edge labels with vertical pipes: `-->|label|`, never `-- "label" -->`.
+      5. **Strict Vertical Flow & Width Budget (Anti-Shrink Guarantee)**:
+         - Notion constrains diagrams to a narrow column width (700-900px). Diagrams with wide horizontal sprawl or subgraphs placed side-by-side shrink proportionally, making text microscopic and unreadable.
+         - STRICTLY use `graph TD` (Top-Down). NEVER use `graph LR` (Left-to-Right).
+         - NEVER declare multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`).
+         - Inside each subgraph, chain nodes vertically in a single sequence (`Node1 --> Node2 --> Node3`) or allow at most 2 parallel branches across the rank.
+         - Keep node labels strictly compact (max 25-28 characters per node, e.g. 'Layered EA Models', 'Serving & Realisation'). Labels exceeding 30 characters cause Notion's SVG layout engine to overflow and physically clip words against the right border of the node rectangle.
     ```mermaid
     graph TD
       classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;
@@ -192,18 +211,30 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
   * Conclude the paper synthesis with the following three high-signal study sections:
     ---
     ## 🧠 Conceptual Architecture & Relational Graphs
-    * Provide a Mermaid mindmap capturing the taxonomic hierarchy of the paper (CRITICAL: wrap node labels containing parentheses, formulas, colons, or arrows in double quotes, e.g. `["Consistency (C)"]`, `["Scale (KB to YB)"]`, never leave unquoted parentheses inside node text):
+    * Provide a Mermaid Conceptual Taxonomy Tree (`graph TD`) mapping the paper's conceptual taxonomy with hierarchical pastel levels:
     ```mermaid
-    mindmap
-      root((Paper Core))
-        Theoretical Framework
-          Assumptions
-          Equilibrium
-        Empirical Identification
-          Methodology
-          Causal Mechanism
+    graph TD
+      classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2px,color:#fff;
+      classDef level1 fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+      classDef level2 fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1.2px,color:#4c1d95;
+      classDef level3 fill:#f0fdf4,stroke:#10b981,stroke-width:1px,color:#064e3b;
+
+      ROOT(["Paper Core"]):::rootNode
+      P1["Theoretical Framework"]:::level1
+      P2["Empirical Identification"]:::level1
+      M1["Assumptions"]:::level2
+      M2["Equilibrium"]:::level2
+      S1["Methodology"]:::level2
+      S2["Causal Mechanism"]:::level2
+
+      ROOT --> P1
+      ROOT --> P2
+      P1 --> M1
+      P1 --> M2
+      P2 --> S1
+      P2 --> S2
     ```
-    * Provide a Mermaid flowchart (`graph TD` or `graph LR`) mapping the primary causal chain or identification tree. Follow these VISUAL & MATHEMATICAL standards:
+    * Provide a Mermaid flowchart (`graph TD`) mapping the primary causal chain or identification tree. Follow these VISUAL & MATHEMATICAL standards:
       1. **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire paper, NOT monochromatic by subgraph box. Use semantic pastel fills with distinct border strokes:
          - **Theory & Identification**: `classDef theoryNode fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a;` (identification hypotheses, structural equations, estimators).
          - **Empirical Channels & Mechanics**: `classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95;` (transmission channels, data variation, sample cuts).
@@ -213,6 +244,7 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
          - NEVER use HTML tags (`<span>`, `<b>`, `<i>`, `<br/>`, `<br>`, etc.) inside Mermaid nodes or subgraph titles. Notion and ELK layout engines fail on HTML tags with layout null pointer exceptions.
          - For multi-line labels, separate concepts with hyphens (` - `) or concise phrases entirely wrapped in double quotes: `NodeID["Clean Descriptive Title - Secondary Detail"]`.
          - ALWAYS wrap ALL node labels in double quotes (e.g. `NodeID["Label Text"]`, `NodeID("Rounded Label")`, `NodeID{{"Condition"}}`).
+         - In edge labels (`|label|`), use concise words without parentheses or angle brackets (`<`, `>`).
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
       4. **Topology & Subgraph Rules**:
          - Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly.
@@ -220,6 +252,12 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
          - NEVER apply `style` directly to subgraph IDs (e.g. `style SG_ID ...` is forbidden as it causes Notion layout crashes).
          - Cross-subgraph edges MUST be declared outside/after the subgraph blocks at root level, never nested inside individual subgraphs.
          - Use standard edge labels with vertical pipes: `-->|label|`, never `-- "label" -->`.
+      5. **Strict Vertical Flow & Width Budget (Anti-Shrink Guarantee)**:
+         - Notion constrains diagrams to a narrow column width (700-900px). Diagrams with wide horizontal sprawl or subgraphs placed side-by-side shrink proportionally, making text microscopic and unreadable.
+         - STRICTLY use `graph TD` (Top-Down). NEVER use `graph LR` (Left-to-Right).
+         - NEVER declare multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`).
+         - Inside each subgraph, chain nodes vertically in a single sequence (`Node1 --> Node2 --> Node3`) or allow at most 2 parallel branches across the rank.
+         - Keep node labels strictly compact (max 25-28 characters per node, e.g. 'Layered EA Models', 'Serving & Realisation'). Labels exceeding 30 characters cause Notion's SVG layout engine to overflow and physically clip words against the right border of the node rectangle.
     ```mermaid
     graph TD
       classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;
@@ -274,12 +312,13 @@ You are an Academic Knowledge Architect and Senior Quantitative Pedagogist in {s
 
 <task>
 Deconstruct the provided synthesized study notes into high-signal conceptual study artifacts:
-1. Mermaid Mindmap: A clean, hierarchical taxonomy of core pillars and sub-concepts (depth 3-4).
-2. Mermaid Flowchart (`graph TD` or `graph LR`): The core cause-and-effect chain, empirical transmission mechanism, or identification flowchart. Follow these visual and mathematical standards:
+1. Mermaid Conceptual Taxonomy Tree (`graph TD`): A clean, hierarchical taxonomy of core pillars and sub-concepts (depth 3-4) using hierarchical pastel classDef styling (`rootNode`, `level1`, `level2`, `level3`, `levelN`).
+2. Mermaid Flowchart (`graph TD`): The core cause-and-effect chain, empirical transmission mechanism, or identification flowchart. Follow these visual and mathematical standards:
    - **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire architecture, NOT monochromatic by subgraph box. Use semantic pastel fills (theory/definitions in blue, compute/hardware in amber, pipelines/flow in purple, engineering/storage in green, bottlenecks/failure modes in coral).
    - **Strict Text Formatting (NO HTML)**: NEVER use HTML tags (`<span>`, `<b>`, `<br/>`, etc.) in node labels or subgraph titles. Wrap all labels in double quotes. For multi-line labels, use ` - ` or concise phrases.
    - **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
    - **Topology & Subgraph Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID ["Subgraph Title"]`. NEVER apply `style` to subgraph IDs (`style SG_ID` is forbidden). Declare cross-subgraph edges outside subgraphs at root level. Use `-->|label|` for edge labels.
+   - **Strict Vertical Flow & Width Budget (Anti-Shrink Guarantee)**: Notion renders code blocks in a narrow reading column (~700-900px). NEVER use `graph LR`. STRICTLY use `graph TD`. Never place multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`). Inside each subgraph, chain nodes vertically in a single sequence. Keep node labels strictly compact (max 25-28 characters per node). Labels exceeding 30 characters cause Notion's SVG layout engine to overflow and clip words against the right border of the rectangle.
 3. Active Recall & Examination Drills: 3 to 5 examination-grade analytical questions with explicit evaluation rubrics.
 4. Model Boundary Conditions: A Markdown table mapping frameworks, validity domains, breakdown triggers, and robust alternatives.
 
@@ -288,9 +327,16 @@ Format the output strictly as the following 3 Markdown sections:
 ---
 ## 🧠 Conceptual Architecture & Relational Graphs
 ```mermaid
-mindmap
-  root((Lecture Core))
-    ...
+graph TD
+  classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2px,color:#fff;
+  classDef level1 fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+  classDef level2 fill:#f5f3ff,stroke:#8b5cf6,stroke-width:1.2px,color:#4c1d95;
+  classDef level3 fill:#f0fdf4,stroke:#10b981,stroke-width:1px,color:#064e3b;
+
+  ROOT(["Lecture Core"]):::rootNode
+  P1["Pillar 1"]:::level1
+  P2["Pillar 2"]:::level1
+  ...
 ```
 
 ```mermaid
@@ -318,8 +364,7 @@ graph TD
 - British English exclusively.
 - Output ONLY the requested Markdown sections without any conversational meta-commentary.
 - Formulas inside text must use standard LaTeX ($...$). In Mermaid diagrams, use Unicode math notation (e.g. `O(N³)`, `β̂`, `(K₁, V₁)`).
-- In Mermaid mindmaps, all node labels containing parentheses, colons, commas, formulas, or arrows MUST be wrapped in double quotes (e.g., `["Scale (KB to YB)"]`, `["Consistency (C)"]`). Never output unquoted parentheses in node text.
-- In Mermaid flowcharts, connect strictly node-to-node (`NodeA --> NodeB`), never use HTML tags, never style subgraph containers (`style SG_ID` is strictly prohibited), and declare cross-subgraph edges at root level outside subgraphs.
+- In Mermaid taxonomy trees and flowcharts, connect strictly node-to-node (`NodeA --> NodeB`), never use HTML tags, never style subgraph containers (`style SG_ID` is strictly prohibited), and declare cross-subgraph edges at root level outside subgraphs.
 </constraints>
 
 <input_study_notes>

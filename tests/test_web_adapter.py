@@ -389,4 +389,81 @@ async def test_append_graph_broadcasts_quota_update(mock_dependencies):
             staging_file.unlink()
 
 
+@pytest.mark.anyio
+async def test_get_profiles_fault_isolation_with_broken_folder(mock_dependencies):
+    # ARCHITETTURA: Verifica che la presenza di percorsi non validi o drive inesistenti (es. su un altro PC)
+    # non causi errori HTTP 500, ma restituisca tutti i profili con stato coerente (folder_exists=False).
+    adapter = mock_dependencies["adapter"]
+    repo = mock_dependencies["repo"]
+    valid_profile = mock_dependencies["profile"]
+
+    broken_profile = CourseProfile(
+        subject="Broken Course Profile",
+        professor_type="PhD Professor in Resilience",
+        doc_type=DocumentType.SLIDES,
+        folder_path=Path("Z:\\NonExistent_Network_Path\\Courses"),
+        target=NotionTarget(
+            database_id="db_broken",
+            course_name="Broken Course",
+            database_title="Notes",
+        ),
+    )
+
+    repo.list_profiles.return_value = [valid_profile, broken_profile]
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+        response = await client.get("/api/profiles")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+
+        valid_res = next(p for p in data if p["subject"] == "Enterprise Architecture")
+        assert valid_res["folder_exists"] is True
+        assert valid_res["files_count"] == 2
+
+        broken_res = next(p for p in data if p["subject"] == "Broken Course Profile")
+        assert broken_res["folder_exists"] is False
+        assert broken_res["files_count"] == 0
+
+
+@pytest.mark.anyio
+async def test_get_profiles_fault_isolation_with_permission_error(mock_dependencies, monkeypatch):
+    # ARCHITETTURA: Verifica che eventuali PermissionError o OSError nel filesystem
+    # vengano catturati a livello di singolo record senza interrompere l'endpoint.
+    adapter = mock_dependencies["adapter"]
+    repo = mock_dependencies["repo"]
+    valid_profile = mock_dependencies["profile"]
+
+    perm_error_profile = CourseProfile(
+        subject="Restricted Permissions Course",
+        professor_type="PhD Professor in Security",
+        doc_type=DocumentType.PAPER_OR_BOOK,
+        folder_path=Path("C:\\Restricted"),
+        target=NotionTarget(
+            database_id="db_restricted",
+            course_name="Restricted Course",
+            database_title="Notes",
+        ),
+    )
+
+    repo.list_profiles.return_value = [valid_profile, perm_error_profile]
+
+    def mock_is_dir(self):
+        if "Restricted" in str(self):
+            raise PermissionError("Access is denied")
+        return True
+
+    monkeypatch.setattr(Path, "is_dir", mock_is_dir)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=adapter.app), base_url="http://testserver") as client:
+        response = await client.get("/api/profiles")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        restricted_res = next(p for p in data if p["subject"] == "Restricted Permissions Course")
+        assert restricted_res["folder_exists"] is False
+        assert restricted_res["files_count"] == 0
+
+
+
 

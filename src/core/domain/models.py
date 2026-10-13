@@ -103,23 +103,37 @@ class CourseProfile:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CourseProfile":
-        target_data = data.get("target", {})
+        # ARCHITETTURA: Parsing difensivo per isolamento guasti sul file di configurazione profili.
+        # Garantisce che dati parzialmente mancanti o formattati male su un altro PC
+        # non causino eccezioni non gestite nel dominio.
+        if not isinstance(data, dict):
+            raise ValueError("Expected dictionary for CourseProfile")
+        target_raw = data.get("target")
+        target_data = target_raw if isinstance(target_raw, dict) else {}
+        subject_str = str(data.get("subject", "") or "").strip()
         target = NotionTarget(
-            database_id=target_data.get("database_id", ""),
-            course_name=target_data.get("course_name", data.get("subject", "")),
-            database_title=target_data.get("database_title", "Notes"),
+            database_id=str(target_data.get("database_id", "") or "").strip(),
+            course_name=str(target_data.get("course_name", subject_str) or subject_str).strip(),
+            database_title=str(target_data.get("database_title", "Notes") or "Notes").strip(),
         )
-        doc_type_val = data.get("doc_type", "slides")
+        doc_type_val = str(data.get("doc_type", "slides") or "slides").lower().strip()
         try:
             doc_type = DocumentType(doc_type_val)
         except ValueError:
             doc_type = DocumentType.SLIDES
 
+        prof_type = str(data.get("professor_type", "") or "").strip()
+        if not prof_type:
+            prof_type = f"PhD Professor in {subject_str}" if subject_str else "PhD Professor"
+
+        raw_folder = str(data.get("folder_path", "") or "").strip()
+        folder_path = Path(raw_folder) if raw_folder else Path(".")
+
         return cls(
-            subject=data.get("subject", ""),
-            professor_type=data.get("professor_type", f"PhD Professor in {data.get('subject', '')}"),
+            subject=subject_str,
+            professor_type=prof_type,
             doc_type=doc_type,
-            folder_path=Path(data.get("folder_path", "")),
+            folder_path=folder_path,
             target=target,
         )
 

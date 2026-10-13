@@ -2,6 +2,9 @@
  * PHD Prof Cockpit — Client-Side Controller (app.js)
  * High-performance Vanilla ES6 controller.
  * Manages reactive state, SSE telemetry streaming, keyboard shortcuts, and UI updates.
+ * # ARCHITETTURA: Controller client-side zero-build disaccoppiato dal backend,
+ *   con gestione deterministica degli stati asincroni (coda FIFO serializzata per grafi)
+ *   e reattività istantanea su eventi SSE del dominio.
  */
 
 (() => {
@@ -25,6 +28,19 @@
     specNotion: document.getElementById("spec-notion"),
     activeCourseTitle: document.getElementById("active-course-title"),
     activeCoursePath: document.getElementById("active-course-path"),
+    activeCourseCount: document.getElementById("active-course-count"),
+    heroStudyCard: document.getElementById("hero-study-card"),
+    heroCourseTitle: document.getElementById("hero-course-title"),
+    heroProfDesc: document.getElementById("hero-prof-desc"),
+    heroDocTypeBadge: document.getElementById("hero-doctype-badge"),
+    heroTargetBadge: document.getElementById("hero-target-badge"),
+    heroQuotaStatus: document.getElementById("hero-quota-status"),
+    heroProgressText: document.getElementById("hero-progress-text"),
+    heroProgressBar: document.getElementById("hero-progress-bar"),
+    activityDrawer: document.getElementById("activity-drawer"),
+    drawerHeader: document.getElementById("drawer-header"),
+    drawerTeaser: document.getElementById("drawer-teaser"),
+    btnToggleDrawer: document.getElementById("btn-toggle-drawer"),
     fileTableBody: document.getElementById("file-table-body"),
     masterCheckbox: document.getElementById("master-checkbox"),
     emptyState: document.getElementById("empty-state"),
@@ -73,7 +89,14 @@
   async function loadProfiles(preferredKey = null) {
     try {
       const res = await fetch("/api/profiles");
-      if (!res.ok) throw new Error("Errore recupero profili");
+      if (!res.ok) {
+        let errMsg = "Errore recupero profili";
+        try {
+          const errData = await res.json();
+          if (errData && errData.detail) errMsg = errData.detail;
+        } catch (_) {}
+        throw new Error(errMsg);
+      }
       state.profiles = await res.json();
       renderProfiles();
 
@@ -82,6 +105,8 @@
           ? state.profiles.find((p) => p.key === preferredKey)
           : state.profiles[0];
         selectProfile(target || state.profiles[0]);
+      } else {
+        appendLog("sys", "Nessun profilo corso configurato. Clicca su '+ Nuovo' per aggiungere il tuo primo corso.", "warn");
       }
     } catch (err) {
       appendLog("sys", `Impossibile caricare i profili: ${err.message}`, "error");
@@ -96,16 +121,18 @@
       item.dataset.key = p.key;
 
       const badgeTypeClass = p.doc_type === "slides" ? "badge-slides" : "badge-paper";
+      const filesBadge = p.folder_exists !== false
+        ? `<span class="badge badge-count">${p.files_count || 0} file</span>`
+        : `<span class="badge badge-warn" title="Cartella non trovata su disco: ${escapeHtml(p.folder_path)}">Cartella assente</span>`;
 
       item.innerHTML = `
         <div class="profile-info">
           <div class="profile-name">
-            <span style="font-family: var(--font-mono); color: var(--text-tertiary); margin-right: 4px;">[${idx + 1}]</span>
             ${escapeHtml(p.subject)}
           </div>
           <div class="profile-meta">
             <span class="badge ${badgeTypeClass}">${escapeHtml(p.doc_type)}</span>
-            <span class="badge badge-count">${p.files_count || 0} file</span>
+            ${filesBadge}
           </div>
         </div>
       `;
@@ -113,6 +140,28 @@
       item.addEventListener("click", () => selectProfile(p));
       el.profileList.appendChild(item);
     });
+  }
+
+  // # ARCHITETTURA: Calcolo metrico reattivo per l'avanzamento didattico del corso.
+  // Aggiorna simultaneamente la progress bar, la percentuale e il contatore file.
+  function updateHeroProgress() {
+    const total = state.files.length;
+    const synced = state.files.filter((f) => f.status === "SYNCED").length;
+    const percent = total > 0 ? Math.round((synced / total) * 100) : 0;
+
+    if (el.heroProgressBar) {
+      el.heroProgressBar.style.width = `${percent}%`;
+      const track = el.heroProgressBar.parentElement;
+      if (track) {
+        track.setAttribute("aria-valuenow", percent);
+      }
+    }
+    if (el.heroProgressText) {
+      el.heroProgressText.textContent = `${percent}% completato (${synced}/${total})`;
+    }
+    if (el.activeCourseCount) {
+      el.activeCourseCount.textContent = `${total} lezioni`;
+    }
   }
 
   function selectProfile(profile) {
@@ -124,15 +173,22 @@
     });
 
     // Update Course Spec Inspector
-    el.specSubject.textContent = profile.subject;
-    el.specProf.textContent = profile.professor_type || "--";
-    el.specDocType.textContent = (profile.doc_type || "SLIDES").toUpperCase();
-    el.specNotion.textContent = `${profile.target?.course_name || ""} > ${profile.target?.database_title || "Notes"}`;
+    if (el.specSubject) el.specSubject.textContent = profile.subject || "--";
+    if (el.specProf) el.specProf.textContent = profile.professor_type || "--";
+    if (el.specDocType) el.specDocType.textContent = (profile.doc_type || "SLIDES").toUpperCase();
+    if (el.specNotion) el.specNotion.textContent = `${profile.target?.course_name || ""} > ${profile.target?.database_title || "Notes"}`;
 
-    // Update Toolbar Header
-    el.activeCourseTitle.textContent = profile.subject;
-    el.activeCoursePath.textContent = profile.folder_path;
-    el.activeCoursePath.title = profile.folder_path;
+    // # ARCHITETTURA: Aggiornamento pulito della testata corso integrata (no banner giganti)
+    if (el.activeCourseTitle) {
+      el.activeCourseTitle.textContent = profile.subject || "Seleziona un corso";
+    }
+    if (el.heroProfDesc) {
+      el.heroProfDesc.textContent = profile.professor_type || "Ambiente di studio per sintesi accademiche rigorose e mappe concettuali";
+    }
+    if (el.activeCoursePath) {
+      el.activeCoursePath.textContent = profile.folder_path || "--";
+      el.activeCoursePath.title = profile.folder_path || "";
+    }
 
     loadFiles(profile.key);
   }
@@ -140,11 +196,9 @@
   // --- 2. Files Queue ---
   async function loadFiles(profileKey) {
     el.fileTableBody.innerHTML = `
-      <tr>
-        <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-tertiary);">
-          Scansione file su disco in corso...
-        </td>
-      </tr>
+      <div class="syllabus-loading">
+        Scansione materiali didattici in corso...
+      </div>
     `;
     el.emptyState.style.display = "none";
 
@@ -155,6 +209,14 @@
       state.files = data.files || [];
       state.selectedFiles.clear();
 
+      if (data.error) {
+        appendLog(
+          "sys",
+          `Cartella materiali non accessibile per '${state.activeProfile?.subject || profileKey}': ${data.error}. Usa 'Modifica' per aggiornare il percorso.`,
+          "warn"
+        );
+      }
+
       // By default, select files that are NOT yet synced
       state.files.forEach((f) => {
         if (f.status !== "SYNCED") {
@@ -163,21 +225,21 @@
       });
 
       renderFiles();
+      updateHeroProgress();
     } catch (err) {
       appendLog("sys", `Errore scansione file per ${profileKey}: ${err.message}`, "error");
       el.fileTableBody.innerHTML = `
-        <tr>
-          <td colspan="7" style="text-align: center; padding: 24px; color: var(--status-failed-fg);">
-            Errore caricamento cartella: ${escapeHtml(err.message)}
-          </td>
-        </tr>
+        <div class="syllabus-error">
+          Errore caricamento cartella: ${escapeHtml(err.message)}
+        </div>
       `;
+      updateHeroProgress();
     }
   }
 
   // --- 2.1 Sequential Graph Append Queue ---
   // # ARCHITETTURA: Coda FIFO serializzata per l'azione on-demand '+ Grafo'.
-  // Previene sovrapposizioni e timeout ('Failed to fetch') generati da dispatch multipli
+  // Previene sovrapposizioni e timeout generati da dispatch multipli
   // concorrenti a LLM e Notion API, garantendo feedback visivo reattivo 'In coda (N)'.
   const graphQueue = {
     items: [],
@@ -193,7 +255,7 @@
 
     enqueue(file) {
       if (state.isBatchRunning) {
-        appendLog("sys", "Impossibile avviare Append Grafo mentre è attivo un batch ETL.", "warn");
+        appendLog("sys", "Impossibile avviare Append Grafo mentre è attivo un batch di sincronizzazione.", "warn");
         return;
       }
 
@@ -222,13 +284,13 @@
         const hash = btn.dataset.hash;
         if (this.isActive(hash)) {
           btn.disabled = true;
-          btn.innerHTML = `<span class="pulse-dot syncing" style="width: 5px; height: 5px;"></span> Grafo...`;
-          btn.style.color = "#8b5cf6";
-          btn.style.borderColor = "rgba(139, 92, 246, 0.4)";
+          btn.innerHTML = `<span class="status-dot syncing" style="width: 5px; height: 5px;"></span> Grafo...`;
+          btn.style.color = "#7c3aed";
+          btn.style.borderColor = "rgba(124, 58, 237, 0.4)";
         } else if (this.isQueued(hash)) {
           const index = this.items.findIndex((item) => item.file_hash === hash) + 1;
           btn.disabled = true;
-          btn.innerHTML = `<span class="pulse-dot" style="width: 5px; height: 5px; background-color: var(--status-warning-fg);"></span> Coda (${index})`;
+          btn.innerHTML = `<span class="status-dot" style="width: 5px; height: 5px; background-color: var(--status-warning-fg);"></span> Coda (${index})`;
           btn.style.color = "var(--status-warning-fg)";
           btn.style.borderColor = "rgba(251, 191, 36, 0.4)";
         }
@@ -246,7 +308,7 @@
       this.activeHash = file.file_hash;
       this.updateUI();
 
-      appendLog("sys", `Append Grafo avviato per ${file.name}...`);
+      appendLog("sys", `Append Grafo concettuale avviato per ${file.name}...`);
 
       try {
         const res = await fetch(`/api/documents/${file.file_hash}/append-graph`, {
@@ -256,18 +318,18 @@
         if (!res.ok) {
           throw new Error(data.detail || "Errore durante l'append del grafo");
         }
-        appendLog("notion", `Grafo aggiunto alla pagina Notion per ${file.name} (${data.blocks_count} blocchi)!`);
+        appendLog("notion", `Grafo aggiunto con successo alla pagina Notion per ${file.name} (${data.blocks_count} blocchi)!`);
 
         const btn = document.querySelector(`.btn-append-graph[data-hash="${file.file_hash}"]`);
         if (btn) {
           btn.innerHTML = `✓ Grafo`;
           btn.style.color = "var(--status-synced-fg)";
-          btn.style.borderColor = "rgba(52, 211, 153, 0.4)";
+          btn.style.borderColor = "rgba(5, 150, 105, 0.4)";
           setTimeout(() => {
             btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> + Grafo`;
             btn.disabled = false;
-            btn.style.color = "#8b5cf6";
-            btn.style.borderColor = "rgba(139, 92, 246, 0.3)";
+            btn.style.color = "#7c3aed";
+            btn.style.borderColor = "rgba(124, 58, 237, 0.25)";
           }, 3000);
         }
       } catch (err) {
@@ -276,8 +338,8 @@
         if (btn) {
           btn.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> + Grafo`;
           btn.disabled = false;
-          btn.style.color = "#8b5cf6";
-          btn.style.borderColor = "rgba(139, 92, 246, 0.3)";
+          btn.style.color = "#7c3aed";
+          btn.style.borderColor = "rgba(124, 58, 237, 0.25)";
         }
       } finally {
         this.activeHash = null;
@@ -290,109 +352,103 @@
     el.fileTableBody.innerHTML = "";
 
     if (state.files.length === 0) {
-      el.emptyState.style.display = "block";
+      el.emptyState.style.display = "flex";
       updateBatchButton();
+      updateHeroProgress();
       return;
     }
 
     el.emptyState.style.display = "none";
 
     state.files.forEach((file) => {
-      const tr = document.createElement("tr");
-      tr.id = `row-${file.name.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+      // # ARCHITETTURA: Creazione della card a isola Syllabus con elevazione 3D e hover-lift
+      const card = document.createElement("div");
+      card.id = `row-${file.name.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
       const isChecked = state.selectedFiles.has(file.name);
-      const shortHash = file.file_hash ? file.file_hash.substring(0, 8) : "--";
+      card.className = `syllabus-card-row ${isChecked ? "selected" : ""}`;
+
       const statusClass = (file.status || "idle").toLowerCase();
+      const cleanExt = (file.extension || "").replace(".", "").toUpperCase();
 
       let appendGraphHtml = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg> + Grafo`;
       let appendGraphDisabled = false;
-      let appendGraphColor = "#8b5cf6";
-      let appendGraphBorder = "rgba(139, 92, 246, 0.3)";
 
       if (graphQueue.isActive(file.file_hash)) {
-        appendGraphHtml = `<span class="pulse-dot syncing" style="width: 5px; height: 5px;"></span> Grafo...`;
+        appendGraphHtml = `<span class="status-dot syncing" style="width: 5px; height: 5px;"></span> Grafo...`;
         appendGraphDisabled = true;
-        appendGraphBorder = "rgba(139, 92, 246, 0.4)";
       } else if (graphQueue.isQueued(file.file_hash)) {
         const pos = graphQueue.items.findIndex((item) => item.file_hash === file.file_hash) + 1;
-        appendGraphHtml = `<span class="pulse-dot" style="width: 5px; height: 5px; background-color: var(--status-warning-fg);"></span> Coda (${pos})`;
+        appendGraphHtml = `<span class="status-dot" style="width: 5px; height: 5px; background-color: var(--status-warning-fg);"></span> Coda (${pos})`;
         appendGraphDisabled = true;
-        appendGraphColor = "var(--status-warning-fg)";
-        appendGraphBorder = "rgba(251, 191, 36, 0.4)";
       }
 
-      tr.innerHTML = `
-        <td>
+      let statusLabel = "Da sincronizzare";
+      if (file.status === "SYNCED") statusLabel = "Sincronizzato";
+      else if (file.status === "SYNCING") statusLabel = "In corso...";
+      else if (file.status === "FAILED") statusLabel = "Errore";
+
+      card.innerHTML = `
+        <div class="col-check">
           <input type="checkbox" class="file-checkbox" data-filename="${escapeHtml(file.name)}" ${isChecked ? "checked" : ""}>
-        </td>
-        <td>
-          <div class="file-name-cell">
-            <span class="file-icon">${escapeHtml(file.extension.replace(".", "").toUpperCase())}</span>
-            <span>${escapeHtml(file.name)}</span>
-          </div>
-        </td>
-        <td><span class="badge badge-count">${escapeHtml(file.extension)}</span></td>
-        <td>${escapeHtml(file.size_formatted)}</td>
-        <td>
-          <span class="hash-cell" title="Clicca per copiare l'hash SHA-256 completo: ${escapeHtml(file.file_hash)}">
-            ${shortHash}
-          </span>
-        </td>
-        <td>
+        </div>
+        <div class="col-name file-name-cell" title="File: ${escapeHtml(file.name)}">
+          <span class="file-badge-format ${cleanExt.toLowerCase()}">${escapeHtml(cleanExt)}</span>
+          <span class="file-title-text">${escapeHtml(file.name)}</span>
+        </div>
+        <div class="col-type"><span class="badge badge-format">${escapeHtml(file.extension)}</span></div>
+        <div class="col-size">${escapeHtml(file.size_formatted)}</div>
+        <div class="col-status">
           <span class="status-badge ${statusClass}">
-            <span class="pulse-dot ${statusClass === 'syncing' ? 'syncing' : ''}" style="width: 5px; height: 5px;"></span>
-            ${escapeHtml(file.status)}
+            <span class="status-dot ${statusClass === 'syncing' ? 'syncing' : ''}"></span>
+            ${escapeHtml(statusLabel)}
           </span>
-        </td>
-        <td style="text-align: right;">
+        </div>
+        <div class="col-actions">
           ${
             file.status === "SYNCED" && file.page_id
-              ? `<div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
-                  <a href="/api/study-schema/${file.file_hash}/opml" download="${encodeURIComponent(file.name.replace(/\.[^/.]+$/, ""))}.opml" class="btn-secondary" title="Scarica Mappa Mentale OPML (EdrawMind / XMind)" style="padding: 2px 7px; font-size: 10px; text-decoration: none; display: inline-flex; align-items: center; gap: 3px; color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+              ? `<div class="action-buttons-group">
+                  <a href="/api/study-schema/${file.file_hash}/opml" download="${encodeURIComponent(file.name.replace(/\.[^/.]+$/, ""))}.opml" class="btn-action btn-opml" title="Scarica Mappa Mentale OPML (EdrawMind / XMind / MindNode)">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    OPML
+                    Mappa OPML
                   </a>
-                  <button class="btn-secondary btn-append-graph" data-hash="${escapeHtml(file.file_hash)}" data-filename="${escapeHtml(file.name)}" title="Aggiungi schema concettuale Mermaid alla pagina Notion" style="padding: 2px 7px; font-size: 10px; display: inline-flex; align-items: center; gap: 3px; color: ${appendGraphColor}; border-color: ${appendGraphBorder};" ${appendGraphDisabled ? "disabled" : ""}>
+                  <button class="btn-action btn-append-graph" data-hash="${escapeHtml(file.file_hash)}" data-filename="${escapeHtml(file.name)}" title="Aggiungi schema concettuale Mermaid alla pagina Notion" ${appendGraphDisabled ? "disabled" : ""}>
                     ${appendGraphHtml}
                   </button>
-                  <a href="https://www.notion.so/${file.page_id.replace(/-/g, '')}" target="_blank" rel="noopener noreferrer" class="btn-secondary btn-notion-link" title="Apri nota su Notion" style="padding: 2px 8px; font-size: 11px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; color: var(--accent-primary);">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                  <a href="https://www.notion.so/${file.page_id.replace(/-/g, '')}" target="_blank" rel="noopener noreferrer" class="btn-action btn-notion" title="Apri appunti su Notion">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     Notion
                   </a>
-                  <button class="btn-secondary btn-single-sync" data-filename="${escapeHtml(file.name)}" title="Riprocessa file" style="padding: 2px 6px; font-size: 10px;">
+                  <button class="btn-action btn-single-sync" data-filename="${escapeHtml(file.name)}" title="Riprocessa questo documento">
                     Sync
                   </button>
                 </div>`
-              : `<button class="btn-secondary btn-single-sync" data-filename="${escapeHtml(file.name)}" style="padding: 2px 6px; font-size: 10px;">
-                  Sync
-                </button>`
+              : `<div class="action-buttons-group">
+                  <button class="btn-action btn-primary-sync btn-single-sync" data-filename="${escapeHtml(file.name)}" title="Sincronizza ora questa lezione su Notion">
+                    Sincronizza
+                  </button>
+                </div>`
           }
-        </td>
+        </div>
       `;
 
-      // Copy hash on click
-      const hashSpan = tr.querySelector(".hash-cell");
-      hashSpan.addEventListener("click", () => {
-        if (file.file_hash) {
-          navigator.clipboard.writeText(file.file_hash);
-          appendLog("local", `SHA-256 copiato negli appunti: ${file.file_hash}`);
-        }
-      });
-
       // Checkbox listener
-      const cb = tr.querySelector(".file-checkbox");
-      cb.addEventListener("change", (e) => {
-        if (e.target.checked) {
-          state.selectedFiles.add(file.name);
-        } else {
-          state.selectedFiles.delete(file.name);
-        }
-        updateBatchButton();
-      });
+      const cb = card.querySelector(".file-checkbox");
+      if (cb) {
+        cb.addEventListener("change", (e) => {
+          if (e.target.checked) {
+            state.selectedFiles.add(file.name);
+            card.classList.add("selected");
+          } else {
+            state.selectedFiles.delete(file.name);
+            card.classList.remove("selected");
+          }
+          updateBatchButton();
+        });
+      }
 
       // Append graph button listener
-      const btnAppendGraph = tr.querySelector(".btn-append-graph");
+      const btnAppendGraph = card.querySelector(".btn-append-graph");
       if (btnAppendGraph) {
         btnAppendGraph.addEventListener("click", () => {
           graphQueue.enqueue(file);
@@ -400,22 +456,25 @@
       }
 
       // Single sync button listener
-      const btnSync = tr.querySelector(".btn-single-sync");
-      btnSync.addEventListener("click", () => {
-        startBatch([file.name]);
-      });
+      const btnSync = card.querySelector(".btn-single-sync");
+      if (btnSync) {
+        btnSync.addEventListener("click", () => {
+          startBatch([file.name]);
+        });
+      }
 
-      el.fileTableBody.appendChild(tr);
+      el.fileTableBody.appendChild(card);
     });
 
     updateBatchButton();
+    updateHeroProgress();
   }
 
   function updateBatchButton() {
     const count = state.selectedFiles.size;
-    el.batchSelectedCount.textContent = count;
-    el.btnRunBatch.disabled = count === 0 || state.isBatchRunning;
-    el.masterCheckbox.checked = count === state.files.length && state.files.length > 0;
+    if (el.batchSelectedCount) el.batchSelectedCount.textContent = count;
+    if (el.btnRunBatch) el.btnRunBatch.disabled = count === 0 || state.isBatchRunning;
+    if (el.masterCheckbox) el.masterCheckbox.checked = count === state.files.length && state.files.length > 0;
   }
 
   // --- 3. Batch ETL Execution ---
@@ -423,13 +482,13 @@
     if (state.isBatchRunning || !state.activeProfile) return;
 
     if (graphQueue.activeHash || graphQueue.items.length > 0) {
-      appendLog("sys", "Attendere il completamento della coda Append Grafo prima di avviare il batch.", "warn");
+      appendLog("sys", "Attendere il completamento della coda Append Grafo prima di avviare la sincronizzazione.", "warn");
       return;
     }
 
     const filesToRun = customFileList || Array.from(state.selectedFiles);
     if (filesToRun.length === 0) {
-      appendLog("sys", "Nessun file selezionato per l'elaborazione.", "warn");
+      appendLog("sys", "Nessun file selezionato per l'elaborazione didattica.", "warn");
       return;
     }
 
@@ -447,12 +506,12 @@
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || "Impossibile avviare il batch");
+        throw new Error(errData.detail || "Impossibile avviare la sincronizzazione");
       }
 
       setBatchRunningState(true);
     } catch (err) {
-      appendLog("sys", `Errore avvio batch: ${err.message}`, "error");
+      appendLog("sys", `Errore avvio sincronizzazione: ${err.message}`, "error");
     }
   }
 
@@ -469,10 +528,10 @@
 
   function setBatchRunningState(running) {
     state.isBatchRunning = running;
-    el.btnRunBatch.disabled = running || state.selectedFiles.size === 0;
-    el.btnStopBatch.style.display = running ? "inline-flex" : "none";
-    el.statusDot.classList.toggle("syncing", running);
-    el.statusText.textContent = running ? "ETL IN CORSO" : "ONLINE";
+    if (el.btnRunBatch) el.btnRunBatch.disabled = running || state.selectedFiles.size === 0;
+    if (el.btnStopBatch) el.btnStopBatch.style.display = running ? "inline-flex" : "none";
+    if (el.statusDot) el.statusDot.classList.toggle("syncing", running);
+    if (el.statusText) el.statusText.textContent = running ? "Sincronizzazione in corso..." : "Notion Pronto";
   }
 
   // --- 4. Real-time Telemetry & SSE Streaming ---
@@ -526,13 +585,13 @@
     });
 
     sse.onerror = () => {
-      el.statusDot.style.backgroundColor = "var(--status-warning-fg)";
-      el.statusText.textContent = "RICONNESSIONE SSE...";
+      if (el.statusDot) el.statusDot.style.backgroundColor = "var(--status-warning-fg)";
+      if (el.statusText) el.statusText.textContent = "Riconnessione...";
     };
 
     sse.onopen = () => {
-      el.statusDot.style.backgroundColor = "var(--status-synced-fg)";
-      el.statusText.textContent = "ONLINE";
+      if (el.statusDot) el.statusDot.style.backgroundColor = "var(--status-synced-fg)";
+      if (el.statusText) el.statusText.textContent = "Notion Pronto";
     };
   }
 
@@ -556,6 +615,12 @@
     if (state.autoscroll) {
       el.logPane.scrollTop = el.logPane.scrollHeight;
     }
+
+    // # ARCHITETTURA: Aggiornamento contestuale del teaser preview nello Study Activity Drawer
+    if (el.drawerTeaser) {
+      el.drawerTeaser.textContent = message;
+      el.drawerTeaser.title = message;
+    }
   }
 
   function updateFileRowStatus(fileName, newStatus) {
@@ -563,13 +628,26 @@
     const row = document.getElementById(safeId);
     if (!row) return;
 
+    // # ARCHITETTURA: Sincronizzazione stato in-memory per ricalcolo istantaneo del progresso
+    const fileObj = state.files.find((f) => f.name === fileName);
+    if (fileObj) {
+      fileObj.status = newStatus;
+      updateHeroProgress();
+    }
+
     const badge = row.querySelector(".status-badge");
     if (badge) {
       const lower = (newStatus || "idle").toLowerCase();
       badge.className = `status-badge ${lower}`;
+
+      let label = "Da sincronizzare";
+      if (newStatus === "SYNCED") label = "Sincronizzato";
+      else if (newStatus === "SYNCING") label = "In corso...";
+      else if (newStatus === "FAILED") label = "Errore";
+
       badge.innerHTML = `
-        <span class="pulse-dot ${lower === 'syncing' ? 'syncing' : ''}" style="width: 5px; height: 5px;"></span>
-        ${escapeHtml(newStatus)}
+        <span class="status-dot ${lower === 'syncing' ? 'syncing' : ''}"></span>
+        ${escapeHtml(label)}
       `;
     }
   }
@@ -588,20 +666,22 @@
   }
 
   function updateQuotaDisplay(remaining) {
-    el.quotaDisplay.textContent = `${remaining} RPD`;
-    el.quotaDisplay.classList.remove("warning", "danger");
+    if (el.quotaDisplay) {
+      el.quotaDisplay.textContent = `${remaining} RPD`;
+      el.quotaDisplay.classList.remove("warning", "danger");
 
-    if (remaining <= 0) {
-      el.quotaDisplay.classList.add("danger");
-    } else if (remaining <= 5) {
-      el.quotaDisplay.classList.add("warning");
+      if (remaining <= 0) {
+        el.quotaDisplay.classList.add("danger");
+      } else if (remaining <= 5) {
+        el.quotaDisplay.classList.add("warning");
+      }
     }
   }
 
   // --- 5. Modal: Create & Edit Profile ---
   function openProfileModal(profileToEdit = null) {
     if (profileToEdit) {
-      document.getElementById("modal-title").textContent = "Modifica Profilo Corso";
+      document.getElementById("modal-title").textContent = "Modifica Corso";
       el.formSubject.value = profileToEdit.subject;
       el.formProf.value = profileToEdit.professor_type || "";
       el.formDocType.value = profileToEdit.doc_type || "slides";
@@ -609,7 +689,7 @@
       el.formDbId.value = profileToEdit.target?.database_id || "";
       el.formCourseName.value = profileToEdit.target?.course_name || profileToEdit.subject;
     } else {
-      document.getElementById("modal-title").textContent = "Nuovo Profilo Corso";
+      document.getElementById("modal-title").textContent = "Nuovo Corso";
       el.profileForm.reset();
       el.formDocType.value = "slides";
     }
@@ -701,7 +781,7 @@
         .map((l) => l.innerText)
         .join("\n");
       navigator.clipboard.writeText(lines);
-      appendLog("sys", "Log copiati negli appunti.");
+      appendLog("sys", "Registro attività copiato negli appunti.");
     });
 
     // Profile Modal
@@ -714,6 +794,30 @@
     // Theme Toggle Control
     if (el.btnThemeToggle) {
       el.btnThemeToggle.addEventListener("click", toggleTheme);
+    }
+
+    // Study Activity Drawer Collapsible Logic
+    // # ARCHITETTURA: Transizione fluida e collassabilità a 38px dello Study Activity Drawer
+    function toggleDrawer() {
+      if (el.activityDrawer) {
+        el.activityDrawer.classList.toggle("collapsed");
+      }
+    }
+
+    if (el.drawerHeader) {
+      el.drawerHeader.addEventListener("click", (e) => {
+        if (e.target.closest("button") || e.target.closest("input") || e.target.closest("label")) {
+          return;
+        }
+        toggleDrawer();
+      });
+    }
+
+    if (el.btnToggleDrawer) {
+      el.btnToggleDrawer.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleDrawer();
+      });
     }
 
     // Segmented Output Mode Selector
@@ -792,9 +896,8 @@
   }
 
   // --- 8. Theme Management (Dark / Light) ---
-  // # ARCHITETTURA: Gestione deterministica del tema con fallback a prefers-color-scheme
-  // e memorizzazione in localStorage per latenza zero e coerenza cross-session.
-  // # TRADE-OFF: Icone SVG inline interpolate via innerHTML per eliminare dipendenze da framework esterni.
+  // # ARCHITETTURA: Gestione deterministica del tema con default Light (richiesta utente)
+  // e memorizzazione in localStorage per latenza zero.
   const THEME_STORAGE_KEY = "phd_cockpit_theme";
 
   const SUN_ICON_SVG = `
@@ -814,10 +917,10 @@
   `;
 
   function getSystemPreferredTheme() {
-    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
-      return "light";
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return "dark";
     }
-    return "dark";
+    return "light";
   }
 
   function getActiveTheme() {
@@ -872,15 +975,14 @@
       savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
     } catch (err) {}
 
-    const initialTheme = savedTheme || getSystemPreferredTheme();
+    const initialTheme = savedTheme || "light"; // Default to Light theme as requested
     applyTheme(initialTheme, false);
 
-    // Reattività ai cambiamenti dinamici del tema OS a runtime
     if (window.matchMedia) {
-      window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
+      window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
         try {
           if (!localStorage.getItem(THEME_STORAGE_KEY)) {
-            applyTheme(e.matches ? "light" : "dark", false);
+            applyTheme(e.matches ? "dark" : "light", false);
           }
         } catch (err) {}
       });
