@@ -127,7 +127,12 @@ class CourseProfile:
             prof_type = f"PhD Professor in {subject_str}" if subject_str else "PhD Professor"
 
         raw_folder = str(data.get("folder_path", "") or "").strip()
-        folder_path = Path(raw_folder) if raw_folder else Path(".")
+        if raw_folder:
+            if raw_folder.startswith("Users/") or raw_folder.startswith("home/"):
+                raw_folder = f"/{raw_folder}"
+            folder_path = Path(raw_folder).expanduser()
+        else:
+            folder_path = Path(".")
 
         return cls(
             subject=subject_str,

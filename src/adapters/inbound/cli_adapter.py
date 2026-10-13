@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import pathlib
@@ -16,19 +17,38 @@ from src.adapters.inbound.i18n import I18n
 SLEEP_BETWEEN_FILES = 5
 
 SUPPORTED_EXTENSIONS = {".pdf", ".pptx"}
+IGNORED_DIR_NAMES = {
+    ".git", ".venv", "venv", "env", ".idea", ".vscode",
+    "__pycache__", "staging", "node_modules", ".pytest_cache"
+}
 
-def scan_documents(folder: pathlib.Path) -> List[pathlib.Path]:
+def scan_documents(folder: pathlib.Path, recursive: bool = True) -> List[pathlib.Path]:
     """
     Scans for supported academic documents (.pdf, .pptx) sorted deterministically.
-    Returns an empty list if directory is missing or unreadable, preventing unhandled filesystem exceptions.
+    # ARCHITETTURA: Scansione ricorsiva fault-tolerant multi-piattaforma.
+    # Supporta cartelle annidate, esclude cartelle di runtime (.git, .venv)
+    # ed elimina deterministicamente i file fantasma di macOS (prefisso '._*' o nascosti).
     """
     try:
         if not folder or not folder.is_dir():
             return []
-        return sorted([
-            p for p in folder.iterdir()
-            if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
-        ])
+
+        found: List[pathlib.Path] = []
+        if recursive:
+            for root, dirs, files in os.walk(folder):
+                dirs[:] = [d for d in dirs if not d.startswith(".") and d.lower() not in IGNORED_DIR_NAMES]
+                for file_name in files:
+                    if file_name.startswith("."):
+                        continue
+                    ext = os.path.splitext(file_name)[1].lower()
+                    if ext in SUPPORTED_EXTENSIONS:
+                        found.append(pathlib.Path(root) / file_name)
+        else:
+            for p in folder.iterdir():
+                if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in SUPPORTED_EXTENSIONS:
+                    found.append(p)
+
+        return sorted(found, key=lambda p: str(p).lower())
     except (OSError, PermissionError, Exception):
         return []
 
@@ -144,12 +164,16 @@ class CLIAdapter:
             if not folder.is_dir():
                 print(f"  [!] {self.i18n.t('folder_not_found_err', folder=folder)}")
                 raw = input(f"  {self.i18n.t('folder_reenter')}").strip()
+                if raw.startswith("Users/") or raw.startswith("home/"):
+                    raw = f"/{raw}"
                 folder = pathlib.Path(raw).expanduser().resolve()
                 continue
             docs = scan_documents(folder)
             if not docs:
                 print(f"  [!] {self.i18n.t('no_supported_files', folder=folder)}")
                 raw = input(f"  {self.i18n.t('folder_reenter_other')}").strip()
+                if raw.startswith("Users/") or raw.startswith("home/"):
+                    raw = f"/{raw}"
                 folder = pathlib.Path(raw).expanduser().resolve()
                 continue
             return folder, docs

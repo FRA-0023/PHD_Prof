@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 137 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 139 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -19,19 +19,24 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
-### 2026-10-13 (Cross-Machine Profile Fault Isolation & Local Network Resilience)
+### 2026-10-13 (Cross-Platform Mac/Win Hardening, Fault Isolation & Recursive Engine)
 - **Diagnosi & Root Causes Isolate**:
   1. *Perdita di Fault Isolation tra CLI e Web Cockpit*: Nella CLI, se un profilo conteneva una cartella inesistente sul nuovo PC (`C:\Documenti\UNIMIB\...` vs nuova macchina), la scansione isolava il singolo corso stampando "Cartella non trovata", consentendo di utilizzare gli altri domini corretti. Nel Web Cockpit (`/api/profiles`), qualsiasi eccezione `OSError` o `PermissionError` durante `scan_documents` o `is_dir()` faceva collassare l'intero endpoint con HTTP 500, facendo sollevare a `app.js` l'errore bloccante: `Impossibile caricare i profili: Errore recupero profili`.
   2. *DNS Wildcard Hijacking su Host Locale (`phdprof.test`)*: In `pdf_to_notion.py`, `socket.gethostbyname(web_domain)` considerava valida qualsiasi risoluzione DNS. Su un PC nuovo connesso a reti con DNS hijacking (che rispondono con IP pubblici per qualsiasi dominio inesistente come `.test`), il sistema apriva il browser su un host remoto invece di fare il fallback su `127.0.0.1`.
+  3. *Cartelle e File Fantasma su macOS (TCC, Tilde `~`, `._*`)*:
+     - Accesso a `~/Documents` su macOS protetto da framework TCC (richiede autorizzazione in Privacy & Sicurezza).
+     - Deserializzazione profili `Path(raw_folder)` priva di `expanduser()` (la tilde `~` cercava directory letterali `~`).
+     - File fantasma AppleDouble (`._*.pdf` / `._*.pptx`) inclusi erroneamente nella coda batch.
+     - Scansione strettamente flat (`iterdir()`): corsi con materiali organizzati in sottocartelle (`Lezione 1/`, `Slide/`) mostravano 0 file.
+     - Parità funzionale PPTX: su macOS assenza di PowerPoint COM per esportazione visiva vettoriale.
 - **Risoluzione Deterministica nel Core, Backend & Frontend**:
-  - `web_adapter.py`: Schermata `scan_documents` contro qualsiasi eccezione di I/O (`OSError`, `PermissionError`, eccezioni generali). Nell'endpoint `/api/profiles`, implementato try/except per singolo profilo: se il filesystem di un corso è inaccessibile, il record restituisce `folder_exists: false` e `files_count: 0`, preservando la restituzione dei domini validi.
-  - `models.py` (`CourseProfile.from_dict`): Parsing difensivo per campi nulli o formati atipici.
-  - `json_course_profile_repository.py`: Protezione da file JSON malformati o liste `[]` invece di mappe chiave-valore.
+  - `web_adapter.py` & `cli_adapter.py`: Scansione documentale ricorsiva (`scan_documents(recursive=True)`), esclusione automatica di directory di runtime (`.git`, `.venv`, `staging`, `node_modules`, `__pycache__`) e scarto deterministico di file fantasma macOS (`._*`, `.DS_Store`, file nascosti).
+  - `models.py` (`CourseProfile.from_dict`) & `web_adapter.py` (`save_profile`): Normalizzazione automatica tilde `~` (`expanduser()`) e ripristino leading slash per percorsi UNIX (`Users/...` -> `/Users/...`).
+  - `gemini_file_reader.py`: Hook per conversione vettoriale PPTX via **LibreOffice CLI** (`soffice --headless --convert-to pdf`) in fallback su macOS/Linux quando PowerPoint COM non è disponibile.
   - `pdf_to_notion.py`: Risoluzione locale vincolata rigorosamente a IP loopback (`127.0.0.1`, `::1`, `0.0.0.0`), con fallback automatico e trasparente su `127.0.0.1` in caso di DNS esterno.
   - `app.js` & `app.css`: Badge visivo arancione/rosso `Cartella assente` per i profili orfani nella sidebar, con warning esplicito nel log di sistema che guida l'utente a cliccare "Modifica" senza bloccare la selezione degli altri corsi.
-  - `cli_adapter.py`: Allineata la medesima schermatura su filesystem.
 - **Autonomous Verification Gate**:
-  - 137/137 unit test superati al 100% su pytest (0 regressioni). Aggiunti 4 test dedicati per fault isolation e tolleranza guasti su filesystem e repository.
+  - 139/139 unit test superati al 100% su pytest (0 regressioni). Aggiunti test dedicati per scansione ricorsiva, filtraggio file fantasma AppleDouble e fallback LibreOffice CLI.
 
 ### 2026-10-11 (Notion Mermaid Truncation & Dark Mode White-on-White Contrast Resolution)
 - **Diagnosi Empirica & Root Causes Isolate**:

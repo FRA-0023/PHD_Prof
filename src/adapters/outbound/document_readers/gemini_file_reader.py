@@ -113,14 +113,11 @@ class GeminiFileReader(IDocumentReader):
 
         return uploaded
 
-    def _convert_pptx_to_pdf(self, pptx_path: Path, output_pdf_path: Path) -> bool:
+    def _convert_pptx_to_pdf_via_com(self, pptx_path: Path, output_pdf_path: Path) -> bool:
         """
         Converts a PPTX presentation to PDF via PowerPoint COM automation on Windows.
         Returns True if conversion succeeded and output PDF exists, False otherwise.
         """
-        if not pptx_path.exists():
-            return False
-
         try:
             import win32com.client
         except ImportError:
@@ -167,6 +164,66 @@ class GeminiFileReader(IDocumentReader):
                 pythoncom.CoUninitialize()
             except Exception:
                 pass
+
+    def _find_soffice(self) -> Optional[str]:
+        """Locates LibreOffice CLI binary across macOS, Linux, and Windows."""
+        import shutil
+        import os
+        for cmd in ["soffice", "libreoffice"]:
+            found = shutil.which(cmd)
+            if found:
+                return found
+        mac_paths = [
+            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+            "/opt/homebrew/bin/soffice",
+            "/usr/local/bin/soffice",
+        ]
+        for p in mac_paths:
+            if os.path.isfile(p) and os.access(p, os.X_OK):
+                return p
+        return None
+
+    def _convert_pptx_to_pdf_via_soffice(self, pptx_path: Path, output_pdf_path: Path) -> bool:
+        """Converts PPTX to PDF via headless LibreOffice (cross-platform macOS/Linux fallback)."""
+        soffice = self._find_soffice()
+        if not soffice:
+            return False
+        import subprocess
+        import tempfile
+        import shutil
+        try:
+            output_pdf_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                cmd = [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmp_dir, str(pptx_path.resolve())]
+                res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+                if res.returncode == 0:
+                    gen_pdf = Path(tmp_dir) / f"{pptx_path.stem}.pdf"
+                    if gen_pdf.exists() and gen_pdf.stat().st_size > 0:
+                        shutil.copyfile(gen_pdf, output_pdf_path)
+                        return output_pdf_path.exists() and output_pdf_path.stat().st_size > 0
+        except Exception as exc:
+            print(f"    [LibreOffice CLI Warning] Conversione soffice fallita ({exc}).")
+        return False
+
+    def _convert_pptx_to_pdf(self, pptx_path: Path, output_pdf_path: Path) -> bool:
+        """
+        Converts a PPTX presentation to PDF.
+        # ARCHITETTURA: Dual-Payload multimodal cross-platform.
+        # Prova prima PowerPoint COM (Windows nativo); se assente o su macOS/Linux,
+        # ripiega su LibreOffice CLI headless (soffice).
+        """
+        if not pptx_path.exists():
+            return False
+
+        # Tentativo 1: Windows COM Automation
+        if self._convert_pptx_to_pdf_via_com(pptx_path, output_pdf_path):
+            return True
+
+        # Tentativo 2: Cross-platform headless (macOS / Linux / Windows senza Office)
+        if self._convert_pptx_to_pdf_via_soffice(pptx_path, output_pdf_path):
+            return True
+
+        return False
 
     def read(self, document: Document) -> Union[genai_types.File, str, List[Any]]:
         ext = document.path.suffix.lower()

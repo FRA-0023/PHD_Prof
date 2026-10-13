@@ -34,19 +34,39 @@ from src.adapters.inbound.web.telemetry_streamer import TelemetryStreamer
 SUPPORTED_EXTENSIONS = {".pdf", ".pptx"}
 SLEEP_BETWEEN_FILES = 5
 
-def scan_documents(folder: pathlib.Path) -> List[pathlib.Path]:
+IGNORED_DIR_NAMES = {
+    ".git", ".venv", "venv", "env", ".idea", ".vscode",
+    "__pycache__", "staging", "node_modules", ".pytest_cache"
+}
+
+def scan_documents(folder: pathlib.Path, recursive: bool = True) -> List[pathlib.Path]:
     """
     Scans for supported academic documents (.pdf, .pptx) sorted deterministically.
-    # ARCHITETTURA: Fault isolation a livello di filesystem. Previene crash HTTP 500
-    # in caso di percorsi non mappati, permessi negati o dischi rimovibili disconnessi.
+    # ARCHITETTURA: Scansione ricorsiva fault-tolerant multi-piattaforma.
+    # Rileva file sia nella radice sia nelle sottocartelle (es. Lezione 1, Modulo A),
+    # esclude directory di runtime (.git, .venv, staging) e bonifica deterministicamente
+    # i file fantasma di metadati di macOS (prefisso '._*' o file nascosti).
     """
     try:
         if not folder or not folder.is_dir():
             return []
-        return sorted([
-            p for p in folder.iterdir()
-            if p.is_file() and p.suffix.lower() in SUPPORTED_EXTENSIONS
-        ])
+
+        found: List[pathlib.Path] = []
+        if recursive:
+            for root, dirs, files in os.walk(folder):
+                dirs[:] = [d for d in dirs if not d.startswith(".") and d.lower() not in IGNORED_DIR_NAMES]
+                for file_name in files:
+                    if file_name.startswith("."):
+                        continue  # Esclude file nascosti e AppleDouble '._*'
+                    ext = os.path.splitext(file_name)[1].lower()
+                    if ext in SUPPORTED_EXTENSIONS:
+                        found.append(pathlib.Path(root) / file_name)
+        else:
+            for p in folder.iterdir():
+                if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in SUPPORTED_EXTENSIONS:
+                    found.append(p)
+
+        return sorted(found, key=lambda p: str(p).lower())
     except (OSError, PermissionError, Exception):
         return []
 
@@ -211,7 +231,10 @@ class WebAdapter:
             if not self.course_profile_repo:
                 raise HTTPException(status_code=500, detail="Profile repository not configured")
 
-            folder = pathlib.Path(data.folder_path).expanduser().resolve()
+            raw_path = data.folder_path.strip()
+            if raw_path.startswith("Users/") or raw_path.startswith("home/"):
+                raw_path = f"/{raw_path}"
+            folder = pathlib.Path(raw_path).expanduser().resolve()
             if not folder.is_dir():
                 raise HTTPException(status_code=400, detail=f"Folder does not exist: {data.folder_path}")
 

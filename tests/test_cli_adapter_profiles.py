@@ -147,3 +147,39 @@ def test_cli_adapter_manual_setup_saves_new_profile(mock_clients, monkeypatch, t
     saved = repo.save_profile.call_args[0][0]
     assert saved.subject == "Text Mining"
     assert saved.target.database_id == "db_tm_456"
+
+
+def test_scan_documents_recursive_and_ghost_file_filtering(tmp_path):
+    # ARCHITETTURA: Verifica che la scansione sia ricorsiva e filtri sia le cartelle
+    # di runtime sia i metadati e i file fantasma di macOS (prefisso '._*').
+    from src.adapters.inbound.cli_adapter import scan_documents
+
+    # 1. File valido nella radice
+    (tmp_path / "lecture_root.pdf").write_bytes(b"%PDF content")
+
+    # 2. File valido in sottocartella annidata
+    sub = tmp_path / "Modulo_01"
+    sub.mkdir()
+    (sub / "slide_sub.pptx").write_bytes(b"PK PPTX content")
+
+    # 3. File fantasma macOS in sottocartella (AppleDouble fork)
+    (sub / "._slide_sub.pptx").write_bytes(b"resource fork")
+
+    # 4. File valido ma dentro cartella di runtime da ignorare (.git / .venv)
+    git_dir = tmp_path / ".git"
+    git_dir.mkdir()
+    (git_dir / "hidden_doc.pdf").write_bytes(b"%PDF hidden")
+
+    # 5. File generico nascosto (.DS_Store o .hidden.pdf)
+    (tmp_path / ".hidden.pdf").write_bytes(b"%PDF hidden")
+
+    docs = scan_documents(tmp_path, recursive=True)
+    doc_names = [d.name for d in docs]
+
+    assert len(docs) == 2
+    assert "lecture_root.pdf" in doc_names
+    assert "slide_sub.pptx" in doc_names
+    assert "._slide_sub.pptx" not in doc_names
+    assert "hidden_doc.pdf" not in doc_names
+    assert ".hidden.pdf" not in doc_names
+

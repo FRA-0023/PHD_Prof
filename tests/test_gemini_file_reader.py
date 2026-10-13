@@ -337,3 +337,26 @@ def test_gemini_file_reader_cleanup_composite_payload(mock_genai_client):
 
     mock_genai_client.files.delete.assert_called_once_with(name="files/dual-payload-file")
 
+
+def test_gemini_file_reader_pptx_soffice_fallback(mock_genai_client, monkeypatch, tmp_path):
+    # ARCHITETTURA: Verifica che in assenza di PowerPoint COM (es. su macOS o Linux),
+    # il lettore ripieghi deterministicamente sul convertitore LibreOffice CLI (soffice).
+    reader = GeminiFileReader(client=mock_genai_client, staging_dir=tmp_path)
+    pptx_file = tmp_path / "test_presentation.pptx"
+    pptx_file.write_bytes(b"dummy")
+    out_pdf = tmp_path / "test_presentation.pdf"
+
+    # COM fallisce
+    monkeypatch.setattr(reader, "_convert_pptx_to_pdf_via_com", lambda p, o: False)
+
+    # soffice ha successo
+    def mock_soffice(p, o):
+        o.write_bytes(b"%PDF dummy converted by soffice")
+        return True
+
+    monkeypatch.setattr(reader, "_convert_pptx_to_pdf_via_soffice", mock_soffice)
+
+    assert reader._convert_pptx_to_pdf(pptx_file, out_pdf) is True
+    assert out_pdf.exists()
+
+
