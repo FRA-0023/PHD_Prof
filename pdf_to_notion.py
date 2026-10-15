@@ -151,6 +151,12 @@ def main() -> None:
     except ValueError:
         split_threshold = 30000
 
+    raw_split_threshold_slides = os.getenv("SPLIT_THRESHOLD_SLIDES")
+    try:
+        split_threshold_slides = int(raw_split_threshold_slides) if raw_split_threshold_slides else 35
+    except ValueError:
+        split_threshold_slides = 35
+
     usecase = ProcessDocumentUseCase(
         readers=readers,
         llm_client=llm_client,
@@ -161,6 +167,7 @@ def main() -> None:
         image_host_client=image_host_client,
         schema_exporter=schema_exporter,
         split_threshold_chars=split_threshold,
+        split_threshold_slides=split_threshold_slides,
     )
 
     if args.mode == "web":

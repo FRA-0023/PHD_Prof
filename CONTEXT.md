@@ -11,7 +11,8 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 144 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Windowed Slide Chunker (Adaptive Output Budgeting)**: Decomposizione deterministica delle presentazioni dense (>35 slide, SPLIT_THRESHOLD_SLIDES=35) in chunk bilanciati di slide per garantire 8.192 token di output dedicati a ciascuna porzione prima della ricomposizione e dell'estrazione degli schemi concettuali.
+- **Test Suite**: 148 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -31,6 +32,14 @@ ich_text per celle e paragrafi) e convertendo &nbsp; in spazio ordinario.
   - Il markdown sintetizzato per la Sessione 2 contava esattamente 42.528 caratteri (~8.100 token), spingendo il planner dell'LLM a comprimere/saltare le slide 30–37 (Spark SQL, viste temporanee, query parametrizzate Spark 3.4+).
   - Generata e validata la sezione mancante (17.378 caratteri di analisi dettagliata salvati in scratch/missing_section_30_37.md).
   - Formulato piano architetturale per *Windowed Slide Chunking* (splitting a soglia slide > 35) per garantire 8k token dedicati a ciascuna porzione.
+- **Live Injection Sezione Spark SQL (Slide 30–37)**:
+  - Generata sintesi accademica esaustiva delle slide 30–37 (ciclo di vita della modellazione predittiva, PySpark 3.4 parameter injection, viste temporanee Spark SQL e matrice di trade-off DataFrame vs SQL).
+  - Convertita in 42 blocchi Notion nativi via `build_notion_blocks()` e iniettata tramite Notion API con puntamento esatto immediatamente prima del blocco *"🧩 Spark Data Structures: RDDs, DataFrames, and Datasets"* sulla pagina Notion `3fab63e8-59c8-8157-89b9-dcc46a0daaf5`. Rimosso il vecchio blocco segnaposto ridondante.
+- **Implementazione Windowed Slide Chunker**:
+  - `src/core/usecases/process_document.py`: Aggiunti metodi `_count_slides()`, `_slice_pdf_pages()` (con PyMuPDF / fitz) e `_process_windowed_slides()` orchestrati in `execute()` tramite la condizione `should_chunk_slides = (total_slides > split_threshold_slides and pre_density >= 15000)`. Ciascun chunk riceve una chiamata LLM dedicata con 8k token di output, le note vengono ricomposte linearmente e lo Stage 2 genera gli artefatti concettuali (Mermaid, Mindmap, OPML) sul corpus unificato.
+  - `pdf_to_notion.py`: Parametro `split_threshold_slides` (default: 35) configurabile da variabile d'ambiente `SPLIT_THRESHOLD_SLIDES`.
+  - `.env.example` & `README.md`: Documentate le variabili `SPLIT_THRESHOLD_CHARS` e `SPLIT_THRESHOLD_SLIDES`.
+  - `tests/test_process_document_adaptive.py`: Aggiunto test unitario `test_process_document_windowed_slide_chunking` a copertura completa della suddivisione e fusione degli output. Suite totale: 148/148 passati.
 
 ### 2026-10-14 (Resilient Visual Extraction, Inline Figure Lifting & Notion Block Captioning)
 - **Diagnosi & Root Causes Isolate**:

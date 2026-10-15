@@ -157,3 +157,61 @@ def test_process_document_adaptive_two_stage_dense():
     saved_markdown = staging_storage.save.call_args[0][1]
     assert "Chapter 1: Extensive Lecture" in saved_markdown
     assert "Conceptual Architecture" in saved_markdown
+
+
+def test_process_document_windowed_slide_chunking(monkeypatch):
+    """
+    # ARCHITETTURA: Mazzo di slide esteso (es. 67 slide > soglia 35 e sostanza >= 15k).
+    # Verifica il partizionamento in 2 tranche bilanciate (1-34 e 35-67),
+    # ciascuna con chiamata LLM dedicata + 1 chiamata unificata di Stage 2 per gli artefatti (totale 3 chiamate).
+    """
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = False
+
+    reader = MagicMock(spec=IDocumentReader)
+    reader.read.return_value = "chunk_payload_data"
+
+    llm_client = MagicMock(spec=ILlmClient)
+    llm_client.generate_notes.side_effect = [
+        "## Part 1 Notes\nExtensive coverage of slides 1 to 34.",
+        "## Part 2 Notes\nExtensive coverage of slides 35 to 67.",
+        "## 🧠 Conceptual Architecture\n```mermaid\ngraph TD\nRoot --> Leaf\n```",
+    ]
+
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "page_chunked"
+
+    usecase = ProcessDocumentUseCase(
+        readers={DocumentType.SLIDES: reader},
+        llm_client=llm_client,
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+        split_threshold_slides=35,
+        split_threshold_chars=40000,
+    )
+
+    # Mock _count_slides, _calculate_payload_density, and _slice_pdf_pages to avoid disk I/O in unit test
+    monkeypatch.setattr(usecase, "_count_slides", lambda doc: 67)
+    monkeypatch.setattr(usecase, "_calculate_payload_density", lambda doc, payload: 25000)
+    monkeypatch.setattr(usecase, "_slice_pdf_pages", lambda in_p, pages, out_p: None)
+
+    doc = Document(path=Path("deck_67_slides.pdf"), file_hash="hash_67_slides", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Big Data", database_title="Notes")
+
+    res = usecase.execute(doc, target, "system_prompt")
+
+    assert res.success is True
+    # 2 chunk note calls + 1 unified artifacts call = 3 calls
+    assert llm_client.generate_notes.call_count == 3
+    # Reader cleanup must be invoked for each chunk payload
+    assert reader.cleanup.call_count == 2
+
+    # Verification of stitched markdown in staging
+    saved_markdown = staging_storage.save.call_args[0][1]
+    assert "Part 1 Notes" in saved_markdown
+    assert "Part 2 Notes" in saved_markdown
+    assert "Conceptual Architecture" in saved_markdown
