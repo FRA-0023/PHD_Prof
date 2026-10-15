@@ -12,7 +12,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
 - **Windowed Slide Chunker (Character-Driven & Volume-Balanced)**: Controllo preventivo prioritario sul volume di caratteri effettivi (`SPLIT_THRESHOLD_CHARS=25000`) invece del mero conteggio delle slide. Le slide vengono raggruppate in tranche bilanciate pesate sulla massa di caratteri per slide (`_partition_slides_by_character_budget`), allocando un budget di output dedicato di 8.192 token per ciascun blocco.
-- **Test Suite**: 150 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 151 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -20,6 +20,22 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
+### 2026-10-15 (Zero-Slop Conceptual & Notational Continuity Across Chunks)
+- **Diagnosi della Frattura Concettuale tra Chunk Multi-Call**:
+  - *Sintomo*: Note generate su presentazioni massive (3 chiamate LLM) con ottima qualità locale ma percepite come frammentate e scollegate.
+  - *Root Cause*: Isolamento a finestra cieca (stateless chunking) in cui le chiamate 2 e 3 non avevano visibilità sulle definizioni/notazioni introdotte nella chiamata 1, portando a notational drift, rispiegazioni ridondanti o salti bruschi di registro.
+  - *Vincolo Utente*: Coerenza e continuità reale senza aumentare lo slop, senza formule di transizione retoriche ("Come abbiamo visto...", "Passiamo ora a...") e senza allungare inutilmente il testo ("brodo lungo e poco saporito").
+- **Implementazione della Staffetta Simbolica e Transizione per Delta Tecnico**:
+  - `src/core/domain/prompt_templates.py`:
+    - Rinforzati `SLIDES_PROMPT_TEMPLATE` e `PAPER_OR_BOOK_PROMPT_TEMPLATE` con la regola di *Direct Technical Progression (Zero-Slop Transitions)*: divieto assoluto di formule transizionali discorsive; obbligo di legare i concetti esclusivamente tramite il loro *Delta Tecnico* (1 sola proposizione diretta sul limite o fallimento matematico del modello precedente che motiva la nuova formulazione).
+    - Introdotto il vincolo di *Uniform Analytical Caliber (Empirical & Computational Rigor)*: la stessa grammatica formale (ipotesi $H_0$, parametri strutturali, statistiche test) applicata sia alla teoria che alle regressioni empiriche e codice.
+    - Aggiornato *Anti-Tautology & Symbolic Continuity*: i simboli e modelli già formalizzati sono invarianti provati da usare direttamente senza rispiegazioni.
+  - `src/core/usecases/process_document.py`:
+    - Implementato `_extract_chunk_symbolic_anchor(notes_markdown)`: estrazione vettoriale (<1ms) dei modelli H2/H3 e delle formulazioni formali ($$...$$) stabiliti nel chunk precedente.
+    - Iniezione deterministica nel prompt del Chunk $k$ del blocco vincolante `ACTIVE NOTATIONAL & CONCEPTUAL STATE` che ordina a Gemini di assumere notazione e proprietà come invarianti noti, avanzando unicamente per delta tecnici.
+- **Autonomous Verification Gate**:
+  - Aggiunti 2 test unitari dedicati in `tests/test_process_document_adaptive.py` (`test_extract_chunk_symbolic_anchor` e verifica della direttiva di continuità passata al Chunk 2).
+  - Suite completa: **151/151 unit test passati al 100% (0 regressioni)**.
 ### 2026-10-15 (Unit Root Testing Complete Audit & Live Empirical Enrichment)
 - **Diagnosi Root Cause della Pagina 'Unit Root Testing' (3fab63e8-59c8-8140-9c6d-f7514f7ce955)**:
   - *Origine Temporale*: La pagina segnalata dall'utente era stata generata alle 08:43 AM, ovvero prima dello sviluppo e del deploy del Windowed Slide Chunker.

@@ -217,6 +217,12 @@ def test_process_document_windowed_slide_chunking(monkeypatch):
     assert "Part 2 Notes" in saved_markdown
     assert "Conceptual Architecture" in saved_markdown
 
+    # Verification of continuity directive passed to Chunk 2
+    chunk2_prompt = llm_client.generate_notes.call_args_list[1][0][0]
+    assert "ACTIVE NOTATIONAL & CONCEPTUAL STATE" in chunk2_prompt
+    assert "Part 1 Notes" in chunk2_prompt
+    assert "DIRECT TECHNICAL DELTAS" in chunk2_prompt
+
 
 def test_partition_slides_by_character_budget_skewed():
     """
@@ -302,4 +308,29 @@ def test_slide_chunking_triggered_by_characters_not_slide_count(monkeypatch):
     usecase.execute(doc_sparse, target, "prompt")
     # 6.000 car <= 25.000 car -> Chunker NON attivato! Single call = 1 sola chiamata
     assert llm_client.generate_notes.call_count == 1
+
+
+def test_extract_chunk_symbolic_anchor():
+    """
+    # STATISTICA & ARCHITETTURA: Verifica che lo stato simbolico estragga
+    # i modelli stabiliti e le equazioni formali senza includere la sezione References.
+    """
+    markdown = """
+    # Chapter Title
+    ## 🌐 Stationarity & Random Walk
+    Introductory paragraph.
+    $$y_t = y_{t-1} + \\epsilon_t$$
+    ### 🎲 Unit Root Mechanics
+    Derivation paragraph.
+    $$\\Delta y_t = \\alpha_0 + \\gamma y_{t-1} + \\epsilon_t$$
+    ### 📚 References
+    - Dickey & Fuller (1979)
+    """
+    anchor = ProcessDocumentUseCase._extract_chunk_symbolic_anchor(markdown)
+    assert "Established Models/Topics: Stationarity & Random Walk, Unit Root Mechanics" in anchor
+    assert "Active Parameter Formulations: $y_t = y_{t-1} + \\epsilon_t$ | $\\Delta y_t = \\alpha_0 + \\gamma y_{t-1} + \\epsilon_t$" in anchor
+    assert "References" not in anchor
+
+    # Test empty markdown
+    assert ProcessDocumentUseCase._extract_chunk_symbolic_anchor("") == ""
 

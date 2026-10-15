@@ -374,6 +374,46 @@ class ProcessDocumentUseCase:
         return chunk_ranges
 
     @staticmethod
+    def _extract_chunk_symbolic_anchor(notes_markdown: str) -> str:
+        """
+        # ARCHITETTURA: Estrazione rapida (<1ms) dello stato concettuale e notazionale attivo (Zero-Slop Anchor).
+        # STATISTICA: Isola i modelli formalizzati (H2/H3) e le equazioni chiave ($$...$$) per passarli
+        # come invarianti vincolanti al chunk successivo.
+        # TRADE-OFF: Mantiene il contesto a meno di 10-12 righe, prevenendo sia il notational drift sia la
+        # proliferazione di rispiegazioni e preamboli tautologici.
+        """
+        import re
+        if not notes_markdown or not notes_markdown.strip():
+            return ""
+
+        headers = []
+        for line in notes_markdown.splitlines():
+            line_str = line.strip()
+            if line_str.startswith("## ") or line_str.startswith("### "):
+                clean_title = re.sub(r"^#{2,3}\s*([^\w\s]+\s*)?", "", line_str).strip()
+                if clean_title and clean_title not in headers and not clean_title.lower().startswith("references"):
+                    headers.append(clean_title)
+
+        eq_pattern = re.compile(r"\$\$([^\$]+)\$\$")
+        equations = []
+        for match in eq_pattern.finditer(notes_markdown):
+            eq = match.group(1).strip()
+            eq_clean = " ".join(eq.split())
+            if eq_clean and eq_clean not in equations and len(eq_clean) <= 120:
+                equations.append(eq_clean)
+
+        lines = []
+        if headers:
+            recent_headers = headers[-6:]
+            lines.append(f"- Established Models/Topics: {', '.join(recent_headers)}")
+        if equations:
+            recent_eqs = equations[-4:]
+            eqs_formatted = " | ".join(f"${e}$" for e in recent_eqs)
+            lines.append(f"- Active Parameter Formulations: {eqs_formatted}")
+
+        return "\n".join(lines)
+
+    @staticmethod
     def _slice_pdf_pages(input_path: Path, pages: List[int], output_path: Path) -> None:
         """
         # PERFORMANCE: Estrazione vettoriale lossless di un range di pagine tramite PyMuPDF (<20ms).
@@ -427,6 +467,7 @@ class ProcessDocumentUseCase:
         chunk_results = []
         chunks_dir = Path("staging/chunks")
         chunks_dir.mkdir(parents=True, exist_ok=True)
+        cumulative_anchor = ""
 
         for chunk_idx, (start_p, end_p) in enumerate(chunk_ranges):
             chunk_chars = sum(slide_char_counts[start_p - 1:end_p]) if slide_char_counts else 0
@@ -444,6 +485,17 @@ class ProcessDocumentUseCase:
             chunk_payload = reader.read(chunk_doc)
 
             try:
+                continuity_directive = ""
+                if chunk_idx > 0 and cumulative_anchor:
+                    continuity_directive = (
+                        f"\n=== ACTIVE NOTATIONAL & CONCEPTUAL STATE (DO NOT RE-EXPLAIN) ===\n"
+                        f"The following models, parameters, and notation were established in prior slides:\n"
+                        f"{cumulative_anchor}\n"
+                        f"- ASSUME all notation, variables, and properties listed above are already proven and active. Do NOT re-define them.\n"
+                        f"- Advance concepts strictly via DIRECT TECHNICAL DELTAS (stating in 1 direct sentence the exact formal limit or failure of the preceding model this new model resolves). Zero rhetorical or conversational transition padding.\n"
+                        f"- Maintain identical analytical, mathematical, and computational caliber (formal hypotheses, structural parameters, test statistics).\n"
+                    )
+
                 chunk_prompt = (
                     f"{prompt}\n\n"
                     f"=== SLIDE RANGE DIRECTIVE (CHUNK {chunk_idx + 1}/{len(chunk_ranges)}) ===\n"
@@ -452,11 +504,13 @@ class ProcessDocumentUseCase:
                     f"- When inserting visual diagrams (e.g. ![](figure://slide_N)), ALWAYS use the absolute original slide number N (between {start_p} and {end_p}) visible on the slide footer, NEVER the relative page index of this slice.\n"
                     f"- Do NOT generate final global closing artifacts (no Conceptual Architecture Mermaid trees, no Active Recall drills, no Boundary Conditions table); these will be synthesized globally across the entire lecture at the end.\n"
                     f"- Output ONLY the substantive study sections (## and ###) for slides {start_p} through {end_p} without conversational padding."
+                    f"{continuity_directive}"
                 )
 
                 chunk_text = self.llm_client.generate_notes(chunk_prompt, chunk_payload)
                 notes_part, _ = self._split_notes_and_artifacts(chunk_text)
                 chunk_results.append(notes_part.strip())
+                cumulative_anchor = self._extract_chunk_symbolic_anchor("\n\n".join(chunk_results))
             finally:
                 reader.cleanup(chunk_payload)
 
