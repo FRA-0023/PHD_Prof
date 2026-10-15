@@ -41,6 +41,13 @@ def parse_rich_text(line: str, annotations: Dict[str, bool] = None) -> List[Dict
     Normalizes punctuation spacing and truncates individual segments to NOTION_MAX_BLOCK_CHARS.
     """
     if annotations is None:
+        # ARCHITETTURA: In Markdown (in particolare nelle celle di tabelle GFM), i ritorni a capo
+        # e le liste puntate interne sono codificati come tag HTML (<br>, <br/>, <br />).
+        # Notion non esegue il rendering dei tag HTML nativi e li visualizzerebbe come testo grezzo.
+        # TRADE-OFF: Convertiamo deterministicamente qualsiasi variante di <br> in newline nativo '\n',
+        # supportato nativamente dall'engine di layout di Notion sia nelle celle che nei blocchi di testo.
+        line = re.sub(r'[ \t]*</?br\s*/?>[ \t]*', '\n', line, flags=re.IGNORECASE).strip('\n')
+        line = line.replace('&nbsp;', ' ')
         line = normalize_sentence_spacing(line)
         annotations = {}
 
@@ -52,6 +59,7 @@ def parse_rich_text(line: str, annotations: Dict[str, bool] = None) -> List[Dict
         r'|(\*\*\*(.+?)\*\*\*)'
         r'|(\*\*(.+?)\*\*)'
         r'|((?<!\*)\*(?!\s|\*)(.+?)(?<!\s|\*)\*(?!\*))'
+        r'|(\[([^\]]+)\]\((https?://[^\s\)]+)\))'
     )
     cursor = 0
 
@@ -104,6 +112,17 @@ def parse_rich_text(line: str, annotations: Dict[str, bool] = None) -> List[Dict
             sub_ann = dict(annotations)
             sub_ann["italic"] = True
             parts.extend(parse_rich_text(m.group(12), sub_ann))
+        # 7: [text](url) -> Group 13
+        elif m.group(13) is not None:
+            link_text = m.group(14)[:NOTION_MAX_BLOCK_CHARS]
+            link_url = m.group(15)
+            link_item: Dict[str, Any] = {
+                "type": "text",
+                "text": {"content": link_text, "link": {"url": link_url}},
+            }
+            if annotations:
+                link_item["annotations"] = dict(annotations)
+            parts.append(link_item)
 
         cursor = m.end()
 
@@ -1021,18 +1040,31 @@ def build_notion_blocks(markdown_text: str) -> List[Dict[str, Any]]:
                 continue
 
         # ── Images ──────────────────────────────────────────────────────────
-        img_match = re.match(r'^!\[([^\]]*)\]\((https?://[^\)]+)\)$', s)
+        # ARCHITETTURA: Riconoscimento del blocco immagine nativo Notion.
+        # Supporta URL esterni con schema http/https e preserva la didascalia (alt text)
+        # come rich_text dedicato nel payload del blocco image.
+        img_match = re.match(r'^!\[([^\]]*)\]\((https?://[^\s\)]+)\)\.?$', s)
         if img_match:
             flush_list()
             img_url = img_match.group(2)
-            blocks.append({
+            img_block: Dict[str, Any] = {
                 "object": "block",
                 "type": "image",
                 "image": {
                     "type": "external",
                     "external": {"url": img_url}
                 }
-            })
+            }
+            if img_match.group(1):
+                caption_text = img_match.group(1).strip()
+                # ARCHITETTURA: Soppressione didascalie boilerplate/generiche (es. 'Figura slide 8', 'Slide 8')
+                is_boilerplate = bool(
+                    re.match(r'^(figura|figure)?\s*(slide\s*)?\d+$', caption_text, re.IGNORECASE)
+                    or re.match(r'^brief technical caption$', caption_text, re.IGNORECASE)
+                )
+                if caption_text and not is_boilerplate:
+                    img_block["image"]["caption"] = parse_rich_text(caption_text)
+            blocks.append(img_block)
             continue
 
         # ── Paragraph ───────────────────────────────────────────────────────

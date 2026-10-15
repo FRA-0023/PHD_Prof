@@ -56,10 +56,15 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
 - Mathematics & Formulas: Extract all formal equations. Format inline math with `$` (e.g., $E=mc^2$) and display math on its own line with `$$` (e.g., $$\\hat{{y}} = \\sigma(Wx+b)$$). Never use code blocks for math.
   * Complex Operations & Hardware Deconstructions: When introducing foundational mathematical operations, computational complexity bounds, or hardware-bridging mechanisms, format them under a dedicated subsection: `### 🧮 Mathematical & Hardware Deconstruction: [Concept Name]`, following the 5-point physical mapping, operational count, silicon bridge, numerical trace, and boundary conditions.
 - Code Snippets: Format code inside fenced blocks with the language tag (e.g., ```python, ```r).
-- Visual Diagrams & Figures:
+- Visual Diagrams & Figures (CRITICAL FORMATTING INVARIANT):
   * If a slide contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
-  * Use the format: `![Brief technical caption](figure://slide_N)` where N is the 1-based slide/page number.
-  * Optional: To crop a specific box, use `![...](figure://slide_N?crop=ymin,xmin,ymax,xmax)` where coordinates are 0-1000.
+  * MANDATORY STANDALONE BLOCK: The image reference MUST ALWAYS be placed on its own standalone line with empty lines before and after. Format:
+    
+    ![](figure://slide_N)
+    
+  * FULL-SLIDE INTEGRITY (NO ARBITRARY CROPPING): Always extract the full slide without coordinate crops (do NOT use ?crop=...). Extracting the full slide preserves all axes, labels, notes, and comparative panels (e.g. Before/After) without truncation.
+  * STRICT PROHIBITION ON INLINE CITATIONS: NEVER write inline references or citations such as `(figure://slide_N)`, `(slide N)`, `(figura N)`, or `(vedi slide N)` inside sentences, headers, or bullet points. All figures must be isolated standalone image lines. Keep the prose completely clean and flowing.
+  * ZERO BOILERPLATE CAPTIONS: Do NOT write generic captions like "Figura slide N" or "Slide N". Leave the figure reference clean as `![](figure://slide_N)`.
   * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text slides or syllabus overviews.
 - References: Place all citations exclusively at the end in a `### 📚 References` section. No inline citations in the body.
 - Study Artifacts & Conceptual Maps (Mandatory Append Section):
@@ -201,10 +206,15 @@ Anti-Tautology & Anti-Repetition: Explain each concept, parameter, or property O
 - Mathematics & Formulas: Extract and explain all mathematical formulations. Format inline math with `$` (e.g., $L(\\theta)$) and display equations on standalone lines with `$$` (e.g., $$\\nabla_\\theta J(\\theta) = \\mathbb{{E}}[ \\dots ]$$). Never use code blocks for math.
   * Complex Operations & Deconstructions: When introducing foundational mathematical operations, computational complexity bounds, or algorithmic mechanisms, format them under a dedicated subsection: `### 🧮 Mathematical Deconstruction: [Concept Name]`, systematically providing physical variable mapping, step-by-step derivation, operational count, and boundary failure modes.
 - Code & Algorithms: Format pseudo-code or algorithms inside fenced code blocks with language identifiers (e.g., ```python, ```r).
-- Visual Diagrams & Figures:
+- Visual Diagrams & Figures (CRITICAL FORMATTING INVARIANT):
   * If the document contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
-  * Use the format: `![Brief technical caption](figure://slide_N)` where N is the 1-based page number.
-  * Optional: To crop a specific box, use `![...](figure://slide_N?crop=ymin,xmin,ymax,xmax)` where coordinates are 0-1000.
+  * MANDATORY STANDALONE BLOCK: The image reference MUST ALWAYS be placed on its own standalone line with empty lines before and after. Format:
+    
+    ![](figure://slide_N)
+    
+  * PAGE INTEGRITY (NO ARBITRARY CROPPING): Always extract the full page without coordinate crops (do NOT use ?crop=...). Extracting the full page preserves all axes, labels, and mathematical annotations without truncation.
+  * STRICT PROHIBITION ON INLINE CITATIONS: NEVER write inline references or citations such as `(figure://slide_N)`, `(slide N)`, `(figura N)`, or `(vedi slide N)` inside sentences, headers, or bullet points. All figures must be isolated standalone image lines. Keep the prose completely clean and flowing.
+  * ZERO BOILERPLATE CAPTIONS: Do NOT write generic captions like "Figura slide N" or "Slide N". Leave the figure reference clean as `![](figure://slide_N)`.
   * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text pages.
 - References: Consolidate formal bibliographic citations in a final `### 📚 References` section. No inline citations in the body.
 - Study Artifacts & Conceptual Maps (Mandatory Append Section):

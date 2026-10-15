@@ -63,35 +63,60 @@ class ProcessDocumentUseCase:
 
     def _process_figures(self, markdown_text: str, document: Document, target: NotionTarget) -> str:
         """
-        Intercetta i marker `figure://slide_X` nel markdown testuale,
-        esegue l'estrazione visiva, carica su R2 in gerarchia e sostituisce l'URL.
+        # ARCHITETTURA: Intercettore universale antifragile di marker visivi `figure://slide_X`.
+        # Cattura sia la sintassi formale standalone (`![Alt](figure://...)`), sia riferimenti
+        # parentetici inline allucinati dall'LLM (`(figure://...)` o `figure://...`).
+        # Risolve l'impedance mismatch con il Block Model di Notion:
+        # in Notion le immagini non possono vivere inline dentro `rich_text`, pertanto
+        # le figure inline vengono referenziate in modo pulito nel testo e sollevate come blocchi
+        # immagine autonomi a livello radice (`type: "image"`).
         """
         import re
-        import uuid
-        
-        # Pattern: ![alt](figure://slide_X) o ![alt](figure://slide_X?crop=ymin,xmin,ymax,xmax)
-        pattern = re.compile(r'!\[([^\]]*)\]\(figure://slide_(\d+)(?:\?crop=([\d.]+),([\d.]+),([\d.]+),([\d.]+))?\)')
-        
-        if not self.visual_extractor or not self.image_host_client:
-            # Fallback antifragile: convertiamo in testo se manca il setup
-            return pattern.sub(r'> 📷 **\1** *(Figura alla slide \2)*', markdown_text)
-            
-        def replacer(match):
-            alt_text = match.group(1)
-            page_num = int(match.group(2))
-            
+
+        # Regex modulare con named groups per intercettare qualsiasi variante sintattica di figure://
+        figure_pattern = re.compile(
+            r'(?:'
+            r'!?\[(?P<alt>[^\]]*)\]\(figure://slide_(?P<slide1>\d+)(?:\?crop=(?P<c1_ymin>[\d.]+),(?P<c1_xmin>[\d.]+),(?P<c1_ymax>[\d.]+),(?P<c1_xmax>[\d.]+))?\)'
+            r'|'
+            r'\(\s*figure://slide_(?P<slide2>\d+)(?:\?crop=(?P<c2_ymin>[\d.]+),(?P<c2_xmin>[\d.]+),(?P<c2_ymax>[\d.]+),(?P<c2_xmax>[\d.]+))?\s*\)'
+            r'|'
+            r'figure://slide_(?P<slide3>\d+)(?:\?crop=(?P<c3_ymin>[\d.]+),(?P<c3_xmin>[\d.]+),(?P<c3_ymax>[\d.]+),(?P<c3_xmax>[\d.]+))?'
+            r')'
+        )
+
+        def parse_figure_match(m: re.Match) -> Tuple[str, int, Optional[Tuple[float, float, float, float]]]:
+            alt = m.group("alt")
+            slide = m.group("slide1") or m.group("slide2") or m.group("slide3")
+            page_num = int(slide)
+
+            ymin = m.group("c1_ymin") or m.group("c2_ymin") or m.group("c3_ymin")
+            xmin = m.group("c1_xmin") or m.group("c2_xmin") or m.group("c3_xmin")
+            ymax = m.group("c1_ymax") or m.group("c2_ymax") or m.group("c3_ymax")
+            xmax = m.group("c1_xmax") or m.group("c2_xmax") or m.group("c3_xmax")
+
             crop_box = None
-            if match.group(3):
+            if ymin and xmin and ymax and xmax:
                 try:
-                    crop_box = (
-                        float(match.group(3)),
-                        float(match.group(4)),
-                        float(match.group(5)),
-                        float(match.group(6)),
-                    )
+                    crop_box = (float(ymin), float(xmin), float(ymax), float(xmax))
                 except ValueError:
-                    pass
-            
+                    crop_box = None
+
+            if not alt or not alt.strip():
+                alt = f"Figura slide {page_num}"
+
+            return alt.strip(), page_num, crop_box
+
+        def resolve_figure_url(page_num: int, crop_box: Optional[Tuple[float, float, float, float]]) -> Optional[str]:
+            if not self.visual_extractor or not self.image_host_client:
+                return None
+
+            # ARCHITETTURA: Prevenzione immagini tagliate su presentazioni slide.
+            # Sulle slide, coordinate arbitrarie di crop ipotizzate dall'LLM tagliano frequentemente
+            # assi cartesiani, anni e note a piè di pagina (es. confronti prima/dopo su slide 8).
+            # L'estrazione a slide intera a 300 DPI garantisce la totale integrità e completezza visiva.
+            if document.doc_type == DocumentType.SLIDES:
+                crop_box = None
+
             # ARCHITETTURA: Identificatore crittografico deterministico della figura.
             # Rende il processo 100% idempotente legando l'asset al file_hash, numero slide e crop box.
             crop_sig = f"{crop_box}" if crop_box else "full"
@@ -106,7 +131,7 @@ class ProcessDocumentUseCase:
             if hasattr(self.image_host_client, "image_exists") and self.image_host_client.image_exists(remote_name):
                 public_url = self.image_host_client.get_public_url(remote_name)
                 print(f"    [Cloudflare R2] Figura {img_id[:8]}... già presente su storage — skip upload.")
-                return f"![{alt_text}]({public_url})"
+                return public_url
 
             # Controllo cache su disco locale (staging/figures/)
             tmp_dir = Path("staging/figures")
@@ -123,13 +148,64 @@ class ProcessDocumentUseCase:
                 # Upload su Storage con path gerarchico: notion/universita/{course_name}/
                 print(f"    [Cloudflare R2] Caricamento {remote_name}...")
                 public_url = self.image_host_client.upload_image(tmp_path, remote_name)
-
-                return f"![{alt_text}]({public_url})"
+                return public_url
             except Exception as e:
                 print(f"    [Errore] Fallita estrazione/caricamento figura slide {page_num}: {e}")
-                return f"> 📷 **{alt_text}** *(Errore estrazione slide {page_num})*"
-                
-        return pattern.sub(replacer, markdown_text)
+                return None
+
+        lines = markdown_text.splitlines()
+        processed_lines = []
+
+        for line in lines:
+            matches = list(figure_pattern.finditer(line))
+            if not matches:
+                processed_lines.append(line)
+                continue
+
+            s = line.strip()
+            # TRADE-OFF: Se la riga intera è ESCLUSIVAMENTE un riferimento alla figura,
+            # preserviamo la semantica di blocco Markdown standard senza didascalie boilerplate.
+            if figure_pattern.fullmatch(s):
+                alt, page_num, crop_box = parse_figure_match(matches[0])
+                url = resolve_figure_url(page_num, crop_box)
+                if url:
+                    processed_lines.append(f"![]({url})")
+                continue
+
+            # Se la riga contiene testo discorsivo con uno o più marker di figura inline
+            standalone_figures = []
+            seen_slides = set()
+
+            def inline_replacer(m: re.Match) -> str:
+                alt, page_num, crop_box = parse_figure_match(m)
+                if page_num not in seen_slides:
+                    url = resolve_figure_url(page_num, crop_box)
+                    if url:
+                        seen_slides.add(page_num)
+                        standalone_figures.append(url)
+                # Rimuove integralmente qualsiasi dicitura o citazione dal testo
+                return ""
+
+            cleaned_line = figure_pattern.sub(inline_replacer, line)
+            # Rimuove eventuali diciture residue orfane nel testo (es. "(figura 8)", "*(Slide 8)*", ecc.)
+            cleaned_line = re.sub(r"\*?\*?\((?:slide|figura)\s*\d+\)\*?\*?", "", cleaned_line, flags=re.IGNORECASE)
+            # Preserva l'indentazione originale rimuovendo doppi spazi e spazi pre-punteggiatura
+            indent = len(cleaned_line) - len(cleaned_line.lstrip(" "))
+            body = re.sub(r"[ \t]+", " ", cleaned_line.lstrip(" "))
+            body = re.sub(r"\s+([,.;:!?])", r"\1", body)
+            cleaned_line = (" " * indent) + body.rstrip()
+            processed_lines.append(cleaned_line)
+
+            # Solleviamo ogni figura a blocco immagine autonomo Notion compatibile
+            # Senza alt-text/caption per eliminare qualsiasi dicitura al di sotto dell'immagine
+            for url in standalone_figures:
+                processed_lines.append("")
+                processed_lines.append(f"![]({url})")
+
+        res = "\n".join(processed_lines)
+        if markdown_text.endswith("\n"):
+            res += "\n"
+        return res
 
     def _calculate_payload_density(self, document: Document, payload: Any) -> int:
         """

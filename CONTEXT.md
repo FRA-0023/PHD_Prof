@@ -11,7 +11,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Test Suite**: 139 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 144 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -19,6 +19,39 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
+### 2026-10-15 (Notion Table <br> HTML Tag Normalization & Output Budget Diagnosis)
+- **Normalizzazione Deterministica HTML <br> nei Blocchi Notion**:
+  - *Diagnosi Root Cause*: Le tabelle Markdown GFM usano convenzionalmente tag HTML <br>/<br/> per formattare punti elenco o a capo dentro le singole celle (dove i newline fisici \n romperebbero la riga GFM). Notion API non renderizza tag HTML nativi e li visualizzava come testo grezzo <br>- ...<br>-.
+  - *Fix Deterministico*: Aggiornato src/adapters/outbound/notion_block_builder.py in parse_rich_text(), normalizzando regex [ \t]*</?br\s*/?>[ \t]* in newline nativi \n (pienamente supportati da Notion nei 
+ich_text per celle e paragrafi) e convertendo &nbsp; in spazio ordinario.
+  - *Verifica Suite*: Aggiunti 2 test di regressione dedicati in 	ests/test_notion_block_builder.py. Suite completa superata con 147/147 test passati (0 regressioni).
+  - *Live Patch Notion*: Aggiornate via API Notion le righe della tabella sulla pagina *Big Data Engineering & Distributed Systems 2* (3fab63e8-59c8-8157-89b9-dcc46a0daaf5), azzerando i blocchi residui con <br>.
+- **Diagnosi Omissione Slide 30–37 (Saturazione Output Token Budget)**:
+  - Isolata la causa del salto delle slide su presentazioni dense: non è memoria di input (contesto 1M+ di Gemini 2.5 Flash), ma la saturazione dell'output token envelope (max 8.192 token di generazione).
+  - Il markdown sintetizzato per la Sessione 2 contava esattamente 42.528 caratteri (~8.100 token), spingendo il planner dell'LLM a comprimere/saltare le slide 30–37 (Spark SQL, viste temporanee, query parametrizzate Spark 3.4+).
+  - Generata e validata la sezione mancante (17.378 caratteri di analisi dettagliata salvati in scratch/missing_section_30_37.md).
+  - Formulato piano architetturale per *Windowed Slide Chunking* (splitting a soglia slide > 35) per garantire 8k token dedicati a ciascuna porzione.
+
+### 2026-10-14 (Resilient Visual Extraction, Inline Figure Lifting & Notion Block Captioning)
+- **Diagnosi & Root Causes Isolate**:
+  1. *Disallineamento Sintassi LLM (Inline Citations vs Standalone Image Blocks)*:
+     - Nelle slide con grafici o tabelle, Gemini generava riferimenti discorsivi parentetici (es. `(figure://slide_6)`, `(figure://slide_8?crop=100,0,700,500)`) all'interno di frasi o bullet point accademici anziché blocchi immagine Markdown dedicati (`![caption](figure://slide_N)`).
+  2. *Regex Rigida in `ProcessDocumentUseCase._process_figures`*:
+     - La regex preesistente cercava unicamente `!\[([^\]]*)\]\(figure://slide_(\d+)...\)`. I riferimenti privi di punto esclamativo o alt text venivano completamente ignorati, bypassando l'estrazione grafica con PyMuPDF e l'upload su Cloudflare R2, lasciando stringhe testuali grezze `(figure://slide_X)` nel corpo dei blocchi Notion.
+  3. *Incompatibilità con il Block Model di Notion*:
+     - In Notion le immagini non possono esistere come frammenti inline dentro un blocco `rich_text` (paragrafo o bullet point). Sono obbligatoriamente blocchi autonomi di primo livello (`type: "image"`). Qualsiasi immagine annidata inline dentro una riga veniva degradata a testo letterale.
+- **Risoluzione Deterministica nel Core & Block Builder**:
+  - `ProcessDocumentUseCase._process_figures`:
+    - Introdotta regex universale con named groups che cattura sia blocchi standalone (`![Alt](figure://...)`), sia citazioni parentetiche (`(figure://slide_N...)`) che riferimenti testuali grezzi (`figure://slide_N...`).
+    - *Inline Figure Lifting*: quando un riferimento visivo si trova all'interno di una riga di testo, la frase viene bonificata con un'annotazione pulita `*(Slide N)*` e l'immagine estratta/caricata su R2 viene sollevata come blocco Markdown autonomo (`\n\n![Alt](url)\n\n`) posizionato immediatamente sotto il blocco genitore.
+    - Preservato il graceful fallback con callout `> 📷 ...` o testo discorsivo in assenza di credenziali R2 o in caso di errore.
+  - `notion_block_builder.py`:
+    - Supporto esplicito per le didascalie native Notion (`caption`) nei blocchi `image` generate dall'alt text Markdown.
+    - Esteso `parse_rich_text` con il parsing nativo dei link Markdown `[testo](url)` serializzati come oggetti `text` con attributo `link: {url: ...}`.
+  - `prompt_templates.py`:
+    - Rinforzati `SLIDES_PROMPT_TEMPLATE` e `PAPER_OR_BOOK_PROMPT_TEMPLATE` con un vincolo vincolante negativo esplicito: divieto assoluto di referenziare figure in formato parentetico inline; obbligo di emissione come riga autonoma isolata da newline vuoti.
+- **Autonomous Verification Gate**:
+  - 144/144 unit test superati al 100% su pytest (0 regressioni). Aggiunti 5 test unitari dedicati per estrazione inline, lifting su blocchi multipli, fallback senza R2, caption immagini e link Markdown.
 ### 2026-10-13 (Cross-Platform Mac/Win Hardening, Fault Isolation & Recursive Engine)
 - **Diagnosi & Root Causes Isolate**:
   1. *Perdita di Fault Isolation tra CLI e Web Cockpit*: Nella CLI, se un profilo conteneva una cartella inesistente sul nuovo PC (`C:\Documenti\UNIMIB\...` vs nuova macchina), la scansione isolava il singolo corso stampando "Cartella non trovata", consentendo di utilizzare gli altri domini corretti. Nel Web Cockpit (`/api/profiles`), qualsiasi eccezione `OSError` o `PermissionError` durante `scan_documents` o `is_dir()` faceva collassare l'intero endpoint con HTTP 500, facendo sollevare a `app.js` l'errore bloccante: `Impossibile caricare i profili: Errore recupero profili`.
@@ -553,3 +586,21 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
   * Inbound CLI (`CLIAdapter` & `pdf_to_notion.py`): Aggiunto argomento `--generation-mode` (`--gen-mode`) e prompt interattivo con selezione rapida [1], [2], [3].
   * Inbound Web (`WebAdapter`, `index.html`, `app.js`, `app.css`): Aggiunto campo `mode` in `BatchStartRequest`, selettore visuale dropdown (`.select-mode`) nel toolbar della coda documenti e logging telemetrico della modalità attiva.
 - **Verifica Test Suite**: Eseguiti 116 unit test offline con mock completi (116/116 passati con successo).
+
+
+### 2026-10-14 (Fix Pipeline Rendering Figure & Patch Live Pagina Notion 'Data Visualization')
+- **Diagnosi Root Cause**:
+  * LLM Gemini produceva marker figura inline in formato genitore `(figure://slide_N)` anziché la sintassi standard `![alt](figure://slide_N)`.
+  * La regex precedente in `ProcessDocumentUseCase._process_figures()` matchava unicamente immagini Markdown standalone, lasciando intatti i marker testuali `figure://` e impedendo l'estrazione visiva.
+  * Il blocco di codice locale era stato corretto ma la pagina Notion remota non era stata aggiornata, mostrando i vecchi blocchi non renderizzati.
+- **Hardening Multi-Livello Codebase**:
+  * `src/core/usecases/process_document.py`: Introdotta universal figure regex `(?:!\[(?P<alt_img>[^\]]*)\]\((?P<uri_img>figure://[^\s\)]+)\)|\((?P<uri_paren>figure://[^\s\)]+)\)|(?P<uri_bare>figure://[^\s\)]+))`. Implementato il pattern *Inline Figure Lifting*: trasforma il testo inline in `*(Slide N)*` e solleva la figura in un blocco immagine Markdown standalone adiacente.
+  * `src/adapters/outbound/notion_block_builder.py`: Aggiunto supporto a `caption` nativa su blocchi immagine esterni Notion ed esteso `parse_rich_text` con supporto a link Markdown standard `[testo](url)`.
+  * `src/core/domain/prompt_templates.py`: Aggiunti vincoli negativi rigorosi in `SLIDES_PROMPT_TEMPLATE` e `PAPER_OR_BOOK_PROMPT_TEMPLATE` vietando marker inline e imponendo blocchi standalone vuoti prima e dopo.
+- **Esecuzione Patch Live & Sincronizzazione**:
+  * Creata utility `scripts/patch_data_visualization_page.py`.
+  * Estratte 11 figure a 300 DPI dal file ufficiale del corso `C:\Documenti\UNIMIB\Data science for Economics\Class_4_Theory_4_Data_Science_in_Economics_Data_Visualization_Coding_Activity.pdf` (SHA-256 `5a597c6221d39590...`), caricate su Cloudflare R2 con percorso gerarchico (`notion/universita/data_science_in_economics/`).
+  * Sostituiti integralmente i blocchi sulla pagina Notion `3f9b63e8-59c8-811e-b88b-cc0f883162fa` con 105 blocchi strutturati e 11 blocchi immagine nativi.
+  * Sincronizzato staging `staging/5a597c6221d39590f17c2ab752bb510f02f88a2867fd5eb15ba60bb27934f7cc.md` e aggiornato `sync_state.json`.
+- **Verifica Test Suite**: 144/144 unit test passati con successo (100% green).
+

@@ -255,6 +255,97 @@ def test_process_figures_skip_extraction_when_local_cached(tmp_path: Path, monke
     assert "https://cdn.example.com/uploaded.png" in processed
 
 
+def test_process_figures_inline_parenthetical_extracted_and_lifted():
+    # ARCHITETTURA: Verifica che riferimenti parentetici inline (figure://slide_6)
+    # vengano rimossi dal testo senza lasciare citazioni e sollevati come blocchi immagine autonomi senza caption ridondante.
+    visual_extractor = MagicMock()
+    image_host = MagicMock()
+    image_host.image_exists.return_value = False
+    image_host.upload_image.return_value = "https://cdn.example.com/fig6.png"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(),
+        notion_client=MagicMock(),
+        state_repo=MagicMock(),
+        staging_storage=MagicMock(),
+        visual_extractor=visual_extractor,
+        image_host_client=image_host,
+    )
+
+    doc = Document(path=Path("doc.pdf"), file_hash="hash_inline", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Data Viz", database_title="Notes")
+
+    raw_markdown = "- **Principle 1.** Visualising schooling (figure://slide_6) simplifies the chart."
+    processed = usecase._process_figures(raw_markdown, doc, target)
+
+    # Verifica pulizia integrale testo e lifting blocco immagine pulito
+    assert "- **Principle 1.** Visualising schooling simplifies the chart." in processed
+    assert "*(Slide 6)*" not in processed
+    assert "figure://slide_6" not in processed
+    assert "\n\n![](https://cdn.example.com/fig6.png)" in processed
+    visual_extractor.extract_figure.assert_called_once()
+    image_host.upload_image.assert_called_once()
+
+
+def test_process_figures_multiple_inline_crops():
+    # ARCHITETTURA: Verifica che su SLIDES le figure duplicate sulla stessa riga vengano deduplicate
+    # e che il crop arbitrario venga disattivato per garantire l'integrità visiva a slide intera.
+    visual_extractor = MagicMock()
+    image_host = MagicMock()
+    image_host.image_exists.return_value = False
+    image_host.upload_image.return_value = "https://cdn.example.com/slide8.png"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(),
+        notion_client=MagicMock(),
+        state_repo=MagicMock(),
+        staging_storage=MagicMock(),
+        visual_extractor=visual_extractor,
+        image_host_client=image_host,
+    )
+
+    doc = Document(path=Path("doc.pdf"), file_hash="hash_crops", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Data Viz", database_title="Notes")
+
+    raw_markdown = "Replacing 3D (figure://slide_8?crop=100,0,700,500) with 2D (figure://slide_8?crop=100,500,700,1000)."
+    processed = usecase._process_figures(raw_markdown, doc, target)
+
+    # Testo ripulito senza alcuna citazione o parentesi
+    assert "Replacing 3D with 2D." in processed
+    assert "figure://slide_8" not in processed
+    assert "![](https://cdn.example.com/slide8.png)" in processed
+    # Deduplicazione a slide intera: 1 sola estrazione/upload per slide 8
+    assert visual_extractor.extract_figure.call_count == 1
+    assert image_host.upload_image.call_count == 1
+
+
+def test_process_figures_inline_fallback_when_no_r2():
+    # TRADE-OFF: Fallback graceful se R2 o visual extractor non sono configurati: pulisce il testo senza crash
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(),
+        notion_client=MagicMock(),
+        state_repo=MagicMock(),
+        staging_storage=MagicMock(),
+        visual_extractor=None,
+        image_host_client=None,
+    )
+
+    doc = Document(path=Path("doc.pdf"), file_hash="hash_nor2", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Data Viz", database_title="Notes")
+
+    raw_markdown = (
+        "Inline reference (figure://slide_6) in text.\n"
+        "![Standalone](figure://slide_7)"
+    )
+    processed = usecase._process_figures(raw_markdown, doc, target)
+
+    assert "Inline reference in text." in processed
+    assert "figure://slide_6" not in processed
+
+
 def test_process_document_notes_only_mode():
     state_repo = MagicMock(spec=IStateRepository)
     state_repo.get_entry.return_value = None

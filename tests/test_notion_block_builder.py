@@ -238,6 +238,35 @@ def test_build_notion_blocks_table_with_escaped_pipe():
     assert len(table["children"]) == 2
 
 
+def test_parse_rich_text_html_br_tags():
+    # ARCHITETTURA: Verifica che le varianti di tag HTML <br> siano normalizzate in newline nativi
+    # senza lasciare residui di sintassi HTML o spazi spurii.
+    raw = "<br>- Point 1<br/>- Point 2<br />- Point 3</br>- Point 4<BR>- Point 5<br>"
+    parts = parse_rich_text(raw)
+    content = "".join(p["text"]["content"] for p in parts)
+    assert "<br" not in content.lower()
+    assert "</br" not in content.lower()
+    assert content == "- Point 1\n- Point 2\n- Point 3\n- Point 4\n- Point 5"
+
+
+def test_build_notion_blocks_table_with_html_br():
+    # ARCHITETTURA: Verifica che le celle delle tabelle Markdown con elenchi o a capo <br>
+    # vengano convertite in blocchi Notion table nativi con soft-break \n puliti.
+    md = (
+        "| Data Structure | Characteristics |\n"
+        "| :--- | :--- |\n"
+        "| DataFrame | - Data organised into named columns.<br>- Immutable distributed collection of data.<br>- Allows imposition of structure. |"
+    )
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "table"
+    table = blocks[0]["table"]
+    row_cells = table["children"][1]["table_row"]["cells"]
+    cell_text = "".join(item["text"]["content"] for item in row_cells[1])
+    assert "<br" not in cell_text.lower()
+    assert cell_text == "- Data organised into named columns.\n- Immutable distributed collection of data.\n- Allows imposition of structure."
+
+
 def test_build_notion_blocks_nested_bullet_points():
     md = (
         "* **Mapping (List(K2, V2)):** Each chunk is processed by a map function.\n"
@@ -593,6 +622,47 @@ def test_convert_mindmap_to_flowchart_preserves_whole_words_without_truncation()
     sanitized = convert_mindmap_to_flowchart(raw_mindmap)
     assert "..." not in sanitized
     assert "Serving Relationships" in sanitized
+
+
+def test_build_notion_blocks_image_with_caption():
+    # ARCHITETTURA: Verifica che blocchi immagine con alt text popolino correttamente il campo caption di Notion
+    md = "![Architecture Diagram](https://cdn.example.com/notion/universita/ea/arch.png)"
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "image"
+    assert blocks[0]["image"]["type"] == "external"
+    assert blocks[0]["image"]["external"]["url"] == "https://cdn.example.com/notion/universita/ea/arch.png"
+    assert "caption" in blocks[0]["image"]
+    assert blocks[0]["image"]["caption"][0]["text"]["content"] == "Architecture Diagram"
+
+
+def test_build_notion_blocks_markdown_link_in_rich_text():
+    # ARCHITETTURA: Verifica che link Markdown [testo](url) vengano serializzati con il campo link nativo
+    md = "Consulenza e documentazione su [Notion Docs](https://developers.notion.com) ufficiale."
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "paragraph"
+    rich_text = blocks[0]["paragraph"]["rich_text"]
+    link_parts = [p for p in rich_text if p.get("text", {}).get("link") is not None]
+    assert len(link_parts) == 1
+    assert link_parts[0]["text"]["content"] == "Notion Docs"
+    assert link_parts[0]["text"]["link"]["url"] == "https://developers.notion.com"
+
+
+def test_build_notion_blocks_suppress_boilerplate_figure_caption():
+    # ARCHITETTURA: Verifica che didascalie boilerplate ('Figura slide N', 'Slide N') vengano omesse
+    md = "![Figura slide 8](https://cdn.example.com/notion/universita/ea/slide8.png)"
+    blocks = build_notion_blocks(md)
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "image"
+    assert "caption" not in blocks[0]["image"]
+
+    # Immagine senza alt text
+    md_empty = "![](https://cdn.example.com/notion/universita/ea/clean.png)"
+    blocks_empty = build_notion_blocks(md_empty)
+    assert len(blocks_empty) == 1
+    assert "caption" not in blocks_empty[0]["image"]
+
 
 
 
