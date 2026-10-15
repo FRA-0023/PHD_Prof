@@ -20,6 +20,23 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
+### 2026-10-15 (Unit Root Testing Complete Audit & Live Empirical Enrichment)
+- **Diagnosi Root Cause della Pagina 'Unit Root Testing' (3fab63e8-59c8-8140-9c6d-f7514f7ce955)**:
+  - *Origine Temporale*: La pagina segnalata dall'utente era stata generata alle 08:43 AM, ovvero prima dello sviluppo e del deploy del Windowed Slide Chunker.
+  - *Meccanismo di Troncamento*: Il file sorgente (2 Unit Root Testing.pdf, 131 slide, 60.792 caratteri) era stato inviato a Gemini in una singola chiamata monolitica. L'output aveva saturato il ceiling di 8.192 token alla slide 111, tagliando interamente le slide 112–131 (casi empirici su CPI belga e PIL reale austriaco con rotture strutturali nel drift).
+  - *Validazione della Nuova Architettura Chunker*: Con il nuovo *Character-First Chunker* attivo (soglia 25.000 caratteri), lo stesso identico PDF viene ripartito automaticamente in **3 blocchi bilanciati** (~20.000 caratteri ciascuno), allocando  \times 8.192 = 24.576$ token di output complessivi (più del triplo del budget) ed eliminando strutturalmente ogni omissione per i test futuri.
+- **Live Enrichment Accademico & Bonifica Blocchi Notion**:
+  - *Asset Visivi su Cloudflare R2*: Estratte ad alta definizione (300 DPI) tramite PyMuPDF e caricate su R2 le 12 figure e tabelle di regressione empiriche mancanti (slide 114–130).
+  - *Bonifica Strutturale*: Archiviati (eliminati) tramite DELETE API Notion i 36 blocchi orfani e duplicati a fondo pagina (da indice 232 a 267).
+  - *Iniezione 93 Nuovi Blocchi Accademici*:
+    1. **Belgian Price Level Dynamics: Inflation Drift Collapse vs Spurious Stationarity** (Slide 113–120): Conflitto tra procedura univariata (drop trend) e multivariata (keep trend), fallacia della stazionarietà attorno alla media nel modello con drift ($\tau_\mu = -3.88$), artefatto del trend quadratico concavo ( = -2.95$), e risoluzione definitiva con rottura strutturale nel drift al 1985:Q1 ( = -2.08, \tau = -1.27$, random walk con breaking drift).
+    2. **Austrian Macroeconomic Output: Growth Deceleration vs Spurious Mean Reversion** (Slide 121–130): Stazionarietà della crescita $\Delta \ln Y_t \sim I(0)$ ($\tau_\mu = -4.95$), fallacia dell'output stazionario a media costante ($\tau_\mu = -3.55$), rottura strutturale nella crescita trimestrale al 1975:Q1 (dall'1.1% allo 0.5%,  = -3.38$), e risoluzione con breaking drift ($\tau = -1.54$, random walk con breaking drift).
+    3. **Protocollo Metodologico & Decision Engine**: Flowchart di diagnosi contro l'applicazione meccanica dei test di radice unitaria.
+    4. **Bibliografia Accademica Rigorosa**: 7 paper canonici (Dickey-Fuller 1979/1981, Dickey-Pantula 1987, KPSS 1992, Perron 1989, Said-Dickey 1984, Zivot-Andrews 1992).
+    5. **Artefatti Didattici**: Diagrammi Mermaid, 5 Active Recall Drills di livello avanzato e Model Boundary Conditions Table.
+  - *Verifica Live*: Pagina Notion portata a 325 blocchi, totale coerenza concettuale e zero metadati tecnici o riferimenti numerici alle slide nei titoli.
+  - *Sincronizzazione Staging*: Aggiornato con codifica UTF-8 il file locale staging/83a7b4017cfc38140920d829b29610228ac79aff81e663841c4711576e5eb162.md.
+
 ### 2026-10-15 (Notion Table <br> HTML Tag Normalization & Output Budget Diagnosis)
 - **Normalizzazione Deterministica HTML <br> nei Blocchi Notion**:
   - *Diagnosi Root Cause*: Le tabelle Markdown GFM usano convenzionalmente tag HTML <br>/<br/> per formattare punti elenco o a capo dentro le singole celle (dove i newline fisici \n romperebbero la riga GFM). Notion API non renderizza tag HTML nativi e li visualizzava come testo grezzo <br>- ...<br>-.
