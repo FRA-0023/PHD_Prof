@@ -414,7 +414,7 @@ R2_PUBLIC_DOMAIN=https://pub-xxxxxx.r2.dev
 # Optional Configurations
 GEMINI_TIMEOUT_SECONDS=300
 GEMINI_MODEL=gemini-2.5-flash
-SPLIT_THRESHOLD_CHARS=30000
+SPLIT_THRESHOLD_CHARS=25000
 SPLIT_THRESHOLD_SLIDES=35
 CLI_LANGUAGE=EN
 ```
@@ -433,8 +433,8 @@ CLI_LANGUAGE=EN
 | `R2_PUBLIC_DOMAIN` | No | R2 Public URL (e.g. `https://pub-xxxx.r2.dev`) | *None* |
 | `GEMINI_MODEL` | No | Gemini model identifier (supports automatic fallbacks) | `gemini-2.5-flash` |
 | `GEMINI_TIMEOUT_SECONDS` | No | Timeout in seconds for large file uploads and inference | `300` |
-| `SPLIT_THRESHOLD_CHARS` | No | Character threshold for adaptive two-stage decomposition (~7,500 words) | `30000` |
-| `SPLIT_THRESHOLD_SLIDES` | No | Slide count threshold for windowed presentation chunking (8k token budget per chunk) | `35` |
+| `SPLIT_THRESHOLD_CHARS` | No | Character threshold for two-stage papers & character-balanced slide partitioning (~6,000 words) | `25000` |
+| `SPLIT_THRESHOLD_SLIDES` | No | Optional fallback slide count threshold for image-only presentations lacking extractable text | `35` |
 | `CLI_LANGUAGE` | No | CLI interface language (`EN` or `IT`) | `EN` |
 
 ---

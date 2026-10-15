@@ -47,8 +47,8 @@ class ProcessDocumentUseCase:
         visual_extractor: Optional[Any] = None,
         image_host_client: Optional[Any] = None,
         schema_exporter: Optional[IStudySchemaExporter] = None,
-        split_threshold_chars: int = 30000,
-        split_threshold_slides: int = 35,
+        split_threshold_chars: int = 25000,
+        split_threshold_slides: Optional[int] = 35,
     ):
         self.readers = readers
         self.llm_client = llm_client
@@ -276,6 +276,103 @@ class ProcessDocumentUseCase:
                 pass
         return 0
 
+    def _get_slide_character_counts(self, document: Document) -> List[int]:
+        """
+        # PERFORMANCE: Estrazione rapida (<20ms) del volume testuale per singola slide.
+        # STATISTICA: Consente la misurazione della densità informativa non uniforme lungo il mazzo,
+        # separando slide sparse (titoli/separatori, <100 car) da slide dense (codice/formule, >1500 car).
+        """
+        if not document.path.exists():
+            return []
+
+        ext = document.path.suffix.lower()
+        if ext == ".pdf":
+            try:
+                import fitz
+                with fitz.open(document.path) as doc_pdf:
+                    return [len(page.get_text().strip()) for page in doc_pdf]
+            except Exception:
+                pass
+        elif ext == ".pptx":
+            cached_pdf = Path("staging") / f"{document.file_hash}_slides.pdf"
+            if cached_pdf.exists():
+                try:
+                    import fitz
+                    with fitz.open(cached_pdf) as doc_pdf:
+                        return [len(page.get_text().strip()) for page in doc_pdf]
+                except Exception:
+                    pass
+            try:
+                from pptx import Presentation
+                prs = Presentation(document.path)
+                counts: List[int] = []
+                for slide in prs.slides:
+                    text_parts = [shape.text for shape in slide.shapes if shape.has_text_frame]
+                    counts.append(len(" ".join(text_parts).strip()))
+                return counts
+            except Exception:
+                pass
+        return []
+
+    def _partition_slides_by_character_budget(
+        self,
+        slide_char_counts: List[int],
+        max_chunk_chars: int,
+    ) -> List[Tuple[int, int]]:
+        """
+        # ARCHITETTURA: Partizionamento bilanciato delle slide basato sulla densità informativa (caratteri).
+        # STATISTICA: Minimizza la varianza del carico informativo tra le tranche di slide,
+        # raggruppando slide contigue fino al raggiungimento di un volume bilanciato (~target_per_chunk).
+        # Previene la saturazione dell'output token envelope (8.192 token) allocando budget omogenei.
+        """
+        import math
+        total_slides = len(slide_char_counts)
+        if total_slides <= 1:
+            return [(1, total_slides)]
+
+        total_chars = sum(slide_char_counts)
+        # Fallback per mazzi puramente grafici o scansionati privi di testo vettoriale
+        if total_chars == 0:
+            half = math.ceil(total_slides / 2)
+            return [(1, half), (half + 1, total_slides)]
+
+        num_chunks = max(2, math.ceil(total_chars / max_chunk_chars))
+        num_chunks = min(num_chunks, total_slides)
+        target_per_chunk = total_chars / num_chunks
+
+        chunk_ranges: List[Tuple[int, int]] = []
+        current_start = 1
+        current_chars = 0
+
+        for slide_idx, count in enumerate(slide_char_counts):
+            slide_num = slide_idx + 1
+            current_chars += count
+            remaining_slides = total_slides - slide_num
+            chunks_left = num_chunks - len(chunk_ranges)
+
+            must_cut = (remaining_slides == chunks_left - 1)
+            reached_target = (current_chars >= target_per_chunk and remaining_slides >= (chunks_left - 1))
+
+            if chunks_left > 1 and (reached_target or must_cut):
+                if must_cut:
+                    chunk_ranges.append((current_start, slide_num))
+                    current_start = slide_num + 1
+                    current_chars = 0
+                else:
+                    prev_diff = abs((current_chars - count) - target_per_chunk)
+                    curr_diff = abs(current_chars - target_per_chunk)
+                    if prev_diff < curr_diff and (slide_num - 1) >= current_start and (total_slides - (slide_num - 1)) >= chunks_left:
+                        chunk_ranges.append((current_start, slide_num - 1))
+                        current_start = slide_num
+                        current_chars = count
+                    else:
+                        chunk_ranges.append((current_start, slide_num))
+                        current_start = slide_num + 1
+                        current_chars = 0
+
+        chunk_ranges.append((current_start, total_slides))
+        return chunk_ranges
+
     @staticmethod
     def _slice_pdf_pages(input_path: Path, pages: List[int], output_path: Path) -> None:
         """
@@ -296,29 +393,29 @@ class ProcessDocumentUseCase:
         document: Document,
         target: NotionTarget,
         prompt: str,
-        total_slides: int,
+        slide_char_counts: List[int],
         generation_mode: GenerationMode,
     ) -> str:
         """
-        # ARCHITETTURA: Windowed Multi-Call Slide Chunker.
+        # ARCHITETTURA: Windowed Multi-Call Slide Chunker Character-Driven.
         # TRADE-OFF: Risolve definitivamente la saturazione dell'output token budget (8.192 token).
-        # Suddivide presentazioni massive (> 35 slide) in K segmenti bilanciati, allocando
+        # Suddivide presentazioni massive in K segmenti bilanciati sul volume reale di caratteri, allocando
         # un intero budget di output dedicato per ogni tranche di slide per garantire
         # massima profondità analitica, formule, codici e zero omissioni o salti di slide.
         """
-        import math
         reader = self.readers.get(document.doc_type) or self.readers[DocumentType.SLIDES]
+        total_slides = len(slide_char_counts) if slide_char_counts else self._count_slides(document)
+        total_chars = sum(slide_char_counts) if slide_char_counts else self._calculate_payload_density(document, None)
 
-        num_chunks = math.ceil(total_slides / self.split_threshold_slides)
-        step = math.ceil(total_slides / num_chunks)
-        chunk_ranges = []
-        for i in range(num_chunks):
-            start_p = i * step + 1
-            end_p = min((i + 1) * step, total_slides)
-            if start_p <= total_slides:
-                chunk_ranges.append((start_p, end_p))
+        chunk_ranges = self._partition_slides_by_character_budget(
+            slide_char_counts=slide_char_counts,
+            max_chunk_chars=self.split_threshold_chars,
+        )
 
-        print(f"    [Adaptive Chunker] Rilevato mazzo esteso ({total_slides} slide). Partizionamento in {len(chunk_ranges)} tranche bilanciate (~{step} slide/chunk)...")
+        print(
+            f"    [Adaptive Character Chunker] Rilevati {total_chars} caratteri distribuiti su {total_slides} slide. "
+            f"Partizionamento pesato sui caratteri in {len(chunk_ranges)} tranche bilanciate..."
+        )
 
         # Determina il PDF sorgente per il slicing vettoriale
         source_pdf = document.path
@@ -332,7 +429,8 @@ class ProcessDocumentUseCase:
         chunks_dir.mkdir(parents=True, exist_ok=True)
 
         for chunk_idx, (start_p, end_p) in enumerate(chunk_ranges):
-            print(f"    [LLM Chunk {chunk_idx + 1}/{len(chunk_ranges)}] Generazione note per slide {start_p}-{end_p}...")
+            chunk_chars = sum(slide_char_counts[start_p - 1:end_p]) if slide_char_counts else 0
+            print(f"    [LLM Chunk {chunk_idx + 1}/{len(chunk_ranges)}] Generazione note per slide {start_p}-{end_p} ({chunk_chars} caratteri)...")
             chunk_pdf = chunks_dir / f"{document.file_hash}_chunk_{chunk_idx + 1}_{start_p}_{end_p}.pdf"
 
             if not chunk_pdf.exists() or chunk_pdf.stat().st_size == 0:
@@ -420,16 +518,22 @@ class ProcessDocumentUseCase:
                 self.staging_storage.save(file_hash, markdown_text)
         else:
             reader = self.readers.get(document.doc_type) or self.readers[DocumentType.SLIDES]
-            total_slides = self._count_slides(document)
-            pre_density = self._calculate_payload_density(document, None)
+            slide_char_counts = self._get_slide_character_counts(document)
+            total_chars = sum(slide_char_counts) if slide_char_counts else self._calculate_payload_density(document, None)
+            total_slides = len(slide_char_counts) if slide_char_counts else self._count_slides(document)
 
-            # ARCHITETTURA: Windowed Slide Chunker per mazzi di slide densi ed estesi.
-            # Se il numero di slide supera split_threshold_slides (default: 35) e c'è sostanza reale (>15k caratteri),
-            # suddividiamo la presentazione in tranche bilanciate per prevenire la saturazione del limite di output (8.192 token).
+            # ARCHITETTURA: Windowed Slide Chunker Character-Driven.
+            # STATISTICA: Il controllo opera prioritariamente sul volume totale di caratteri effettivi (substance-driven).
+            # Se la presentazione supera la soglia di caratteri (split_threshold_chars, default: 25.000),
+            # si attiva il partizionamento delle slide bilanciato sul volume dei caratteri per prevenire
+            # la saturazione dell'output token budget LLM (8.192 token).
             should_chunk_slides = (
                 document.doc_type == DocumentType.SLIDES
-                and total_slides > self.split_threshold_slides
-                and pre_density >= 15000
+                and total_slides > 1
+                and (
+                    total_chars > self.split_threshold_chars
+                    or (total_chars == 0 and self.split_threshold_slides and total_slides > self.split_threshold_slides)
+                )
             )
 
             if should_chunk_slides:
@@ -437,7 +541,7 @@ class ProcessDocumentUseCase:
                     document=document,
                     target=target,
                     prompt=prompt,
-                    total_slides=total_slides,
+                    slide_char_counts=slide_char_counts,
                     generation_mode=generation_mode,
                 )
                 print(f"    [LLM] Assemblati {len(markdown_text)} caratteri totali dai chunk. Salvataggio in staging...")

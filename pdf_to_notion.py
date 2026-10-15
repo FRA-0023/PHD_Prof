@@ -144,12 +144,12 @@ def main() -> None:
     from src.adapters.outbound.study_schema_exporter_adapter import StudySchemaExporterAdapter
     schema_exporter = StudySchemaExporterAdapter()
 
-    # Adaptive Dispatcher threshold (default: 30.000 chars, calibrated to prevent 8k output token saturation)
+    # Adaptive Dispatcher and Slide Chunker threshold (default: 25.000 chars, calibrated to prevent 8k output token saturation)
     raw_split_threshold = os.getenv("SPLIT_THRESHOLD_CHARS")
     try:
-        split_threshold = int(raw_split_threshold) if raw_split_threshold else 30000
+        split_threshold = int(raw_split_threshold) if raw_split_threshold else 25000
     except ValueError:
-        split_threshold = 30000
+        split_threshold = 25000
 
     raw_split_threshold_slides = os.getenv("SPLIT_THRESHOLD_SLIDES")
     try:

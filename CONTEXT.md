@@ -11,8 +11,8 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Ingestione Multimodale PPTX**: Dual-Payload (rendering vettoriale PDF via PowerPoint COM + note a piè di pagina via python-pptx).
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
-- **Windowed Slide Chunker (Adaptive Output Budgeting)**: Decomposizione deterministica delle presentazioni dense (>35 slide, SPLIT_THRESHOLD_SLIDES=35) in chunk bilanciati di slide per garantire 8.192 token di output dedicati a ciascuna porzione prima della ricomposizione e dell'estrazione degli schemi concettuali.
-- **Test Suite**: 148 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Windowed Slide Chunker (Character-Driven & Volume-Balanced)**: Controllo preventivo prioritario sul volume di caratteri effettivi (`SPLIT_THRESHOLD_CHARS=25000`) invece del mero conteggio delle slide. Le slide vengono raggruppate in tranche bilanciate pesate sulla massa di caratteri per slide (`_partition_slides_by_character_budget`), allocando un budget di output dedicato di 8.192 token per ciascun blocco.
+- **Test Suite**: 150 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -46,6 +46,14 @@ ich_text per celle e paragrafi) e convertendo &nbsp; in spazio ordinario.
     2. **Slide 54**: Modello esecutivo Non-Distributed vs Distributed Systems, comunicazione/network shuffle, determinanti di costo (cardinalità chiavi, data skew, località di partizionamento su nodo/macchina), rischi OOM (JVM heap exhaustion e disk spill thrashing), e regola aurea: *"TIP: Filter before joining to avoid using unnecessary computing power"*.
     3. **Slide 58 & 60**: Modalità di registrazione UDF (SQL Catalog `spark.udf.register()` vs wrapper DataFrame `udf()`) e matrice di compatibilità runtime Pandas 2.0+ (richiede Spark $\ge 3.4$) / Pandas 3.0+ (`FutureWarning`).
   - *Live Injection & Staging Sync*: Generati 35 blocchi Notion nativi addizionali (25 per Joins Slide 53-54, 10 per UDF Slide 58-60) e iniettati via PATCH API con coordinate esatte sulla pagina Notion remota (portando i blocchi totali da 214 a 249). Sincronizzato parallelamente il file di staging markdown locale `staging/743fd4a784268b4ea4895760d595985fe21ae0e44e3859b5453d0fffb86bea33.md`.
+- **Refactoring Character-First per Slide Chunker**:
+  - *Razionale Sistemico*: Il numero grezzo di slide è un proxy ingannevole (80 slide sparse con poche parole = 7.000 caratteri, mentre 25 slide dense di codice/formule = 35.000 caratteri). L'attivazione e il partizionamento devono essere determinati dal volume di caratteri reali per prevenire saturazioni dell'envelope di output senza generare chiamate API superflue per mazzi visivi leggeri.
+  - *Implementazione Use Case (`src/core/usecases/process_document.py`)*:
+    1. `_get_slide_character_counts(document)`: Estrazione vettoriale rapida (<20ms) del conteggio caratteri per singola slide tramite PyMuPDF.
+    2. `_partition_slides_by_character_budget(counts, budget)`: Algoritmo di raggruppamento delle slide in tranche bilanciate che minimizza la varianza del carico informativo per chunk.
+    3. Trigger `should_chunk_slides`: Attivato prioritariamente da `total_chars > split_threshold_chars` (default: 25.000 caratteri), con fallback sul conteggio slide solo per mazzi puramente grafici o scansionati privi di testo vettoriale.
+  - *Allineamento Configurazione*: Aggiornati `pdf_to_notion.py` (default: 25.000 caratteri), `.env.example` e `README.md`.
+  - *Suite di Test Estesa*: Aggiunti 2 test unitari dedicati in `tests/test_process_document_adaptive.py` (`test_partition_slides_by_character_budget_skewed` e `test_slide_chunking_triggered_by_characters_not_slide_count`). Suite totale: 150/150 passati (100% green).
 
 ### 2026-10-14 (Resilient Visual Extraction, Inline Figure Lifting & Notion Block Captioning)
 - **Diagnosi & Root Causes Isolate**:

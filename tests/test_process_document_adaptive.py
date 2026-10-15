@@ -161,8 +161,8 @@ def test_process_document_adaptive_two_stage_dense():
 
 def test_process_document_windowed_slide_chunking(monkeypatch):
     """
-    # ARCHITETTURA: Mazzo di slide esteso (es. 67 slide > soglia 35 e sostanza >= 15k).
-    # Verifica il partizionamento in 2 tranche bilanciate (1-34 e 35-67),
+    # ARCHITETTURA: Mazzo di slide esteso caratterizzato da alta densità (> split_threshold_chars).
+    # Verifica che il trigger character-driven attivi il partizionamento bilanciato in 2 tranche,
     # ciascuna con chiamata LLM dedicata + 1 chiamata unificata di Stage 2 per gli artefatti (totale 3 chiamate).
     """
     state_repo = MagicMock(spec=IStateRepository)
@@ -190,13 +190,14 @@ def test_process_document_windowed_slide_chunking(monkeypatch):
         notion_client=notion_client,
         state_repo=state_repo,
         staging_storage=staging_storage,
-        split_threshold_slides=35,
-        split_threshold_chars=40000,
+        split_threshold_chars=20000,
     )
 
-    # Mock _count_slides, _calculate_payload_density, and _slice_pdf_pages to avoid disk I/O in unit test
+    # Mock _get_slide_character_counts, _count_slides, and _slice_pdf_pages to avoid disk I/O in unit test
+    # 67 slide con densità realistica (totale: 27.000 caratteri)
+    counts = [400] * 67
+    monkeypatch.setattr(usecase, "_get_slide_character_counts", lambda doc: counts)
     monkeypatch.setattr(usecase, "_count_slides", lambda doc: 67)
-    monkeypatch.setattr(usecase, "_calculate_payload_density", lambda doc, payload: 25000)
     monkeypatch.setattr(usecase, "_slice_pdf_pages", lambda in_p, pages, out_p: None)
 
     doc = Document(path=Path("deck_67_slides.pdf"), file_hash="hash_67_slides", doc_type=DocumentType.SLIDES)
@@ -215,3 +216,90 @@ def test_process_document_windowed_slide_chunking(monkeypatch):
     assert "Part 1 Notes" in saved_markdown
     assert "Part 2 Notes" in saved_markdown
     assert "Conceptual Architecture" in saved_markdown
+
+
+def test_partition_slides_by_character_budget_skewed():
+    """
+    # STATISTICA: Verifica che il partizionamento bilanci la massa di caratteri
+    # e non il mero conteggio delle slide quando la distribuzione è altamente asimmetrica.
+    """
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(),
+        notion_client=MagicMock(),
+        state_repo=MagicMock(),
+        staging_storage=MagicMock(),
+        split_threshold_chars=20000,
+    )
+
+    # 20 slide sparse (100 car ciascuna = 2.000 car) + 20 slide dense (1.500 car ciascuna = 30.000 car)
+    # Totale: 32.000 caratteri distribuiti su 40 slide
+    skewed_counts = [100] * 20 + [1500] * 20
+    ranges = usecase._partition_slides_by_character_budget(skewed_counts, max_chunk_chars=20000)
+
+    # Con target ~16.000 car/chunk, deve tagliare verso la slide 29-30, non rigidamente a metà (slide 20)
+    assert len(ranges) == 2
+    assert ranges[0][0] == 1
+    assert ranges[0][1] >= 28  # Incorpora tutte le slide sparse più le prime dense
+    assert ranges[1][0] == ranges[0][1] + 1
+    assert ranges[1][1] == 40
+
+    chunk1_chars = sum(skewed_counts[ranges[0][0] - 1:ranges[0][1]])
+    chunk2_chars = sum(skewed_counts[ranges[1][0] - 1:ranges[1][1]])
+    # Entrambi i chunk rimangono ampiamente al di sotto dei 20.000 caratteri di soglia
+    assert chunk1_chars <= 20000
+    assert chunk2_chars <= 20000
+
+
+def test_slide_chunking_triggered_by_characters_not_slide_count(monkeypatch):
+    """
+    # ARCHITETTURA: Dimostrazione del principio Character-First:
+    # Caso A: 20 slide ma dense (30.000 caratteri > threshold 25.000) -> ATTIVA chunking.
+    # Caso B: 60 slide ma sparse (8.000 caratteri <= threshold 25.000) -> NON attiva chunking (single call).
+    """
+    state_repo = MagicMock(spec=IStateRepository)
+    state_repo.get_entry.return_value = None
+    staging_storage = MagicMock(spec=IStagingStorage)
+    staging_storage.exists.return_value = False
+    reader = MagicMock(spec=IDocumentReader)
+    reader.read.return_value = "payload"
+    llm_client = MagicMock(spec=ILlmClient)
+    llm_client.generate_notes.return_value = "# Notes\nContent"
+    notion_client = MagicMock(spec=INotionClient)
+    notion_client.create_page.return_value = "p1"
+
+    usecase = ProcessDocumentUseCase(
+        readers={DocumentType.SLIDES: reader},
+        llm_client=llm_client,
+        notion_client=notion_client,
+        state_repo=state_repo,
+        staging_storage=staging_storage,
+        split_threshold_chars=25000,
+    )
+    monkeypatch.setattr(usecase, "_slice_pdf_pages", lambda in_p, pages, out_p: None)
+
+    # Caso A: 20 slide dense (1.500 car/slide = 30.000 caratteri)
+    dense_20_counts = [1500] * 20
+    monkeypatch.setattr(usecase, "_get_slide_character_counts", lambda doc: dense_20_counts)
+    monkeypatch.setattr(usecase, "_count_slides", lambda doc: 20)
+
+    doc_dense = Document(path=Path("dense_20.pdf"), file_hash="hash_dense", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Course", database_title="Notes")
+
+    usecase.execute(doc_dense, target, "prompt")
+    # 30.000 car > 25.000 car -> Chunker attivato! 2 chunk notes + 1 stage 2 artifacts = 3 calls
+    assert llm_client.generate_notes.call_count == 3
+
+    # Reset mock
+    llm_client.generate_notes.reset_mock()
+
+    # Caso B: 60 slide sparse (100 car/slide = 6.000 caratteri)
+    sparse_60_counts = [100] * 60
+    monkeypatch.setattr(usecase, "_get_slide_character_counts", lambda doc: sparse_60_counts)
+    monkeypatch.setattr(usecase, "_count_slides", lambda doc: 60)
+
+    doc_sparse = Document(path=Path("sparse_60.pdf"), file_hash="hash_sparse_60", doc_type=DocumentType.SLIDES)
+    usecase.execute(doc_sparse, target, "prompt")
+    # 6.000 car <= 25.000 car -> Chunker NON attivato! Single call = 1 sola chiamata
+    assert llm_client.generate_notes.call_count == 1
+
