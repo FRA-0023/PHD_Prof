@@ -40,6 +40,12 @@ ich_text per celle e paragrafi) e convertendo &nbsp; in spazio ordinario.
   - `pdf_to_notion.py`: Parametro `split_threshold_slides` (default: 35) configurabile da variabile d'ambiente `SPLIT_THRESHOLD_SLIDES`.
   - `.env.example` & `README.md`: Documentate le variabili `SPLIT_THRESHOLD_CHARS` e `SPLIT_THRESHOLD_SLIDES`.
   - `tests/test_process_document_adaptive.py`: Aggiunto test unitario `test_process_document_windowed_slide_chunking` a copertura completa della suddivisione e fusione degli output. Suite totale: 148/148 passati.
+- **Audit Sistematico & Risoluzione Sezioni Mancanti (Slide 53, 54, 58, 60)**:
+  - *Diagnosi Integrale Presentazione (67 Slide)*: Eseguito audit microscopico slide-by-slide del file `BigData_Session_2_2026_2027.pdf` confrontando il corpus di ciascuna slide con la pagina Notion remota (`3fab63e8-59c8-8157-89b9-dcc46a0daaf5`). Rilevate omissioni critiche causate dal budget token nella seconda metà del documento:
+    1. **Slide 53**: Matrice di codice eseguibile per Inner, Left, Right e Full Outer Join su tabelle `t_a` e `t_b` con output ASCII espliciti.
+    2. **Slide 54**: Modello esecutivo Non-Distributed vs Distributed Systems, comunicazione/network shuffle, determinanti di costo (cardinalità chiavi, data skew, località di partizionamento su nodo/macchina), rischi OOM (JVM heap exhaustion e disk spill thrashing), e regola aurea: *"TIP: Filter before joining to avoid using unnecessary computing power"*.
+    3. **Slide 58 & 60**: Modalità di registrazione UDF (SQL Catalog `spark.udf.register()` vs wrapper DataFrame `udf()`) e matrice di compatibilità runtime Pandas 2.0+ (richiede Spark $\ge 3.4$) / Pandas 3.0+ (`FutureWarning`).
+  - *Live Injection & Staging Sync*: Generati 35 blocchi Notion nativi addizionali (25 per Joins Slide 53-54, 10 per UDF Slide 58-60) e iniettati via PATCH API con coordinate esatte sulla pagina Notion remota (portando i blocchi totali da 214 a 249). Sincronizzato parallelamente il file di staging markdown locale `staging/743fd4a784268b4ea4895760d595985fe21ae0e44e3859b5453d0fffb86bea33.md`.
 
 ### 2026-10-14 (Resilient Visual Extraction, Inline Figure Lifting & Notion Block Captioning)
 - **Diagnosi & Root Causes Isolate**:
