@@ -40,6 +40,13 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
   - Script `scripts/harmonize_unit_root_notion.py` eseguito con successo: 52 blocchi modificati in-place, 45+ espressioni LaTeX e tutte le celle della tabella normalizzate a singolo backslash.
   - File di staging locale `staging/83a7b4017cfc38140920d829b29610228ac79aff81e663841c4711576e5eb162.md` sincronizzato a 57.321 caratteri.
   - Suite di test: **151/151 unit test passati (100% green)**.
+- **Codifica Permanente per le Prossime Generazioni (Prompt Hardening & Chunker Engine)**:
+  - *Hardening Prompt Template (`src/core/domain/prompt_templates.py`)*:
+    - Integrata la regola tassativa di **Foundational Anchoring & Pedagogical Calibration**: il target reader possiede solide basi di statistica/computer science classica, ma approccia la materia per la prima volta. Per ogni formalismo avanzato, il modello DEVE esplicitare quale assunzione di base collassa e perché prima di introdurre lo strumento correttivo, fornendo l'intuizione fisica/statistica dei parametri (es. Hurwicz bias, decomposizione Said-Dickey, dominanza deterministica) e spiegando perché la scelta errata è fatale (spurious regression vs over-differencing).
+    - Integrata la regola di **End-to-End Methodological Continuity**: esplicitare il dilemma circolare o trade-off strutturale che motiva algoritmi diagnostici sequenziali e collegare direttamente paradossi o edge case empirici (rotture nel drift) ai failure modes degli stimatori.
+    - Introdotti i vincoli negativi vincolanti di **KaTeX Single-Backslash Formatting** (divieto assoluto di doppie barre rovesciate dentro le formule KaTeX) e **Backtick Hygiene** (chiusura e bilanciamento rigoroso di ogni backtick per evitare wrapping accidentale in monospace).
+  - *Rinforzo del Chunker Multi-Call (`src/core/usecases/process_document.py`)*:
+    - Estesa la `continuity_directive` iniettata nei prompt dei chunk $k > 1$, ordinando a Gemini di mantenere l'ancoraggio causale ai meccanismi stabiliti nei chunk precedenti, prevenendo qualsiasi discontinuità esplicativa tra blocchi di slide.
 - **Diagnosi della Frattura Concettuale tra Chunk Multi-Call**:
   - *Sintomo*: Note generate su presentazioni massive (3 chiamate LLM) con ottima qualità locale ma percepite come frammentate e scollegate.
   - *Root Cause*: Isolamento a finestra cieca (stateless chunking) in cui le chiamate 2 e 3 non avevano visibilità sulle definizioni/notazioni introdotte nella chiamata 1, portando a notational drift, rispiegazioni ridondanti o salti bruschi di registro.

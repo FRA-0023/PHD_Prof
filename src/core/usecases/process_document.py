@@ -494,6 +494,7 @@ class ProcessDocumentUseCase:
                         f"- ASSUME all notation, variables, and properties listed above are already proven and active. Do NOT re-define them.\n"
                         f"- Advance concepts strictly via DIRECT TECHNICAL DELTAS (stating in 1 direct sentence the exact formal limit or failure of the preceding model this new model resolves). Zero rhetorical or conversational transition padding.\n"
                         f"- Maintain identical analytical, mathematical, and computational caliber (formal hypotheses, structural parameters, test statistics).\n"
+                        f"- Preserve full pedagogical depth: anchor newly introduced diagnostics or empirical tests to the statistical mechanisms established in prior chunks, explaining the exact econometric reason for any parameter transformations, circular dilemmas, or distributional shifts.\n"
                     )
 
                 chunk_prompt = (
