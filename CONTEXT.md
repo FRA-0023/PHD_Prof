@@ -20,7 +20,26 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
-### 2026-10-15 (Zero-Slop Conceptual & Notational Continuity Across Chunks)
+### 2026-10-16 (Unit Root Testing In-Place Pedagogical Harmonization & KaTeX Normalization)
+- **Diagnosi della Disconnessione e Frattura Concettuale**:
+  - *Problema Utente*: La nota Notion *Unit Root Testing* presentava una qualità analitica elevata a livello locale, ma mancava di un filo logico unitario ed era ostica per uno studente con basi solide in statistica classica ($E[X], \text{Var}(X)$, OLS, $t$-test, $F$-test, LLN/CLT) che affronta le serie storiche per la prima volta.
+  - *Root Cause Formattazione*: Un backtick non chiuso nel blocco 189 mandava in crash il parser LaTeX Notion (trasformando l'intero blocco in codice grezzo con `code: true`); formule e tabelle da blocco 235 a 324 presentavano doppi backslash (`\\`) che KaTeX interpretava come comandi di a capo invece che simboli matematici.
+- **Armonizzazione Chirurgica In-Place (52 Blocchi Chiave Patched)**:
+  - *Sezione 1 (Stationarity vs Non-Stationarity, blocchi 1, 5, 7, 11, 17, 20, 24, 44)*: Ancorata la debolezza inferenziale al fatto che nelle serie storiche si osserva una **singola traiettoria temporale** $\{y_t\}$; spiegato il collasso di LLN e CLT e definita la stazionarietà in covarianza come condizione di regolarità minima. Distinzione netta tra non-stazionarietà deterministica (shock transitori, mean-reverting) e stocastica (shock permanenti a memoria infinita via radice unitaria).
+  - *Sezione 2 (Transformations to Stationary Series, blocchi 52, 55, 58, 60, 62)*: Esplicitata l'inefficienza che motiva il test: detrending lineare su serie stocastica lascia la non-stazionarietà nei residui (spurious regression), mentre differenziare una serie trend-stazionaria induce una radice unitaria non-invertibile nel MA (over-differencing).
+  - *Sezione 3 (Dickey-Fuller Test & ADF, blocchi 67, 69, 74, 79, 87, 88, 90, 93, 98, 99, 101, 110, 115, 121, 132, 133, 134, 137, 139, 140, 149, 150, 151)*:
+    - *Spiegazione della Distribuzione DF e Hurwicz Bias*: Chiarito perché sotto $H_0: \gamma=0$ OLS sottostima sistematicamente $\alpha_1$ ($\hat{\gamma} < 0$, regressione che insegue la media campionaria della passeggiata aleatoria), spostando $\tau$ a sinistra (valori critici più negativi, $-1.95$). Spiegato perché aggiungere intercetta e trend sposta la soglia ancora più a sinistra ($-2.88 \to -3.43$).
+    - *Spiegazione Statistiche $\phi_1, \phi_2, \phi_3$*: Identificate come esatti test $F$ congiunti su $q$ restrizioni lineari, ma valutati su tavole simulate DF poiché il denominatore contiene regressori non-stazionari.
+    - *Decomposizione di Said-Dickey*: Spiegata la separazione ortogonale: la memoria di lungo periodo è isolata nel singolo coefficiente scalare $\gamma = \sum \alpha_j - 1$, mentre la correlazione seriale a breve termine è assorbita dai lag differenziati $\Delta y_{t-i} \sim I(0)$ su cui valgono $t$-test standard.
+    - *Biforcazione Gaussiana*: Chiarito il *Deterministic Dominance Effect* (in random walk con drift, la crescita deterministica cresce ad ordine $O(t)$ dominando la componente stocastica $O(t^{1/2})$, per cui $\tau_\mu \xrightarrow{d} \mathcal{N}(0, 1)$), e spiegato perché usiamo comunque le tabelle DF per prudenza econometrica.
+  - *Sezioni 4 & 5 (Model Selection, Enders & Pitfalls, blocchi 157, 159, 171, 174, 175, 176, 187, 189, 204, 206, 209, 213, 216, 221, 224, 233)*:
+    - Risolto il dilemma circolare tramite la procedura sequenziale di Enders.
+    - Fissato il backtick errato nel blocco 189 e rimossi backtick vuoti / caratteri spuri.
+    - Collegati i 3 pitfall strutturali (bassa potenza vs radici vicine $\to$ KPSS; rotture strutturali omese $\to$ Perron; radici multiple $I(2) \to$ Dickey-Pantula) direttamente alla Sezione 6 (casi empirici CPI Belgio e PIL Austria).
+- **Normalizzazione KaTeX & Sincronizzazione**:
+  - Script `scripts/harmonize_unit_root_notion.py` eseguito con successo: 52 blocchi modificati in-place, 45+ espressioni LaTeX e tutte le celle della tabella normalizzate a singolo backslash.
+  - File di staging locale `staging/83a7b4017cfc38140920d829b29610228ac79aff81e663841c4711576e5eb162.md` sincronizzato a 57.321 caratteri.
+  - Suite di test: **151/151 unit test passati (100% green)**.
 - **Diagnosi della Frattura Concettuale tra Chunk Multi-Call**:
   - *Sintomo*: Note generate su presentazioni massive (3 chiamate LLM) con ottima qualità locale ma percepite come frammentate e scollegate.
   - *Root Cause*: Isolamento a finestra cieca (stateless chunking) in cui le chiamate 2 e 3 non avevano visibilità sulle definizioni/notazioni introdotte nella chiamata 1, portando a notational drift, rispiegazioni ridondanti o salti bruschi di registro.
