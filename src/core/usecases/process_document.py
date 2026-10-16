@@ -495,6 +495,7 @@ class ProcessDocumentUseCase:
                         f"- Advance concepts strictly via DIRECT TECHNICAL DELTAS (stating in 1 direct sentence the exact formal limit or failure of the preceding model this new model resolves). Zero rhetorical or conversational transition padding.\n"
                         f"- Maintain identical analytical, mathematical, and computational caliber (formal hypotheses, structural parameters, test statistics).\n"
                         f"- Preserve full pedagogical depth: anchor newly introduced diagnostics or empirical tests to the statistical mechanisms established in prior chunks, explaining the exact econometric reason for any parameter transformations, circular dilemmas, or distributional shifts.\n"
+                        f"- Progressive Narrative Threading (Zero Alienation): Do NOT isolate or detach this chunk from prior material. Weave it seamlessly into the cumulative analytical thread by referencing established outcomes as active, proven premises in a single concise clause, advancing immediately to the new technical delta without duplicating definitions or re-explaining established models.\n"
                     )
 
                 chunk_prompt = (
