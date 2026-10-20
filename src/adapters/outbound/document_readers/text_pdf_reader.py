@@ -23,6 +23,13 @@ class TextPdfReader(IDocumentReader):
         ext = document.path.suffix.lower()
         print(f"    [Local Parser] Extracting text/markdown from '{document.path.name}'...")
 
+        # ARCHITETTURA: Per i file PPTX deleghiamo prioritariamente a extract_pptx_to_markdown
+        # che supporta l'attraversamento ricorsivo di GroupShape, tabelle e speaker notes,
+        # evitando la perdita di testo nei diagrammi raggruppati tipica di MarkItDown base.
+        if ext == ".pptx":
+            from src.adapters.outbound.document_readers.pptx_extractor import extract_pptx_to_markdown
+            return extract_pptx_to_markdown(document.path)
+
         if self._has_markitdown:
             try:
                 result = self._md.convert(doc_path)

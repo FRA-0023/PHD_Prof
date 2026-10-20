@@ -167,24 +167,73 @@ def is_table_separator(line: str) -> bool:
     )
 
 
-def _clean_mermaid_label(inner_text: str) -> str:
+def wrap_mermaid_label(text: str, max_chars_per_line: int = 16) -> str:
+    """
+    Spezza deterministicamente etichette Mermaid lunghe su più righe tramite tag <br/> a confine di parola.
+    # ARCHITETTURA: Nei blocchi Mermaid di Notion, il renderer calcola le bounding box SVG
+    # con font standard, mentre il CSS del client desktop impone 'Segoe UI 14px'.
+    # Su una singola riga continua, parole o stringhe superiori a 16 caratteri oltrepassano la larghezza
+    # del box SVG e subiscono il troncamento visivo (overflow: hidden / clipPath).
+    # Suddividendo le etichette con <br/> in righe da massimo 14-16 caratteri, il testo rimane
+    # perfettamente centrato, la bounding box si espande in altezza e non si verifica alcun troncamento.
+    # TRADE-OFF: L'uso di <br/> è l'unico meccanismo nativo supportato dall'engine Dagre di Mermaid
+    # per forzare il multi-line rendering all'interno dei nodi senza ricorrere a costrutti HTML complessi.
+    """
+    if not text:
+        return text
+    parts = re.split(r'<br\s*/?>', text, flags=re.IGNORECASE)
+    wrapped_lines = []
+    for part in parts:
+        part = part.strip()
+        if not part or len(part) <= max_chars_per_line:
+            if part:
+                wrapped_lines.append(part)
+            continue
+        words = part.split()
+        cur_line = []
+        cur_len = 0
+        for w in words:
+            w_len = len(w)
+            add_len = w_len if not cur_line else w_len + 1
+            if cur_len + add_len <= max_chars_per_line:
+                cur_line.append(w)
+                cur_len += add_len
+            else:
+                if cur_line:
+                    wrapped_lines.append(" ".join(cur_line))
+                cur_line = [w]
+                cur_len = w_len
+        if cur_line:
+            wrapped_lines.append(" ".join(cur_line))
+    return "<br/>".join(wrapped_lines) if wrapped_lines else text
+
+
+def _clean_mermaid_label(inner_text: str, preserve_br: bool = True) -> str:
     """
     Rimuove tag HTML, backticks e normalizza virgolette, parentesi e simboli di confronto
     per la compatibilità con Notion, Mermaid ed ELK/Dagre.
     # ARCHITETTURA: Notion e i renderer web sanitizzano o isolano i nodi SVG; la presenza di tag
     # inline o caratteri XML non escapati manda in crash l'engine di layout.
+    # TRADE-OFF: Preserviamo i tag <br/> (proteggendoli temporaneamente con un token placeholder)
+    # per consentire il multi-line wrapping essenziale a prevenire il text clipping SVG a ~16 caratteri.
     """
-    # 1. Rimozione tag HTML specifici senza corrompere disuguaglianze matematiche
+    # 1. Protezione o rimozione tag <br/>
+    br_placeholder = "___MERMAID_BR_TAG___"
+    if preserve_br:
+        inner_text = re.sub(r'<br\s*/?>', br_placeholder, inner_text, flags=re.IGNORECASE)
+    else:
+        inner_text = re.sub(r'<br\s*/?>', ' - ', inner_text, flags=re.IGNORECASE)
+
+    # 2. Rimozione tag HTML specifici senza corrompere disuguaglianze matematiche
     inner_text = re.sub(r'<span[^>]*>', '', inner_text, flags=re.IGNORECASE)
     inner_text = re.sub(r'</span>', '', inner_text, flags=re.IGNORECASE)
     inner_text = re.sub(r'</?[bi]>', '', inner_text, flags=re.IGNORECASE)
-    inner_text = re.sub(r'<br\s*/?>', ' - ', inner_text, flags=re.IGNORECASE)
     inner_text = re.sub(r'</?[a-zA-Z][a-zA-Z0-9]*(?:\s+[^>]*)?>', '', inner_text)
 
-    # 2. Rimozione backticks
+    # 3. Rimozione backticks
     inner_text = inner_text.replace('`', "'")
 
-    # 3. Rimozione delimitatori di forma e virgolette esterne
+    # 4. Rimozione delimitatori di forma e virgolette esterne
     inner_text = inner_text.strip()
     while (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
         inner_text = inner_text[1:-1].strip()
@@ -199,25 +248,29 @@ def _clean_mermaid_label(inner_text: str) -> str:
     while (inner_text.startswith('"') and inner_text.endswith('"')) or (inner_text.startswith("'") and inner_text.endswith("'")):
         inner_text = inner_text[1:-1].strip()
 
-    # 4. Eliminazione virgolette doppie interne e normalizzazione apici singoli
+    # 5. Eliminazione virgolette doppie interne e normalizzazione apici singoli
     inner_text = inner_text.replace('"', "")
     inner_text = re.sub(r"(^'|'$|(?<=[\s,])'|'(?=[\s,]))", "", inner_text)
 
-    # 5. Normalizzazione operatori matematici e caratteri XML problematici in Mermaid
+    # 6. Normalizzazione operatori matematici e caratteri XML problematici in Mermaid
     inner_text = inner_text.replace('&', ' and ')
     inner_text = inner_text.replace('<=', '≤').replace('>=', '≥')
     inner_text = inner_text.replace('<>', '≠')
     inner_text = inner_text.replace('<', 'lt ').replace('>', 'gt ')
 
-    # 6. Conversione quadre e graffe annidate a parentesi tonde
+    # 7. Conversione quadre e graffe annidate a parentesi tonde
     inner_text = re.sub(r'\[([^\]]*)\]', r'(\1)', inner_text)
     inner_text = re.sub(r'\{([^\}]*)\}', r'(\1)', inner_text)
 
-    # 7. Conversione frecce interne a trattino
+    # 8. Conversione frecce interne a trattino
     inner_text = re.sub(r'\s*(?:->|—)\s*', ' - ', inner_text)
 
-    # 8. Normalizzazione whitespace
-    inner_text = re.sub(r'\s+', ' ', inner_text).strip()
+    # 9. Ripristino del tag <br/> se protetto
+    if preserve_br:
+        inner_text = inner_text.replace(br_placeholder, '<br/>')
+
+    # 10. Normalizzazione whitespace
+    inner_text = re.sub(r'[ \t]+', ' ', inner_text).strip()
     return inner_text
 
 
@@ -225,8 +278,10 @@ def _clean_edge_label(edge_label: str) -> str:
     """
     Pulisce specificamente le etichette degli archi Mermaid (|label|),
     rimuovendo parentesi, operatori di confronto e caratteri che corrompono il lexer.
+    # ARCHITETTURA: Le etichette degli archi devono rimanere rigidamente su una singola riga
+    # senza tag <br/> per non rompere il calcolo delle spline in Dagre.
     """
-    lbl = _clean_mermaid_label(edge_label)
+    lbl = _clean_mermaid_label(edge_label, preserve_br=False)
     # Rimuove parentesi tonde che mandano in crash il parser delle etichette degli archi
     lbl = lbl.replace('(', '- ').replace(')', '')
     lbl = lbl.replace('|', '/')
@@ -320,7 +375,7 @@ def convert_mindmap_to_flowchart(content: str) -> str:
         stack.append((indent, idx))
 
     root = tree_nodes[0]
-    root_label = root['label']
+    root_label = wrap_mermaid_label(_clean_mermaid_label(root['label'], preserve_br=True), max_chars_per_line=16)
 
     result = [
         "%%{init: {'flowchart': {'htmlLabels': false}}}%%",
@@ -340,7 +395,7 @@ def convert_mindmap_to_flowchart(content: str) -> str:
         pillar = tree_nodes[p_idx]
         cls = color_cycle[p_i % len(color_cycle)]
         sg_slug = f"SG_{p_i+1}"
-        p_label = pillar['label']
+        p_label = _clean_mermaid_label(pillar['label'], preserve_br=False)
         sg_title = f"{p_i+1}. {p_label}"
 
         result.append(f'  subgraph {sg_slug} ["{sg_title}"]')
@@ -349,7 +404,8 @@ def convert_mindmap_to_flowchart(content: str) -> str:
         sg_nodes = []
         if not l2_indices:
             nid = pillar['id']
-            result.append(f'    {nid}["{p_label}"]:::{cls}')
+            p_wrapped = wrap_mermaid_label(_clean_mermaid_label(p_label, preserve_br=True), max_chars_per_line=16)
+            result.append(f'    {nid}["{p_wrapped}"]:::{cls}')
             sg_nodes.append(nid)
         else:
             for c_idx in l2_indices:
@@ -358,10 +414,9 @@ def convert_mindmap_to_flowchart(content: str) -> str:
                 sg_nodes.append(cid)
 
                 # ARCHITETTURA: Prevenzione del text-clipping SVG nei box a larghezza fissa di Notion.
-                # Nei blocchi Notion, etichette superiori a 28-30 caratteri su singola riga causano lo straripamento
-                # (overflow) del testo rispetto al rettangolo SVG calcolato, con troncamento visivo delle ultime parole
-                # contro il bordo destro del rettangolo.
-                # Imponiamo un budget stringente di massimo 28 caratteri per nodo a confine di parola intera.
+                # Nei blocchi Notion, etichette superiori a 16-18 caratteri su singola riga causano lo straripamento
+                # (overflow) del testo rispetto al rettangolo SVG calcolato, con troncamento visivo delle ultime parole.
+                # Suddividiamo deterministicamente con wrap_mermaid_label a confine di parola intera con <br/>.
                 clean_child = child['label'].strip()
                 detail_strs = [tree_nodes[sub_idx]['label'].strip() for sub_idx in child['children']]
                 if detail_strs and len(clean_child) <= 25:
@@ -386,7 +441,8 @@ def convert_mindmap_to_flowchart(content: str) -> str:
                         cur += len(w) + (1 if len(kept) > 1 else 0)
                     full_label = " ".join(kept) if kept else clean_child[:38]
 
-                result.append(f'    {cid}["{full_label}"]:::{cls}')
+                full_wrapped = wrap_mermaid_label(_clean_mermaid_label(full_label, preserve_br=True), max_chars_per_line=16)
+                result.append(f'    {cid}["{full_wrapped}"]:::{cls}')
 
 
             # PERFORMANCE/LAYOUT: Catena sequenziale top-down dei nodi interni per evitare
@@ -509,14 +565,14 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             m_id_bracket = re.match(r'^([A-Za-z0-9_]+)\s*\[(.*)\]$', sub_body)
             if m_id_bracket:
                 sid = m_id_bracket.group(1)
-                stitle = _clean_mermaid_label(m_id_bracket.group(2))
+                stitle = _clean_mermaid_label(m_id_bracket.group(2), preserve_br=False)
                 current_sg_id = sid
                 sanitized_lines.append(f'{indent_str}subgraph {sid} ["{stitle}"]')
                 continue
             # Caso b: solo titolo tra virgolette senza ID
             m_quoted_only = re.match(r'^"([^"]+)"$', sub_body)
             if m_quoted_only:
-                stitle = _clean_mermaid_label(m_quoted_only.group(1))
+                stitle = _clean_mermaid_label(m_quoted_only.group(1), preserve_br=False)
                 slug = "sg_" + re.sub(r'[^A-Za-z0-9_]+', '_', stitle).strip('_')
                 current_sg_id = slug
                 sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
@@ -527,7 +583,7 @@ def sanitize_mermaid_flowchart(content: str) -> str:
                 sanitized_lines.append(f"{indent_str}subgraph {sub_body}")
                 continue
             # Caso d: titolo con parole multiple non quotato
-            stitle = _clean_mermaid_label(sub_body)
+            stitle = _clean_mermaid_label(sub_body, preserve_br=False)
             slug = "sg_" + re.sub(r'[^A-Za-z0-9_]+', '_', stitle).strip('_')
             current_sg_id = slug
             sanitized_lines.append(f'{indent_str}subgraph {slug} ["{stitle}"]')
@@ -635,25 +691,25 @@ def sanitize_mermaid_flowchart(content: str) -> str:
             m_bracket = re.match(r'^([A-Za-z0-9_]+)\s*\[(.*)\]$', clean_part)
 
             if m_dcircle:
-                nid, text = m_dcircle.group(1), _clean_mermaid_label(m_dcircle.group(2))
+                nid, text = m_dcircle.group(1), wrap_mermaid_label(_clean_mermaid_label(m_dcircle.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}(("{text}")){class_suffix}{semicolon}'
             elif m_stadium:
-                nid, text = m_stadium.group(1), _clean_mermaid_label(m_stadium.group(2))
+                nid, text = m_stadium.group(1), wrap_mermaid_label(_clean_mermaid_label(m_stadium.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}(["{text}"]){class_suffix}{semicolon}'
             elif m_cylinder:
-                nid, text = m_cylinder.group(1), _clean_mermaid_label(m_cylinder.group(2))
+                nid, text = m_cylinder.group(1), wrap_mermaid_label(_clean_mermaid_label(m_cylinder.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}[("{text}")]{class_suffix}{semicolon}'
             elif m_hex:
-                nid, text = m_hex.group(1), _clean_mermaid_label(m_hex.group(2))
+                nid, text = m_hex.group(1), wrap_mermaid_label(_clean_mermaid_label(m_hex.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}{{"{text}"}}{class_suffix}{semicolon}'
             elif m_rhombus:
-                nid, text = m_rhombus.group(1), _clean_mermaid_label(m_rhombus.group(2))
+                nid, text = m_rhombus.group(1), wrap_mermaid_label(_clean_mermaid_label(m_rhombus.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}{{"{text}"}}{class_suffix}{semicolon}'
             elif m_round:
-                nid, text = m_round.group(1), _clean_mermaid_label(m_round.group(2))
+                nid, text = m_round.group(1), wrap_mermaid_label(_clean_mermaid_label(m_round.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}("{text}"){class_suffix}{semicolon}'
             elif m_bracket:
-                nid, text = m_bracket.group(1), _clean_mermaid_label(m_bracket.group(2))
+                nid, text = m_bracket.group(1), wrap_mermaid_label(_clean_mermaid_label(m_bracket.group(2), preserve_br=True), max_chars_per_line=18)
                 part = f'{nid}["{text}"]{class_suffix}{semicolon}'
 
             cleaned_parts.append(part)

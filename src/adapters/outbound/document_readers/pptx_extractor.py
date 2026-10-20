@@ -3,49 +3,57 @@ import re
 import zipfile
 import xml.etree.ElementTree as ET
 
+def _iter_shapes_recursive(shapes):
+    """
+    # ARCHITETTURA: Attraversamento ricorsivo dell'albero di shape OpenXML (GroupShape).
+    # TRADE-OFF: I convertitori lineari (incluso MarkItDown standard) ispezionano solo
+    # il primo livello `slide.shapes`, ignorando completamente i box di testo, i diagrammi
+    # di processo e le tabelle raggruppati dentro `GroupShape` (`shape_type == 6`).
+    # La discesa ricorsiva garantisce zero perdita di contenuto testuale o tabellare.
+    """
+    for shape in shapes:
+        yield shape
+        is_group = (
+            getattr(shape, "shape_type", None) == 6
+            or type(shape).__name__ == "GroupShape"
+            or isinstance(getattr(shape, "shapes", None), (list, tuple))
+        )
+        if is_group and getattr(shape, "shapes", None) is not None:
+            yield from _iter_shapes_recursive(shape.shapes)
+
+
 def extract_pptx_to_markdown(path: Path) -> str:
     """
     Extracts structured Markdown from a PowerPoint (.pptx) file.
     Follows a 3-tier resilient extraction pipeline:
-    1. Primary: Microsoft's MarkItDown (if installed and dependencies are satisfied).
-    2. Fallback: python-pptx (for rich shapes, tables, and notes parsing).
+    1. Primary: python-pptx with recursive GroupShape, table, and speaker notes parsing.
+    2. Secondary: Microsoft's MarkItDown.
     3. Antifragile Zero-Dependency Fallback: Python standard library (zipfile + xml.etree)
        which extracts all slide texts, shapes, and presenter notes directly from OpenXML without any third-party packages.
     """
     path_str = str(path)
 
-    # Tier 1: MarkItDown (official markdown converter)
-    try:
-        from markitdown import MarkItDown
-        md = MarkItDown()
-        result = md.convert(path_str)
-        text = result.text_content.strip()
-        if text:
-            return text
-    except Exception:
-        pass
-
-    # Tier 2: python-pptx (direct structural parsing)
+    # Tier 1: python-pptx (direct structural parsing with recursive GroupShape traversal)
     try:
         from pptx import Presentation
         prs = Presentation(path_str)
         slides_text = []
         for idx, slide in enumerate(prs.slides, 1):
             parts = [f"## Slide {idx}"]
-            for shape in slide.shapes:
-                if shape.has_text_frame:
+            for shape in _iter_shapes_recursive(slide.shapes):
+                if getattr(shape, "has_text_frame", False) and shape.text_frame:
                     for paragraph in shape.text_frame.paragraphs:
                         line = paragraph.text.strip()
                         if line:
                             parts.append(line)
-                elif shape.has_table:
+                elif getattr(shape, "has_table", False) and shape.table:
                     table = shape.table
                     for row_idx, row in enumerate(table.rows):
                         cells = [cell.text.strip().replace("\n", " ") for cell in row.cells]
                         parts.append("| " + " | ".join(cells) + " |")
                         if row_idx == 0:
                             parts.append("| " + " | ".join(["---"] * len(cells)) + " |")
-            if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+            if getattr(slide, "has_notes_slide", False) and slide.notes_slide and slide.notes_slide.notes_text_frame:
                 notes = slide.notes_slide.notes_text_frame.text.strip()
                 if notes:
                     parts.append(f"> **Note del relatore**: {notes}")
@@ -55,6 +63,17 @@ def extract_pptx_to_markdown(path: Path) -> str:
         full_text = "\n\n---\n\n".join(slides_text).strip()
         if full_text:
             return full_text
+    except Exception:
+        pass
+
+    # Tier 2: MarkItDown (official markdown converter)
+    try:
+        from markitdown import MarkItDown
+        md = MarkItDown()
+        result = md.convert(path_str)
+        text = result.text_content.strip()
+        if text:
+            return text
     except Exception:
         pass
 

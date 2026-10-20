@@ -23,7 +23,9 @@ Synthesize the provided {subject} lecture content into authoritative, intellectu
 5. End-to-End Methodological Continuity (Resolving Circular Dilemmas & Empirical Paradoxes):
    - Trace the causal necessity of diagnostic algorithms (e.g., sequential testing procedures, model selection criteria, lag pruning, downward testing). Explicitly formulate the **circular dilemma or structural trade-off** that mandates the procedure (e.g., testing deterministics requires knowing integration order, but testing integration order requires knowing deterministics).
    - Directly connect empirical paradoxes or edge cases (e.g., structural breaks in drift, near-unit roots, I(2) multiple roots) to the breakdown modes of the underlying estimators (e.g., how an omitted step break forces OLS to fit the jump with alpha_1 ≈ 1 or a spurious concave quadratic trend). Never leave an empirical contradiction unexplained.
-6. Selective Grounded Examples: Provide a concrete empirical/numerical scenario formatted with the mandatory example pattern ONLY for complex, non-trivial models or estimation trade-offs. Never generate examples for basic terminology, administrative overviews, or syllabus lists.
+6. Selective Grounded Examples & Project Deliverables Integrity:
+   - Provide a concrete empirical/numerical scenario formatted with the mandatory example pattern ONLY for complex, non-trivial models or estimation trade-offs. Never generate artificial examples for basic terminology.
+   - CRITICAL COMPLETENESS FOR PROJECT / GROUP WORK / CASE STUDY SPECIFICATIONS: When a slide deck defines a project assignment, group work, case study, or architectural deliverable specification, NEVER omit or compress milestones, deadlines (e.g., Milestone A/B dates), required model views (e.g., ArchiMate views, PIPOT operating models), report structure page-limit tables, or submission/evaluation rules. Synthesize every deliverable requirement, milestone specification, and constraint table in full detail.
 7. Core Insights as Quotes: Elevate only foundational theorems, asymptotic properties, or critical identification rules into dedicated blockquotes (`>`). Maximum 1 quote per major section (`##`).
 8. Boundary Conditions & Trade-offs: State exact conditions where models fail, unit roots arise, or estimators become biased/inconsistent.
 9. Mathematical & Architectural Deconstruction (Complex / Detached Concepts): Whenever formulas, hardware abstractions, computational complexity claims (e.g., GEMM, attention complexity, O(N^3), memory bandwidth bottlenecks), or standalone technical tangents appear, NEVER present them as bare, isolated equations or dry bullet points. Apply systematic pedagogical grounding:
@@ -71,7 +73,7 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Slide-De
   * Complex Operations & Hardware Deconstructions: When introducing foundational mathematical operations, computational complexity bounds, or hardware-bridging mechanisms, format them under a dedicated subsection: `### 🧮 Mathematical & Hardware Deconstruction: [Concept Name]`, following the 5-point physical mapping, operational count, silicon bridge, numerical trace, and boundary conditions.
 - Code Snippets: Format code inside fenced blocks with the language tag (e.g., ```python, ```r).
 - Visual Diagrams & Figures (CRITICAL FORMATTING INVARIANT):
-  * If a slide contains a critical architecture diagram, empirical plot, or structural matrix that cannot be rendered losslessly via LaTeX or Markdown tables, insert an image reference at the exact logical point of discussion.
+  * If a slide contains a critical architecture diagram, metamodel schematic, process/transformation pipeline diagram, empirical plot, or structural matrix that conveys spatial/visual relationships beyond plain prose, ALWAYS insert an image reference at the exact logical point of discussion (even if you also explain its steps in text or lists).
   * MANDATORY STANDALONE BLOCK: The image reference MUST ALWAYS be placed on its own standalone line with empty lines before and after. Format:
     
     ![](figure://slide_N)
@@ -79,7 +81,7 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Slide-De
   * FULL-SLIDE INTEGRITY (NO ARBITRARY CROPPING): Always extract the full slide without coordinate crops (do NOT use ?crop=...). Extracting the full slide preserves all axes, labels, notes, and comparative panels (e.g. Before/After) without truncation.
   * STRICT PROHIBITION ON INLINE CITATIONS: NEVER write inline references or citations such as `(figure://slide_N)`, `(slide N)`, `(figura N)`, or `(vedi slide N)` inside sentences, headers, or bullet points. All figures must be isolated standalone image lines. Keep the prose completely clean and flowing.
   * ZERO BOILERPLATE CAPTIONS: Do NOT write generic captions like "Figura slide N" or "Slide N". Leave the figure reference clean as `![](figure://slide_N)`.
-  * Only select figures that carry high theoretical or empirical signal. Zero screenshots of pure text slides or syllabus overviews.
+  * Only select figures that carry theoretical, methodological, or empirical signal (including metamodels, transformation roadmaps, and multi-stage process frameworks). Zero screenshots of pure bullet-point text slides or title covers.
 - References: Place all citations exclusively at the end in a `### 📚 References` section. No inline citations in the body.
 - Study Artifacts & Conceptual Maps (Mandatory Append Section):
   * Conclude the notes with the following three high-signal study sections:
@@ -115,9 +117,11 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Slide-De
          - **Pipelines & Data Flow**: `classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95;` (transformations, execution DAGs, data lifecycle).
          - **Engineering & Storage**: `classDef devopsNode fill:#f0fdf4,stroke:#10b981,color:#064e3b;` (tools, reproducibility, storage economics).
          - **Bottlenecks & Failure Modes**: `classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,color:#881337;` (physical limits, performance walls, failure conditions).
-      2. **Strict Text Formatting (NO HTML)**:
-         - NEVER use HTML tags (`<span>`, `<b>`, `<i>`, `<br/>`, `<br>`, etc.) inside Mermaid nodes or subgraph titles. Notion and ELK layout engines fail on HTML tags with layout null pointer exceptions.
-         - For multi-line labels, separate concepts with hyphens (` - `) or concise phrases entirely wrapped in double quotes: `NodeID["Clean Descriptive Title - Secondary Detail"]`.
+      2. **Node Label Multi-Line Formatting & Anti-Truncation (<br/>)**:
+         - Notion's Mermaid SVG box bounds clip single-line labels exceeding 15-16 characters (e.g. 'Equipment & Facilities' gets truncated to 'Equipment & Faci').
+         - To guarantee zero text truncation, ALWAYS wrap compound or multi-word labels into short lines using `<br/>` with maximum 14-16 characters per line (e.g. `NodeID["Equipment and<br/>Facilities"]`, `NodeID["European Steel<br/>Producer"]`, `NodeID["ArchiMate<br/>Meta-Model"]`, `NodeID["App Service:<br/>Registration"]`).
+         - NEVER use formatting HTML tags (`<span>`, `<b>`, `<i>`, `<div>`); use ONLY `<br/>` for line breaks within node labels.
+         - Subgraph titles and edge labels (`|label|`) must remain strictly single-line without `<br/>`.
          - ALWAYS wrap ALL node labels in double quotes (e.g. `NodeID["Label Text"]`, `NodeID("Rounded Label")`, `NodeID{{"Condition"}}`).
          - In edge labels (`|label|`), use concise words without parentheses or angle brackets (`<`, `>`).
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
@@ -127,12 +131,12 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Slide-De
          - NEVER apply `style` directly to subgraph IDs (e.g. `style SG_ID ...` is forbidden as it causes Notion layout crashes).
          - Cross-subgraph edges MUST be declared outside/after the subgraph blocks at root level, never nested inside individual subgraphs.
          - Use standard edge labels with vertical pipes: `-->|label|`, never `-- "label" -->`.
-      5. **Strict Vertical Flow & Width Budget (Anti-Shrink Guarantee)**:
-         - Notion constrains diagrams to a narrow column width (700-900px). Diagrams with wide horizontal sprawl or subgraphs placed side-by-side shrink proportionally, making text microscopic and unreadable.
+      5. **Strict Vertical Flow & Width Budget (Anti-Shrink & Single-Column Guarantee)**:
+         - Notion constrains diagrams to a narrow column width (700-900px). Diagrams with wide horizontal sprawl or subgraphs placed side-by-side shrink proportionally, reducing font size to microscopic 3-5px.
          - STRICTLY use `graph TD` (Top-Down). NEVER use `graph LR` (Left-to-Right).
-         - NEVER declare multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`).
-         - Inside each subgraph, chain nodes vertically in a single sequence (`Node1 --> Node2 --> Node3`) or allow at most 2 parallel branches across the rank.
-         - Keep node labels strictly compact (max 25-28 characters per node, e.g. 'Layered EA Models', 'Serving & Realisation'). Labels exceeding 30 characters cause Notion's SVG layout engine to overflow and physically clip words against the right border of the node rectangle.
+         - Single-Column Vertical Hierarchy: Stack all subgraphs in a single vertical cascade (`SG_1 --> SG_2 --> SG_3`). NEVER declare multiple subgraphs in parallel side-by-side.
+         - Strict Downward Edge Orientation (Zero Rank Inversions / Cycles): When connecting across subgraphs, ALL edges must point strictly downwards from higher subgraphs to lower subgraphs (`SG_1 --> SG_2 --> SG_3`). NEVER connect from a lower subgraph back up to a higher subgraph (e.g. never point from Technology Layer up to Application Layer), as backward edges cause Dagre layout engine to violate rank hierarchy and force subgraphs side-by-side horizontally across the page.
+         - Inside each subgraph, chain nodes vertically in a single sequence (`Node1 --> Node2 --> Node3`).
     ```mermaid
     graph TD
       classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;
@@ -279,9 +283,11 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Structur
          - **Empirical Channels & Mechanics**: `classDef pipelineNode fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95;` (transmission channels, data variation, sample cuts).
          - **Controls & Econometric Robustness**: `classDef devopsNode fill:#f0fdf4,stroke:#10b981,color:#064e3b;` (fixed effects, clusters, balance checks).
          - **Threats to Validity & Boundary Failures**: `classDef bottleneckNode fill:#fff1f2,stroke:#f43f5e,color:#881337;` (exclusion restriction violations, weak instruments, endogeneity).
-      2. **Strict Text Formatting (NO HTML)**:
-         - NEVER use HTML tags (`<span>`, `<b>`, `<i>`, `<br/>`, `<br>`, etc.) inside Mermaid nodes or subgraph titles. Notion and ELK layout engines fail on HTML tags with layout null pointer exceptions.
-         - For multi-line labels, separate concepts with hyphens (` - `) or concise phrases entirely wrapped in double quotes: `NodeID["Clean Descriptive Title - Secondary Detail"]`.
+      2. **Node Label Multi-Line Formatting & Anti-Truncation (<br/>)**:
+         - Notion's Mermaid SVG box bounds clip single-line labels exceeding 15-16 characters (e.g. 'Equipment & Facilities' gets truncated to 'Equipment & Faci').
+         - To guarantee zero text truncation, ALWAYS wrap compound or multi-word labels into short lines using `<br/>` with maximum 14-16 characters per line (e.g. `NodeID["Equipment and<br/>Facilities"]`, `NodeID["European Steel<br/>Producer"]`, `NodeID["ArchiMate<br/>Meta-Model"]`, `NodeID["App Service:<br/>Registration"]`).
+         - NEVER use formatting HTML tags (`<span>`, `<b>`, `<i>`, `<div>`); use ONLY `<br/>` for line breaks within node labels.
+         - Subgraph titles and edge labels (`|label|`) must remain strictly single-line without `<br/>`.
          - ALWAYS wrap ALL node labels in double quotes (e.g. `NodeID["Label Text"]`, `NodeID("Rounded Label")`, `NodeID{{"Condition"}}`).
          - In edge labels (`|label|`), use concise words without parentheses or angle brackets (`<`, `>`).
       3. **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
@@ -291,12 +297,12 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Structur
          - NEVER apply `style` directly to subgraph IDs (e.g. `style SG_ID ...` is forbidden as it causes Notion layout crashes).
          - Cross-subgraph edges MUST be declared outside/after the subgraph blocks at root level, never nested inside individual subgraphs.
          - Use standard edge labels with vertical pipes: `-->|label|`, never `-- "label" -->`.
-      5. **Strict Vertical Flow & Width Budget (Anti-Shrink Guarantee)**:
-         - Notion constrains diagrams to a narrow column width (700-900px). Diagrams with wide horizontal sprawl or subgraphs placed side-by-side shrink proportionally, making text microscopic and unreadable.
+      5. **Strict Vertical Flow & Width Budget (Anti-Shrink & Single-Column Guarantee)**:
+         - Notion constrains diagrams to a narrow column width (700-900px). Diagrams with wide horizontal sprawl or subgraphs placed side-by-side shrink proportionally, reducing font size to microscopic 3-5px.
          - STRICTLY use `graph TD` (Top-Down). NEVER use `graph LR` (Left-to-Right).
-         - NEVER declare multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`).
-         - Inside each subgraph, chain nodes vertically in a single sequence (`Node1 --> Node2 --> Node3`) or allow at most 2 parallel branches across the rank.
-         - Keep node labels strictly compact (max 25-28 characters per node, e.g. 'Layered EA Models', 'Serving & Realisation'). Labels exceeding 30 characters cause Notion's SVG layout engine to overflow and physically clip words against the right border of the node rectangle.
+         - Single-Column Vertical Hierarchy: Stack all subgraphs in a single vertical cascade (`SG_1 --> SG_2 --> SG_3`). NEVER declare multiple subgraphs in parallel side-by-side.
+         - Strict Downward Edge Orientation (Zero Rank Inversions / Cycles): When connecting across subgraphs, ALL edges must point strictly downwards from higher subgraphs to lower subgraphs (`SG_1 --> SG_2 --> SG_3`). NEVER connect from a lower subgraph back up to a higher subgraph (e.g. never point from Technology Layer up to Application Layer), as backward edges cause Dagre layout engine to violate rank hierarchy and force subgraphs side-by-side horizontally across the page.
+         - Inside each subgraph, chain nodes vertically in a single sequence (`Node1 --> Node2 --> Node3`).
     ```mermaid
     graph TD
       classDef rootNode fill:#0f172a,stroke:#334155,stroke-width:2.5px,color:#fff;
@@ -354,10 +360,10 @@ Deconstruct the provided synthesized study notes into high-signal conceptual stu
 1. Mermaid Conceptual Taxonomy Tree (`graph TD`): A clean, hierarchical taxonomy of core pillars and sub-concepts (depth 3-4) using hierarchical pastel classDef styling (`rootNode`, `level1`, `level2`, `level3`, `levelN`).
 2. Mermaid Flowchart (`graph TD`): The core cause-and-effect chain, empirical transmission mechanism, or identification flowchart. Follow these visual and mathematical standards:
    - **Color Coding by Topic (NOT by Grouping/Box)**: Style nodes by their conceptual nature / topic across the entire architecture, NOT monochromatic by subgraph box. Use semantic pastel fills (theory/definitions in blue, compute/hardware in amber, pipelines/flow in purple, engineering/storage in green, bottlenecks/failure modes in coral).
-   - **Strict Text Formatting (NO HTML)**: NEVER use HTML tags (`<span>`, `<b>`, `<br/>`, etc.) in node labels or subgraph titles. Wrap all labels in double quotes. For multi-line labels, use ` - ` or concise phrases.
+   - **Node Label Multi-Line Formatting & Anti-Truncation (<br/>)**: Notion clips single-line labels exceeding 15-16 characters. ALWAYS wrap compound or multi-word labels into short lines using `<br/>` with maximum 14-16 characters per line (e.g. `NodeID["Equipment and<br/>Facilities"]`, `NodeID["ArchiMate<br/>Meta-Model"]`). Wrap all labels in double quotes. Subgraph titles and edge labels must remain single-line without `<br/>`.
    - **Formal Mathematical Notation**: In diagrams, format mathematical complexities and variables using clean Unicode math notation instead of ASCII approximations (e.g. `O(m × n × k) ≈ O(N³)` instead of `O(N^3)`, `O(log N)`, `(K₁, V₁)`, `∑`, `β̂`, `λ`, `->`).
    - **Topology & Subgraph Rules**: Connect STRICTLY node-to-node (`NodeA --> NodeB`). NEVER connect an edge to or from a subgraph container directly. If using subgraphs, always specify an alphanumeric ID: `subgraph SG_ID ["Subgraph Title"]`. NEVER apply `style` to subgraph IDs (`style SG_ID` is forbidden). Declare cross-subgraph edges outside subgraphs at root level. Use `-->|label|` for edge labels.
-   - **Strict Vertical Flow & Width Budget (Anti-Shrink Guarantee)**: Notion renders code blocks in a narrow reading column (~700-900px). NEVER use `graph LR`. STRICTLY use `graph TD`. Never place multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`). Inside each subgraph, chain nodes vertically in a single sequence. Keep node labels strictly compact (max 25-28 characters per node). Labels exceeding 30 characters cause Notion's SVG layout engine to overflow and clip words against the right border of the rectangle.
+   - **Strict Vertical Flow & Width Budget (Anti-Shrink & Single-Column Guarantee)**: Notion renders code blocks in a narrow reading column (~700-900px). NEVER use `graph LR`. STRICTLY use `graph TD`. Never place multiple subgraphs in parallel side-by-side. Stack all subgraphs sequentially in a single vertical column (`SG_1 --> SG_2 --> SG_3`). All cross-subgraph edges must point strictly downwards (zero cycles / rank inversions). Inside each subgraph, chain nodes vertically in a single sequence.
 3. Active Recall & Examination Drills: 3 to 5 examination-grade analytical questions with explicit evaluation rubrics.
 4. Model Boundary Conditions: A Markdown table mapping frameworks, validity domains, breakdown triggers, and robust alternatives.
 
@@ -403,7 +409,7 @@ graph TD
 - British English exclusively.
 - Output ONLY the requested Markdown sections without any conversational meta-commentary.
 - Formulas inside text must use standard LaTeX ($...$). In Mermaid diagrams, use Unicode math notation (e.g. `O(N³)`, `β̂`, `(K₁, V₁)`).
-- In Mermaid taxonomy trees and flowcharts, connect strictly node-to-node (`NodeA --> NodeB`), never use HTML tags, never style subgraph containers (`style SG_ID` is strictly prohibited), and declare cross-subgraph edges at root level outside subgraphs.
+- In Mermaid taxonomy trees and flowcharts, connect strictly node-to-node (`NodeA --> NodeB`), use ONLY `<br/>` for line breaks within node labels to prevent clipping, never style subgraph containers (`style SG_ID` is strictly prohibited), and declare cross-subgraph edges at root level outside subgraphs.
 </constraints>
 
 <input_study_notes>

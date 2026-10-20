@@ -94,3 +94,51 @@ def test_pptx_extractor_stdlib_fallback_when_dependencies_missing(tmp_path, monk
     assert "Note del relatore" in result
     assert "Critical presenter remark" in result
 
+
+def test_pptx_extractor_recursive_group_shape_and_table():
+    # ARCHITETTURA: Verifica che i GroupShape annidati (shape_type == 6) e le tabelle
+    # vengano attraversati ricorsivamente senza perdere specifiche o deliverable.
+    from src.adapters.outbound.document_readers.pptx_extractor import extract_pptx_to_markdown
+
+    inner_text_shape = MagicMock()
+    inner_text_shape.shape_type = 1
+    inner_text_shape.has_text_frame = True
+    inner_text_shape.has_table = False
+    p_inner = MagicMock()
+    p_inner.text = "Milestone A: 27 October Deliverable"
+    inner_text_shape.text_frame.paragraphs = [p_inner]
+
+    inner_table_shape = MagicMock()
+    inner_table_shape.shape_type = 19
+    inner_table_shape.has_text_frame = False
+    inner_table_shape.has_table = True
+    c1, c2 = MagicMock(), MagicMock()
+    c1.text, c2.text = "Report Section", "Max Pages"
+    c3, c4 = MagicMock(), MagicMock()
+    c3.text, c4.text = "Executive Summary", "0.5"
+    row0, row1 = MagicMock(), MagicMock()
+    row0.cells = [c1, c2]
+    row1.cells = [c3, c4]
+    inner_table_shape.table.rows = [row0, row1]
+
+    group_shape = MagicMock()
+    group_shape.shape_type = 6  # MSO_SHAPE_TYPE.GROUP
+    group_shape.has_text_frame = False
+    group_shape.has_table = False
+    group_shape.shapes = [inner_text_shape, inner_table_shape]
+
+    mock_slide = MagicMock()
+    mock_slide.shapes = [group_shape]
+    mock_slide.has_notes_slide = False
+
+    mock_presentation = MagicMock()
+    mock_presentation.slides = [mock_slide]
+
+    with patch("pptx.Presentation", return_value=mock_presentation):
+        result = extract_pptx_to_markdown(Path("/tmp/grouped.pptx"))
+
+    assert "Milestone A: 27 October Deliverable" in result
+    assert "| Report Section | Max Pages |" in result
+    assert "| Executive Summary | 0.5 |" in result
+
+

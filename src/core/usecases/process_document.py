@@ -306,8 +306,15 @@ class ProcessDocumentUseCase:
                 from pptx import Presentation
                 prs = Presentation(document.path)
                 counts: List[int] = []
+                from src.adapters.outbound.document_readers.pptx_extractor import _iter_shapes_recursive
                 for slide in prs.slides:
-                    text_parts = [shape.text for shape in slide.shapes if shape.has_text_frame]
+                    text_parts = []
+                    for shape in _iter_shapes_recursive(slide.shapes):
+                        if getattr(shape, "has_text_frame", False) and shape.text_frame:
+                            text_parts.append(shape.text_frame.text)
+                        elif getattr(shape, "has_table", False) and shape.table:
+                            for row in shape.table.rows:
+                                text_parts.extend(cell.text for cell in row.cells)
                     counts.append(len(" ".join(text_parts).strip()))
                 return counts
             except Exception:

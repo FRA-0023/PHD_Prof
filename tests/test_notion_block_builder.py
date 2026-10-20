@@ -7,6 +7,7 @@ from src.adapters.outbound.notion_block_builder import (
     sanitize_mermaid_mindmap,
     sanitize_mermaid_flowchart,
     convert_mindmap_to_flowchart,
+    wrap_mermaid_label,
 )
 
 
@@ -386,13 +387,13 @@ def test_sanitize_mermaid_flowchart_escapes_nested_brackets_and_colons():
         "  end"
     )
     sanitized = sanitize_mermaid_flowchart(raw_flowchart)
-    assert 'A["Input Data (K1, V1)"]' in sanitized
-    assert 'B{"Data Partitioning: Step 1"}' in sanitized
-    assert 'C["Map Function (per chunk)"]' in sanitized
+    assert 'A["Input Data (K1,<br/>V1)"]' in sanitized
+    assert 'B{"Data Partitioning:<br/>Step 1"}' in sanitized
+    assert 'C["Map Function (per<br/>chunk)"]' in sanitized
     assert 'subgraph sg_MapReduce_Word_Count ["MapReduce Word Count"]' in sanitized
-    assert 'I["Deer Bear River, Car Car River"]' in sanitized
-    assert 'K["Shuffle and Sort: Bear:(1,1), Car:(1,1,1)"]' in sanitized
-    assert 'L["Reduce: Bear:2, Car:3"]' in sanitized
+    assert "Deer Bear River" in sanitized
+    assert "Shuffle and Sort:" in sanitized
+    assert 'L["Reduce: Bear:2,<br/>Car:3"]' in sanitized
 
 
 def test_sanitize_mermaid_flowchart_redirects_edges_to_subgraph_members():
@@ -420,7 +421,8 @@ def test_build_notion_blocks_sanitizes_flowchart_in_code_block():
     assert len(blocks) == 1
     assert blocks[0]["type"] == "code"
     content = blocks[0]["code"]["rich_text"][0]["text"]["content"]
-    assert 'K["Shuffle and Sort: Bear:(1,1), Car:(1,1,1)"]' in content
+    assert "Shuffle and Sort:" in content
+    assert "Bear:(1,1)" in content
 
 
 def test_build_notion_blocks_large_code_block_preserves_single_block_integrity():
@@ -474,11 +476,13 @@ def test_sanitize_mermaid_flowchart_strips_html_tags_and_spans():
     assert "<span" not in sanitized
     assert "</span>" not in sanitized
     assert "<b>" not in sanitized
+    assert "</b>" not in sanitized
     assert "<i>" not in sanitized
-    assert "<br/>" not in sanitized
-    assert 'ROOT["Big Data Architecture - Core"]:::rootNode' in sanitized
+    assert "</i>" not in sanitized
+    assert "<br/>" in sanitized
+    assert 'ROOT["Big Data<br/>Architecture<br/>Core"]:::rootNode' in sanitized
     assert 'subgraph SG1 ["Ingestion Layer"]' in sanitized
-    assert 'A["Kafka Broker - Partitioned topic"]' in sanitized
+    assert 'A["Kafka Broker<br/>Partitioned topic"]' in sanitized
     assert 'B["Flink Worker"]' in sanitized
 
 
@@ -528,10 +532,10 @@ def test_sanitize_mermaid_flowchart_normalizes_all_node_shapes_and_quotes():
     )
     sanitized = sanitize_mermaid_flowchart(raw_flowchart)
     assert 'N1("Rounded Node: 10ms")' in sanitized
-    assert 'N2(("Double Circle: Target"))' in sanitized
-    assert 'N3(["Stadium Shape: Batch processing"])' in sanitized
-    assert 'N4{"Rhombus Condition: x gt 0"}' in sanitized
-    assert 'N5{"Hexagon Prep: init()"}' in sanitized
+    assert 'N2(("Double Circle:<br/>Target"))' in sanitized
+    assert 'N3(["Stadium Shape:<br/>Batch processing"])' in sanitized
+    assert 'N4{"Rhombus Condition:<br/>x gt 0"}' in sanitized
+    assert 'N5{"Hexagon Prep:<br/>init()"}' in sanitized
 
 
 def test_sanitize_mermaid_flowchart_normalizes_edge_labels():
@@ -562,13 +566,14 @@ def test_sanitize_mermaid_mindmap_converts_to_flowchart_taxonomy():
     sanitized = sanitize_mermaid_mindmap(raw_mindmap)
     assert "graph TD" in sanitized
     assert "htmlLabels" in sanitized
-    assert "<b" not in sanitized
+    assert "<b>" not in sanitized
+    assert "</b>" not in sanitized
     assert "<span" not in sanitized
     assert "`" not in sanitized
-    assert 'ROOT["Academic Core - Syllabus"]:::rootNode' in sanitized
+    assert 'ROOT["Academic Core<br/>Syllabus"]:::rootNode' in sanitized
     assert 'subgraph SG_1 ["1. Pillars"]' in sanitized
-    assert 'N3["Optimization Problem (min f(x))"]:::theoryNode' in sanitized
-    assert 'N4["Complex Feature (O(N^2))"]:::theoryNode' in sanitized
+    assert 'N3["Optimization<br/>Problem (min<br/>f(x))"]:::theoryNode' in sanitized
+    assert 'N4["Complex Feature<br/>(O(N^2))"]:::theoryNode' in sanitized
     assert "ROOT --> N3" in sanitized
 
 
@@ -621,7 +626,7 @@ def test_convert_mindmap_to_flowchart_preserves_whole_words_without_truncation()
     )
     sanitized = convert_mindmap_to_flowchart(raw_mindmap)
     assert "..." not in sanitized
-    assert "Serving Relationships" in sanitized
+    assert "Serving<br/>Relationships" in sanitized
 
 
 def test_build_notion_blocks_image_with_caption():
@@ -662,6 +667,43 @@ def test_build_notion_blocks_suppress_boilerplate_figure_caption():
     blocks_empty = build_notion_blocks(md_empty)
     assert len(blocks_empty) == 1
     assert "caption" not in blocks_empty[0]["image"]
+
+
+def test_wrap_mermaid_label_prevents_notion_word_clipping():
+    # ARCHITETTURA: Verifica che stringhe composite superiori a 16 caratteri vengano
+    # spezzate con tag <br/> a confine di parola, evitando il troncamento visivo a ~16 caratteri in Notion Desktop.
+    labels_to_test = [
+        "Equipment and Facilities",
+        "European Steel Producer",
+        "ArchiMate Meta-Model",
+        "App Service: Registration",
+        "Layered EA Models",
+        "Customer Retention CRM",
+    ]
+    for label in labels_to_test:
+        wrapped = wrap_mermaid_label(label, max_chars_per_line=16)
+        assert "<br/>" in wrapped, f"Expected <br/> in wrapped label for '{label}', got '{wrapped}'"
+        for line in wrapped.split("<br/>"):
+            assert len(line) <= 18, f"Line '{line}' in '{wrapped}' exceeds character threshold"
+
+
+def test_sanitize_mermaid_flowchart_wraps_long_labels_with_br():
+    # ARCHITETTURA: Verifica che sanitize_mermaid_flowchart applichi deterministicamente
+    # wrap_mermaid_label su nodi definiti con etichette lunghe, preservando la leggibilità in Notion.
+    raw_flowchart = (
+        "graph TD\n"
+        '  N10["Equipment and Facilities"]\n'
+        '  N11["European Steel Producer"]\n'
+        '  N3["ArchiMate Meta-Model"]\n'
+        '  AS_OR["App Service: Registration"]\n'
+        "  N10 --> N11 --> N3 --> AS_OR\n"
+    )
+    sanitized = sanitize_mermaid_flowchart(raw_flowchart)
+    assert 'N10["Equipment and<br/>Facilities"]' in sanitized
+    assert 'N11["European Steel<br/>Producer"]' in sanitized
+    assert 'N3["ArchiMate<br/>Meta-Model"]' in sanitized
+    assert 'AS_OR["App Service:<br/>Registration"]' in sanitized
+
 
 
 

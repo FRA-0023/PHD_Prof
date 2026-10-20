@@ -57,3 +57,51 @@ def test_document_file_path_property_backward_compatibility(sample_pdf: Path):
     doc = Document(path=sample_pdf, file_hash="dummy_hash", doc_type=DocumentType.SLIDES)
     assert hasattr(doc, "file_path")
     assert doc.file_path == doc.path
+
+
+def test_pymupdf_visual_extractor_pptx_resolves_cached_slides_pdf(sample_pdf: Path, tmp_path: Path):
+    # ARCHITETTURA: Verifica che per un documento .pptx l'estrattore non apra il .pptx grezzo
+    # (che in MuPDF produce testo reflowed su pagina bianca), ma il PDF vettoriale in staging.
+    dummy_pptx = tmp_path / "lecture.pptx"
+    dummy_pptx.write_bytes(b"not_a_real_pdf_or_pptx")
+
+    cached_pdf = tmp_path / "pptx_hash_123_slides.pdf"
+    cached_pdf.write_bytes(sample_pdf.read_bytes())
+
+    extractor = PyMuPdfVisualExtractor(staging_dir=tmp_path)
+    doc = Document(path=dummy_pptx, file_hash="pptx_hash_123", doc_type=DocumentType.SLIDES)
+
+    output_img = tmp_path / "figures" / "slide_1.png"
+    extractor.extract_figure(doc, page_number=1, crop_box=None, output_path=output_img)
+
+    assert output_img.exists()
+    assert output_img.stat().st_size > 0
+
+
+def test_pymupdf_visual_extractor_pptx_raises_when_no_pdf_available(tmp_path: Path, monkeypatch):
+    # TRADE-OFF: Se per un .pptx non esiste il PDF in staging e la conversione fallisce,
+    # deve sollevare RuntimeError anziché fare fallback silenzioso sul reflow corrotto di MuPDF.
+    dummy_pptx = tmp_path / "unconvertible.pptx"
+    dummy_pptx.write_bytes(b"dummy_pptx")
+
+    extractor = PyMuPdfVisualExtractor(staging_dir=tmp_path)
+    doc = Document(path=dummy_pptx, file_hash="missing_pdf_hash", doc_type=DocumentType.SLIDES)
+
+    from src.adapters.outbound.document_readers.gemini_file_reader import GeminiFileReader
+    monkeypatch.setattr(GeminiFileReader, "_convert_pptx_to_pdf", lambda self, p, o: False)
+
+    output_img = tmp_path / "figures" / "out.png"
+    with pytest.raises(RuntimeError, match="Impossibile estrarre figure vettoriali"):
+        extractor.extract_figure(doc, page_number=1, crop_box=None, output_path=output_img)
+
+
+def test_pymupdf_visual_extractor_out_of_range_page_raises_value_error(sample_pdf: Path, tmp_path: Path):
+    # ARCHITETTURA: Impedisce che indici di slide superiori al numero di pagine vengano
+    # bloccati sull'ultima pagina generando N copie della stessa immagine.
+    extractor = PyMuPdfVisualExtractor(staging_dir=tmp_path)
+    doc = Document(path=sample_pdf, file_hash="dummy_hash", doc_type=DocumentType.SLIDES)
+
+    output_img = tmp_path / "out_oob.png"
+    with pytest.raises(ValueError, match="fuori range valido"):
+        extractor.extract_figure(doc, page_number=99, crop_box=None, output_path=output_img)
+
