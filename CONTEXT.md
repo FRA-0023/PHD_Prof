@@ -705,3 +705,22 @@ ile=... a path=... in GeminiFileReader per piena conformità con google-genai SD
   * Sincronizzato staging `staging/5a597c6221d39590f17c2ab752bb510f02f88a2867fd5eb15ba60bb27934f7cc.md` e aggiornato `sync_state.json`.
 - **Verifica Test Suite**: 144/144 unit test passati con successo (100% green).
 
+
+
+### 2026-10-20 (Fix Clamping MuPDF, Deterministic Cache-Busting R2 & Invalidation Proxy Notion)
+- **Diagnosi della Causa Radice**:
+  * Durante la prima ingestione da presentazioni PPTX, il motore MuPDF operava in text-reflow clamped su indici slide >= 13, producendo duplicati identici (38 KB) del frammento testuale di slide 13 privi di grafica vettoriale.
+  * Il proxy interno di Notion (
+otion.so/image/...) e i browser/desktop app memorizzano gli asset esterni con Cache-Control: private, max-age=7776000, immutable (TTL di 90 giorni).
+  * Il semplice re-upload delle immagini corrette sullo stesso URL non forzava la ri-estrazione nei client degli utenti a causa della direttiva immutable.
+- **Risoluzione & Cache-Busting su Cloudflare R2**:
+  * Estratte e validate le 18 slide di *ArchiMate Full Framework Vision* (EA2627-04-W5.pptx) e le 3 slide di *Architecture Implementation and Migration* (EA2627-05-W5.pptx) a 300 DPI a slide intera (senza crop distruttivo).
+  * Caricate su Cloudflare R2 con suffisso crittografico versionato _v2.png per garantire l'immediata invalidazione della cache.
+- **Aggiornamento Atomico Blocchi Notion via API**:
+  * Aggiornati via PATCH /v1/blocks/{id} tutti i blocchi immagine su 4 pagine Notion:
+    - *ArchiMate Full Framework Vision* (3feb63e8-59c8-81cb-8b6a-ca5e1a29d7bc): 18/18 blocchi immagine allineati a _v2.png.
+    - *Architecture Implementation and Migration* (3feb63e8-59c8-8156-aaea-e3fb6f5dabeb): 3/3 blocchi immagine allineati a _v2.png.
+    - *Group-work Enterprise Architecture 2026-2027* (3ffb63e8-59c8-81cd-a6b6-c9cfda651f57): 6/6 blocchi immagine allineati a _v2.png.
+    - *Group_work_EA_2026-2027* (3ffb63e8-59c8-81b8-a966-e3f5a1cb4899): 6/6 blocchi immagine allineati a _v2.png.
+  * Verificate le risposte del proxy Notion con HTTP 200 e payload completi (fino a 1.62 MB per diagramma).
+- **Verifica Test Suite**: 157/157 unit test passati con successo (100% green).
