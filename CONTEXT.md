@@ -12,7 +12,7 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
 - **Windowed Slide Chunker (Character-Driven & Volume-Balanced)**: Controllo preventivo prioritario sul volume di caratteri effettivi (`SPLIT_THRESHOLD_CHARS=25000`) invece del mero conteggio delle slide. Le slide vengono raggruppate in tranche bilanciate pesate sulla massa di caratteri per slide (`_partition_slides_by_character_budget`), allocando un budget di output dedicato di 8.192 token per ciascun blocco.
-- **Test Suite**: 151 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Test Suite**: 157 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -20,6 +20,21 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
+### 2026-10-20 (PPTX Vector Visual Extraction, Recursive GroupShape Reader & Syllabus/Project Completeness)
+- **Diagnosi delle 4 Root Causes (Immagini Errate/Bianche, Sezioni Tagliate e Clipping Mermaid)**:
+  1. *Immagini .pptx Errate o Bianche (PyMuPdfVisualExtractor.extract_figure)*: MuPDF (fitz.open) eseguiva un reflow testuale del .pptx grezzo su 13 pagine verticali prive di grafica e con clamping silenzioso sull ultima pagina (min(page_number - 1, len(doc) - 1)), producendo 20 PNG identici/bianchi per EA2627-04-W5.pptx e EA2627-05-W5.pptx.
+  2. *Omissione di Testo Annidato nei .pptx (pptx_extractor.py & text_pdf_reader.py)*: L iterazione flat su slide.shapes ignorava i GroupShape (shape_type == 6) e le tabelle annidate in modalita fallback testuale.
+  3. *Soppressione Indebita di Deliverable, Milestone e Limiti di Pagina (prompt_templates.py)*: La regola di esclusione delle sezioni logistiche in SLIDES_PROMPT_TEMPLATE induceva Gemini a scartare le specifiche operative dei progetti d esame (Milestone A/B, tabella limiti di pagina A4, viste ArchiMate).
+  4. *Mancato Sync Git del Wrapping Mermaid (notion_block_builder.py)*: Le modifiche wrap_mermaid_label (wrapping multilinea a 16-18 caratteri) erano rimaste uncommitted sulla macchina principale.
+- **Risoluzione Deterministica nel Core & Adapters**:
+  - src/adapters/outbound/pymupdf_visual_extractor.py: Implementato _resolve_renderable_pdf_path() per risolvere obbligatoriamente il PDF vettoriale staging/{file_hash}_slides.pdf (o conversione on-demand) per i file .pptx, e introdotta validazione rigorosa dei limiti 1..len(doc) (ValueError su fuori range).
+  - src/adapters/outbound/document_readers/pptx_extractor.py, text_pdf_reader.py & process_document.py: Implementato _iter_shapes_recursive(shapes) per attraversare ricorsivamente GroupShape e tabelle.
+  - src/core/domain/prompt_templates.py: Aggiornato SLIDES_PROMPT_TEMPLATE per preservare integralmente deliverable, milestone, limiti di pagina e diagrammi di processo/roadmap.
+- **Bonifica Asset su Cloudflare R2 & Live Patch Notion**:
+  - Rigenerate a 300 DPI dai PDF vettoriali (staging/*_slides.pdf) e ricaricate su Cloudflare R2 tutte le 21 figure di EA2627-04-W5.pptx e EA2627-05-W5.pptx piu le 6 slide diagrammatiche di Group_work_EA_2026-2027.pptx (Slide 3-8).
+  - Patchate live via Notion API le pagine Group work Enterprise Architecture 2026-2027 (3ffb63e8-59c8-81cd-a6b6-c9cfda651f57) e Group_work_EA_2026-2027 (3ffb63e8-59c8-81b8-a966-e3f5a1cb4899): iniettate le 6 figure vettoriali, integrati i 20 blocchi delle sezioni mancanti (Milestone A/B, viste ArchiMate, tabella budget 15 pagine A4, governance) e aggiornati tutti i 4 blocchi Mermaid con sanitize_mermaid_flowchart().
+- **Autonomous Verification Gate**:
+  - Aggiunti 4 nuovi test unitari in tests/test_visual_extractor.py e tests/test_text_pdf_reader.py. Suite completa: **157/157 unit test passati (100% green)**.
 ### 2026-10-16 (Unit Root Testing In-Place Pedagogical Harmonization & KaTeX Normalization)
 - **Diagnosi della Disconnessione e Frattura Concettuale**:
   - *Problema Utente*: La nota Notion *Unit Root Testing* presentava una qualità analitica elevata a livello locale, ma mancava di un filo logico unitario ed era ostica per uno studente con basi solide in statistica classica ($E[X], \text{Var}(X)$, OLS, $t$-test, $F$-test, LLN/CLT) che affronta le serie storiche per la prima volta.
@@ -474,7 +489,8 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 - **Console UTF-8 Resilience**:
   - Configurato chcp 65001 > nul in Avvia_PHD_Prof.bat e forzato sys.stdout.reconfigure(encoding='utf-8') in pdf_to_notion.py per garantire resa impeccabile di caratteri accentati nei prompt su Windows.
 - **Orchestrazione Competenze Web Design**:
-  - Aggiornato .agents/profile.json montando le skill specialistiche rontend-ux-excellence, impeccable-design, design-taste-frontend e rchitecture-design in .agents/skills/ tramite Skills_Orchestrator/main.py.
+  - Aggiornato .agents/profile.json montando le skill specialistiche 
+rontend-ux-excellence, impeccable-design, design-taste-frontend e rchitecture-design in .agents/skills/ tramite Skills_Orchestrator/main.py.
 - **Test Suite**: 74/74 unit test verificati con successo.
 
 ### 2026-09-30 (Bilingual Interaction Flag IT vs EN & Useful-Comments Audit)
@@ -605,7 +621,8 @@ et::ERR_CERT_AUTHORITY_INVALID e ottenere connessione protetta (lucchetto verde)
 
 
 ### 2026-09-22 (Hotfix) — Supporto PPTX & Correzione Parametro Upload Gemini
-- **Fix Upload Gemini File API**: Corretto il parametro da ile=... a path=... in GeminiFileReader per piena conformità con google-genai SDK v0.6.0.
+- **Fix Upload Gemini File API**: Corretto il parametro da 
+ile=... a path=... in GeminiFileReader per piena conformità con google-genai SDK v0.6.0.
 - **Supporto Nativo PPTX**: Estesa la scansione in CLIAdapter e il parsing in TextPdfReader (tramite MarkItDown) per supportare presentazioni PowerPoint (.pptx), estraendo sia il contenuto delle slide sia le note del relatore.
 - **Test Suite**: Aggiunto 	est_process_document_pptx_routing, 16/16 test superati con successo.
 
