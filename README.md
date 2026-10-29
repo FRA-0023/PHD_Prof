@@ -88,23 +88,23 @@ PHD Prof features a zero-build, local-first single-page study cockpit accessible
 |                                    |                                                                    |
 | Your Courses:                      | +── COURSE STUDY HEADER & TOOLBAR ───────────────────────────────+ |
 |  • Enterprise Architectures        | | Enterprise Architectures              [ 12 lectures ]          | |
-|  • Big Data Analytics              | | Prof. PhD in Data Engineering • C:\Courses\BigData               | |
+|  • Big Data Analytics              | | Prof. PhD in Data Engineering • C:\Courses\BigData             | |
 |  • Deep Learning                   | | Output: [Note + Grafo | Solo Note | Solo Grafo]                | |
 |  [+ New Course]                    | | [All] [Refresh] [Sync Selected (2)]                            | |
-|                                    | | ── Study Progress: 66% Completed (8/12 synced) ──────────────── | |
-| Course Details:                    | | [████████████████████████████░░░░░░░░░░░░]                       | |
+|                                    | | ── Study Progress: 66% Completed (8/12 synced) ─────────────── | |
+| Course Details:                    | | [████████████████████████████░░░░░░░░░░░░]                     | |
 |  - Instructor: Prof. Rossi         | +────────────────────────────────────────────────────────────────+ |
 |  - Format: SLIDES                  |                                                                    |
 |  - Notion DB: Notes                | SYLLABUS MATERIAL (Tactile Island Cards)                           |
 |                                    | ┌── Island Card 1 ───────────────────────────────────────────────┐ |
-|                                    | │ [x] [PDF] Lecture_01.pdf │ 4.2 MB │ Sincronizzato │ [OPML] [Notion]│ |
+|                                    | │ [x] [PDF] Lecture_01.pdf │ 4.2 MB │ [OPML] [Notion]            │ |
 |                                    | └── (Level 2 Elevation with Specular Top Highlight) ─────────────┘ |
 |                                    | ┌── Island Card 2 ───────────────────────────────────────────────┐ |
-|                                    | │ [ ] [PPTX] Lecture_02.pptx │ 8.6 MB │ In corso... │ [Sync]        │ |
+|                                    | │ [ ] [PPTX] Lecture_02.pptx │ 8.6 MB │ In corso... │ [Sync]     │ |
 |                                    | └── (Interactive Hover-Lift to Level 3 Elevation) ───────────────┘ |
 |                                    |                                                                    |
 |                                    | +── STUDY ACTIVITY DRAWER (Collapsible 38px <-> 220px) ──────────+ |
-|                                    | | [📖] REGISTRO ATTIVITÀ | [Teaser: Notion sync completed...]     | |
+|                                    | | [📖] REGISTRO ATTIVITÀ | [Teaser: Notion sync completed...]   | |
 |                                    | |                                  [Auto-scroll] [Copy] [Clear]  | |
 |                                    | +────────────────────────────────────────────────────────────────+ |
 +------------------------------------+--------------------------------------------------------------------+
