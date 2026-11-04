@@ -469,3 +469,70 @@ def test_process_document_force_resync():
 
 
 
+
+
+def test_process_figures_bare_number_and_prefix_variants():
+    visual_extractor = MagicMock()
+    image_host = MagicMock()
+    image_host.image_exists.return_value = True
+    image_host.get_public_url.side_effect = lambda remote_name: f"https://r2.test/{remote_name}"
+
+    usecase = ProcessDocumentUseCase(
+        readers={},
+        llm_client=MagicMock(spec=ILlmClient),
+        notion_client=MagicMock(spec=INotionClient),
+        state_repo=MagicMock(spec=IStateRepository),
+        staging_storage=MagicMock(spec=IStagingStorage),
+        visual_extractor=visual_extractor,
+        image_host_client=image_host,
+    )
+
+    doc = Document(path=Path("dummy.pdf"), file_hash="hash_var", doc_type=DocumentType.SLIDES)
+    target = NotionTarget(database_id="db1", course_name="Data Science", database_title="Notes")
+
+    raw_markdown = (
+        "# Lecture Notes\n\n"
+        "Here is slide 12:\n\n"
+        "![](figure://slide_12)\n\n"
+        "Here is slide 57 with bare number:\n\n"
+        "![](figure://57)\n\n"
+        "Here is slide 8 with page prefix:\n\n"
+        "![](figure://page_8)\n"
+    )
+
+    processed = usecase._process_figures(raw_markdown, doc, target)
+
+    assert "figure://slide_12" not in processed
+    assert "figure://57" not in processed
+    assert "figure://page_8" not in processed
+    assert "https://r2.test/notion/universita/data_science/" in processed
+    assert processed.count("https://r2.test/") == 3
+
+
+def test_resolve_canonical_slide_page_with_mock_doc(tmp_path: Path):
+    import fitz
+
+    # Create a small dummy PDF with 3 pages where page 3 has footer 57
+    pdf_path = tmp_path / "test_deck.pdf"
+    doc = fitz.open()
+    
+    # Page 1: normal text with footer 1
+    p1 = doc.new_page()
+    p1.insert_text((50, 50), "Title Slide\n\n1")
+    
+    # Page 2: text only, footer 2
+    p2 = doc.new_page()
+    p2.insert_text((50, 50), "Overview Slide\n\n2")
+    
+    # Page 3: text, footer 57
+    p3 = doc.new_page()
+    p3.insert_text((50, 50), "Outlier Analysis\n\n57")
+    
+    doc.save(str(pdf_path))
+    doc.close()
+
+    domain_doc = Document(path=pdf_path, file_hash="dummy_hash", doc_type=DocumentType.SLIDES)
+
+    # Page 1 has drawings/images = 0, but if we query footer 57:
+    resolved_57 = ProcessDocumentUseCase._resolve_canonical_slide_page(domain_doc, 57)
+    assert resolved_57 == 3

@@ -61,6 +61,36 @@ class ProcessDocumentUseCase:
         self.split_threshold_chars = split_threshold_chars
         self.split_threshold_slides = split_threshold_slides
 
+    @staticmethod
+    def _resolve_canonical_slide_page(document: Document, page_num: int) -> int:
+        target_path = getattr(document, "path", None) or getattr(document, "file_path", None)
+        if not target_path or not target_path.exists() or target_path.suffix.lower() != ".pdf":
+            return page_num
+
+        try:
+            import fitz
+            with fitz.open(str(target_path)) as doc:
+                total_pages = len(doc)
+                needs_fallback = False
+                if page_num < 1 or page_num > total_pages:
+                    needs_fallback = True
+                else:
+                    p = doc[page_num - 1]
+                    has_visuals = len(p.get_images()) > 0 or len(p.get_drawings()) > 10
+                    if not has_visuals:
+                        needs_fallback = True
+
+                if needs_fallback:
+                    for idx, page in enumerate(doc):
+                        lines = [l.strip() for l in page.get_text().splitlines() if l.strip()]
+                        if lines:
+                            for candidate in lines[-3:]:
+                                if candidate.isdigit() and int(candidate) == page_num:
+                                    return idx + 1
+        except Exception:
+            pass
+        return page_num
+
     def _process_figures(self, markdown_text: str, document: Document, target: NotionTarget) -> str:
         """
         # ARCHITETTURA: Intercettore universale antifragile di marker visivi `figure://slide_X`.
@@ -76,11 +106,11 @@ class ProcessDocumentUseCase:
         # Regex modulare con named groups per intercettare qualsiasi variante sintattica di figure://
         figure_pattern = re.compile(
             r'(?:'
-            r'!?\[(?P<alt>[^\]]*)\]\(figure://slide_(?P<slide1>\d+)(?:\?crop=(?P<c1_ymin>[\d.]+),(?P<c1_xmin>[\d.]+),(?P<c1_ymax>[\d.]+),(?P<c1_xmax>[\d.]+))?\)'
+            r'!?\[(?P<alt>[^\]]*)\]\(figure://(?:slide[_-]?|page[_-]?)?(?P<slide1>\d+)(?:\?crop=(?P<c1_ymin>[\d.]+),(?P<c1_xmin>[\d.]+),(?P<c1_ymax>[\d.]+),(?P<c1_xmax>[\d.]+))?\)'
             r'|'
-            r'\(\s*figure://slide_(?P<slide2>\d+)(?:\?crop=(?P<c2_ymin>[\d.]+),(?P<c2_xmin>[\d.]+),(?P<c2_ymax>[\d.]+),(?P<c2_xmax>[\d.]+))?\s*\)'
+            r'\(\s*figure://(?:slide[_-]?|page[_-]?)?(?P<slide2>\d+)(?:\?crop=(?P<c2_ymin>[\d.]+),(?P<c2_xmin>[\d.]+),(?P<c2_ymax>[\d.]+),(?P<c2_xmax>[\d.]+))?\s*\)'
             r'|'
-            r'figure://slide_(?P<slide3>\d+)(?:\?crop=(?P<c3_ymin>[\d.]+),(?P<c3_xmin>[\d.]+),(?P<c3_ymax>[\d.]+),(?P<c3_xmax>[\d.]+))?'
+            r'figure://(?:slide[_-]?|page[_-]?)?(?P<slide3>\d+)(?:\?crop=(?P<c3_ymin>[\d.]+),(?P<c3_xmin>[\d.]+),(?P<c3_ymax>[\d.]+),(?P<c3_xmax>[\d.]+))?'
             r')'
         )
 
@@ -109,6 +139,8 @@ class ProcessDocumentUseCase:
         def resolve_figure_url(page_num: int, crop_box: Optional[Tuple[float, float, float, float]]) -> Optional[str]:
             if not self.visual_extractor or not self.image_host_client:
                 return None
+
+            page_num = self._resolve_canonical_slide_page(document, page_num)
 
             # ARCHITETTURA: Prevenzione immagini tagliate su presentazioni slide.
             # Sulle slide, coordinate arbitrarie di crop ipotizzate dall'LLM tagliano frequentemente

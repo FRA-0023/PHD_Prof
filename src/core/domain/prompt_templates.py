@@ -78,6 +78,7 @@ Anti-Tautology, Merge-on-Introduction & Symbolic Continuity (Preventing Slide-De
     
     ![](figure://slide_N)
     
+    CRITICAL SYNTAX: ALWAYS include the prefix `slide_` followed by the 1-based page index of the slide (e.g. `![](figure://slide_12)`). NEVER omit the `slide_` prefix (do NOT write `![](figure://12)`).
   * FULL-SLIDE INTEGRITY (NO ARBITRARY CROPPING): Always extract the full slide without coordinate crops (do NOT use ?crop=...). Extracting the full slide preserves all axes, labels, notes, and comparative panels (e.g. Before/After) without truncation.
   * STRICT PROHIBITION ON INLINE CITATIONS: NEVER write inline references or citations such as `(figure://slide_N)`, `(slide N)`, `(figura N)`, or `(vedi slide N)` inside sentences, headers, or bullet points. All figures must be isolated standalone image lines. Keep the prose completely clean and flowing.
   * ZERO BOILERPLATE CAPTIONS: Do NOT write generic captions like "Figura slide N" or "Slide N". Leave the figure reference clean as `![](figure://slide_N)`.
