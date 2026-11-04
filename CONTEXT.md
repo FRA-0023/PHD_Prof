@@ -12,7 +12,8 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Persistent Course Profiles**: Invarianti di corso (materia, ruolo professorale, doc type, cartella locale, target Notion) memorizzati in `course_profiles.json` per avvio one-click a latenza zero.
 - **Bilingual Interaction (EN default vs IT)**: Modulo `I18n` disaccoppiato nell'inbound adapter per visualizzazione bilingue terminale (default: `EN`, opzionale: `IT`).
 - **Windowed Slide Chunker (Character-Driven & Volume-Balanced)**: Controllo preventivo prioritario sul volume di caratteri effettivi (`SPLIT_THRESHOLD_CHARS=25000`) invece del mero conteggio delle slide. Le slide vengono raggruppate in tranche bilanciate pesate sulla massa di caratteri per slide (`_partition_slides_by_character_budget`), allocando un budget di output dedicato di 8.192 token per ciascun blocco.
-- **Test Suite**: 157 unit test offline con mock completi (100% passati, 0 regressioni).
+- **Visual Marker Extraction & Canonical Slide Resolution**: Regex modulare antifragile in `_process_figures` (`figure://(?:slide[_-]?|page[_-]?)?\d+`) per catturare qualsiasi variante o omissione di prefisso dall'LLM. Risoluzione canonica deterministica `_resolve_canonical_slide_page` con fallback intelligente su numeri di slide a pié di pagina (footer), risolvendo le discrepanze tra indice progressivo del PDF e numerazione visiva stampata sulle slide.
+- **Test Suite**: 159 unit test offline con mock completi (100% passati, 0 regressioni).
 - **Standard Documentale README (Invariante)**: Il file `README.md` DEVE essere SEMPRE ed ESCLUSIVAMENTE in lingua inglese. Ogni futura modifica deve preservare la massima chiarezza operativa per l'utilizzatore finale: setup di Python da zero (PATH), creazione API key Gemini, autorizzazioni e gerarchia del database Notion (Root Page -> Course Page -> Database con rilevamento automatico della property di tipo Title), tassonomia completa dei file di runtime/stato e funzionamento utilitaristico della Web Cockpit.
 
 ## Prossimi Passi (Futuro / Manutenzione)
@@ -20,6 +21,24 @@ ETL antifragile e crash-only per ingerire documenti e slide accademiche in forma
 - **Osservabilità Avanzata**: Ulteriori metriche di latenza e token profiling.
 
 ## Log delle Sessioni
+### 2026-11-04 (Resilient Visual Marker Parser, Deterministic Footer-to-Page Resolution & Notion Linear Regression Live Patch)
+- **Diagnosi delle Due Root Causes (Mancata Visualizzazione e Disallineamento Figure)**:
+  * *Deriva Sintattica LLM*: Durante la sintesi di slide deck lunghi (Class 6 - 109 slide), Gemini ha alternato il formato dei marker visivi: nelle prime 7 figure ha usato `figure://slide_N`, mentre nelle ultime 6 ha omesso il prefisso generando `figure://57`, `figure://62`, ecc. La regex preesistente in `ProcessDocumentUseCase._process_figures` imponeva strettamente `figure://slide_`, ignorando i riferimenti privi di prefisso, che venivano emessi su Notion come stringhe di testo grezzo `![](figure://...)` non renderizzate.
+  * *Offset Numerazione Indice PDF vs Footer Slide*: Il documento PDF di 109 slide presenta numeri di pagina a pié di pagina disallineati dall'indice assoluto (es. slide con Stringency Table a pagina 105 del PDF con footer stampato "87"). L'LLM nella seconda parte ha citato i numeri visuali di footer invece degli indici PDF.
+- **Risoluzione Deterministica nel Core & Prompt Hardening**:
+  * `src/core/usecases/process_document.py`:
+    - Regex unificata per intercettare qualsiasi variante: `figure://(?:slide[_-]?|page[_-]?)?(?P<slide1>\d+)`.
+    - Implementato `_resolve_canonical_slide_page()`: se una pagina non presenta elementi grafici/vettoriali o eccede il range, scansiona il testo del PDF e mappa il numero citato al corrispondente numero di slide a pié di pagina.
+  * `src/core/domain/prompt_templates.py`:
+    - Rinforzato `SLIDES_PROMPT_TEMPLATE` specificando l'obbligo di includere sempre il prefisso `slide_` e l'indice di pagina progressivo 1-based del documento.
+  * `tests/test_process_document_usecase.py`:
+    - Aggiunti test di regressione dedicati per varianti di prefisso/numeri nudi e per la risoluzione deterministica pagina/footer.
+- **Live Patch Notion & Staging Sync**:
+  * Eseguito `scripts/patch_linear_regression_page.py`: bonificati ed estratti ad alta definizione (300 DPI) tutti i 13 asset grafici su Cloudflare R2 per la pagina *Linear Regression for Data Science* (`407b63e8-59c8-818e-af5e-ef665dda6d35`).
+  * Aggiornati i 202 blocchi della pagina Notion live con blocchi immagine nativi e formule KaTeX sincronizzate.
+  * File di staging locale `staging/a15fde44563f70675f05cdcead561caee1ad7cc284c072b4c5921a54590956f0.md` aggiornato.
+- **Verifica Test Suite**: 159/159 unit test passati con successo (100% green).
+
 ### 2026-10-20 (PPTX Vector Visual Extraction, Recursive GroupShape Reader & Syllabus/Project Completeness)
 - **Diagnosi delle 4 Root Causes (Immagini Errate/Bianche, Sezioni Tagliate e Clipping Mermaid)**:
   1. *Immagini .pptx Errate o Bianche (PyMuPdfVisualExtractor.extract_figure)*: MuPDF (fitz.open) eseguiva un reflow testuale del .pptx grezzo su 13 pagine verticali prive di grafica e con clamping silenzioso sull ultima pagina (min(page_number - 1, len(doc) - 1)), producendo 20 PNG identici/bianchi per EA2627-04-W5.pptx e EA2627-05-W5.pptx.
