@@ -541,7 +541,7 @@ class ProcessDocumentUseCase:
                     f"{prompt}\n\n"
                     f"=== SLIDE RANGE DIRECTIVE (CHUNK {chunk_idx + 1}/{len(chunk_ranges)}) ===\n"
                     f"This document slice contains slides {start_p} to {end_p} of the complete lecture deck.\n"
-                    f"- Synthesize ALL topics, code snippets, hardware/mathematical mechanisms, and empirical examples from slides {start_p} to {end_p} with maximum academic rigor.\n"
+                    f"- Synthesize ALL topics, code snippets, theoretical mechanisms, and empirical examples from slides {start_p} to {end_p} with maximum academic rigor.\n"
                     f"- When inserting visual diagrams (e.g. ![](figure://slide_N)), ALWAYS use the absolute original slide number N (between {start_p} and {end_p}) visible on the slide footer, NEVER the relative page index of this slice.\n"
                     f"- Do NOT generate final global closing artifacts (no Conceptual Architecture Mermaid trees, no Active Recall drills, no Boundary Conditions table); these will be synthesized globally across the entire lecture at the end.\n"
                     f"- Output ONLY the substantive study sections (## and ###) for slides {start_p} through {end_p} without conversational padding."

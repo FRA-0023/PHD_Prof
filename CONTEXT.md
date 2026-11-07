@@ -743,3 +743,15 @@ otion.so/image/...) e i browser/desktop app memorizzano gli asset esterni con Ca
     - *Group_work_EA_2026-2027* (3ffb63e8-59c8-81b8-a966-e3f5a1cb4899): 6/6 blocchi immagine allineati a _v2.png.
   * Verificate le risposte del proxy Notion con HTTP 200 e payload completi (fino a 1.62 MB per diagramma).
 - **Verifica Test Suite**: 157/157 unit test passati con successo (100% green).
+
+
+### 2026-11-07 (Refactoring Spiegazioni Matematiche & Iniezione Frizione Cognitiva e Tono Energetico)
+- **Soppressione Decostruzione Hardware e Matematica Isolata**:
+  * Rimosso lo standard forzato in 5 punti (mapping fisico, conteggio operazioni, ponte hardware, trace 2x2, boundary conditions) e soppressa la sottosezione `### 🧮 Mathematical & Hardware Deconstruction` in `SLIDES_PROMPT_TEMPLATE` e `PAPER_OR_BOOK_PROMPT_TEMPLATE`.
+  * Convertita la trattazione matematica in paragrafi discorsivi fluidi (2–4 frasi) integrati nel flusso narrativo ordinario, spiegando l'intuizione concettuale e il ruolo sistemico della formula senza isolarla in digressioni sistemistiche.
+- **Iniezione Dinamismo, Frizione Cognitiva & Voce Senior**:
+  * `<role>`: aggiornato il profilo del docente in un mentore quantitativo rigoroso ed energico (spirito Feynman/Karpathy), orientato alla comprensione dell'ingegno dietro ogni meccanismo.
+  * `<task>`: integrati i principi di *Cognitive Friction* (mostrare in 1 frase l'errore dell'intuito naturale per trasformare il modello in una scoperta gratificante), *Clever Trick* (evidenziare l'astuzia algebrica o ingegneristica della soluzione) e *Tangible Stakes* (impatto tangibile dei parametri nel sistema reale).
+  * `Dynamic Analytical Momentum & Progressive Narrative Threading`: imposta la voce attiva, verbi concreti e ritmo serrato, sopprimendo la voce passiva da manuale asettico.
+  * `Language & Tone`: convertito il registro in tono intellettualmente vibrante, asciutto e diretto da ricercatore senior a pari.
+- **Verifica Test Suite**: 159/159 test passati con successo (100% green).
